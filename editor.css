@@ -1,0 +1,370 @@
+/* ==========================================================================
+   KOMOREBI CREATIONS — NON-DEVELOPER VISUAL EDITOR STYLES
+   ========================================================================== */
+
+/* Floating Toggle Button */
+.editor-toggle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  background: var(--text-dark, #23201B);
+  color: var(--bg-main, #FAF6EE);
+  border: 1px solid var(--border-medium, #C9BCA4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  border-radius: 30px;
+  padding: 10px 18px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.editor-toggle-btn:hover {
+  background: var(--accent-ochre, #8E6127);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.editor-toggle-btn.active {
+  background: var(--accent-ochre, #8E6127);
+  border-color: var(--bg-main, #FAF6EE);
+}
+
+/* Floating Edit Dock Bar */
+.editor-dock {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  z-index: 9998;
+  background: #23201B;
+  color: #FAF6EE;
+  border: 1px solid #4A453C;
+  border-radius: 8px;
+  padding: 10px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 95vw;
+  flex-wrap: wrap;
+}
+
+.editor-dock.visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+.editor-dock-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #C79B5C;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+}
+
+.editor-dock-btn {
+  background: #36322A;
+  color: #FAF6EE;
+  border: 1px solid #4A453C;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.editor-dock-btn:hover {
+  background: #4A453C;
+  color: #FFF;
+}
+
+.editor-dock-btn.btn-save {
+  background: #3F5545;
+  border-color: #55705C;
+  color: #FFF;
+  font-weight: 600;
+}
+
+.editor-dock-btn.btn-save:hover {
+  background: #2E3F33;
+}
+
+.editor-dock-btn.btn-download {
+  background: #8E6127;
+  border-color: #B07C3A;
+  color: #FFF;
+  font-weight: 600;
+}
+
+.editor-dock-btn.btn-download:hover {
+  background: #734E1E;
+}
+
+.editor-dock-btn.btn-close {
+  background: transparent;
+  border: none;
+  color: #BDB6A8;
+  padding: 6px 8px;
+}
+
+.editor-dock-btn.btn-close:hover {
+  color: #FFF;
+}
+
+/* Edit Mode Visual Hints on page elements */
+body.edit-mode-active [data-editable] {
+  outline: 1px dashed rgba(142, 97, 39, 0.4);
+  outline-offset: 3px;
+  cursor: text;
+  transition: outline 0.15s ease, background-color 0.15s ease;
+}
+
+body.edit-mode-active [data-editable]:hover {
+  outline: 1.5px solid #8E6127;
+  background-color: rgba(142, 97, 39, 0.08);
+}
+
+body.edit-mode-active [data-editable]:focus {
+  outline: 2px solid #3F5545;
+  background-color: rgba(63, 85, 69, 0.1);
+}
+
+/* Image Editable Badge */
+body.edit-mode-active .editable-image-wrapper {
+  position: relative;
+  cursor: pointer;
+}
+
+body.edit-mode-active .editable-image-wrapper::after {
+  content: '📷 Ganti Gambar / Edit Image';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(35, 32, 27, 0.85);
+  color: #FAF6EE;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+body.edit-mode-active .editable-image-wrapper:hover::after {
+  opacity: 1;
+  background: #8E6127;
+}
+
+/* Modal Drawer for Store Settings & Links */
+.editor-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  padding: 20px;
+}
+
+.editor-modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editor-modal {
+  background: #FAF6EE;
+  color: #23201B;
+  border: 1px solid #C9BCA4;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  transform: translateY(20px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.editor-modal-overlay.open .editor-modal {
+  transform: translateY(0);
+}
+
+.editor-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid #E2D9C8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F3EDE1;
+}
+
+.editor-modal-title {
+  font-family: var(--font-serif, serif);
+  font-size: 22px;
+  margin: 0;
+  font-weight: 600;
+  color: #23201B;
+}
+
+.editor-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #6E6656;
+}
+
+.editor-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: grid;
+  gap: 24px;
+}
+
+.editor-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #E2D9C8;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.editor-tab-btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5C574D;
+  cursor: pointer;
+}
+
+.editor-tab-btn.active {
+  background: #23201B;
+  color: #FAF6EE;
+  border-color: #23201B;
+}
+
+.editor-section-card {
+  background: #FFF;
+  border: 1px solid #E2D9C8;
+  border-radius: 2px;
+  padding: 18px 20px;
+}
+
+.editor-section-card h4 {
+  margin: 0 0 14px;
+  font-family: var(--font-serif, serif);
+  font-size: 18px;
+  color: #23201B;
+  border-bottom: 1px solid #F3EDE1;
+  padding-bottom: 8px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6E6656;
+}
+
+.form-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #C9BCA4;
+  border-radius: 2px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13px;
+  color: #23201B;
+  background: #FFF;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: 2px solid #3F5545;
+  border-color: #3F5545;
+}
+
+.form-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #23201B;
+  cursor: pointer;
+}
+
+.editor-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #E2D9C8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #F3EDE1;
+}
+
+/* Toast Notification */
+.editor-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(50px);
+  background: #23201B;
+  color: #FAF6EE;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 10001;
+  pointer-events: none;
+}
+
+.editor-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

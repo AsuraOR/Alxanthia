@@ -1,51 +1,92 @@
-# 🌸 Komorebi Creations — Website & Guide
+<div align="center">
 
-Official website for **Komorebi Creations (DIY Flower Kit)** with 1:1 botanical aesthetics, responsive layout, and custom domain configuration.
+  <img src="komorebi-logo.png" alt="Komorebi Logo" width="88" height="88" />
+
+  # Komorebi Creations
+
+  **Flowers that never wilt — built by your own hands.**
+
+  *Handcrafted Chenille Stem Botanical Kits & Arrangements*
+
+  [![Domain](https://img.shields.io/badge/website-komorebicreations.com-3F5545?style=for-the-badge)](https://komorebicreations.com)
+  [![Status](https://img.shields.io/badge/status-live-8E6127?style=for-the-badge)](#)
+  [![Stack](https://img.shields.io/badge/stack-HTML5%20%7C%20CSS3%20%7C%20JS-23201B?style=for-the-badge)](#)
+
+</div>
 
 ---
 
-## 🔒 Private Access Passcode Protection
+## 🌿 About Komorebi
 
-The website is protected with a private botanical lock screen so that only you and your girlfriend can access it.
+**Komorebi Creations** is an independent studio crafting botanical DIY kits made from soft chenille stems over twisted wire cores. Every kit arrives pre-cut and sorted like a botanical instruction plate, allowing anyone to shape, assemble, and keep their handmade bloom in about 20 minutes.
 
-- **Current Passcode**: `22062024`
-- **How it works**:
-  - When you visit `komorebicreations.com`, an elegant botanical lock screen appears asking for the passcode.
-  - Enter `22062024` and press **Unlock →**.
-  - **Auto-Remembered**: Your browser automatically saves the unlocked status, so neither of you will have to re-enter the code on your devices.
-  - **Lock Site Button**: A subtle "Lock Site" button is placed in the footer if you ever want to re-lock the website on any device.
+### 🌸 The Botanical Collection
+- **Sunflower** (*Helianthus annuus*): Layered ochre petals with a dense seeded crown.
+- **Rose** (*Rosa centifolia*): Spiralled dusty pink petals wound one by one.
+- **Tulip** (*Tulipa gesneriana*): Six clean petals with slender architectural leaves.
+- **Lavender** (*Lavandula angustifolia*): Bundles of slender textured spikes for narrow vases.
 
-### How to Change the Passcode:
-Open `site-content.js` in VS Code and edit line 21:
-```javascript
-auth: {
-  enabled: true,
-  passcode: "22062024" // Change this to any passcode you like
-}
+Each species is available in three formats:
+1. **DIY Kit**: All parts, stems, glue, and botanical guide in the box.
+2. **Finished Stem**: Hand-assembled by us, wrapped in kraft paper.
+3. **Bouquet**: 5–11 stems arranged, tied, and boxed.
+
+---
+
+## ✨ Features & Highlights
+
+- **Aesthetic Botanical Typography**: Clean, responsive editorial design with Google Fonts (`Cormorant Garamond` & `Karla`) and a warm linen color palette (`#FAF6EE`, `#23201B`, `#3F5545`, `#8E6127`).
+- **Interactive Order Builder**: Real-time product customizer with live price calculations, dynamic inclusions, and direct checkout channels (Tokopedia, Shopee, and automated WhatsApp order messages).
+- **Instant Bilingual Support**: One-click language switcher (`ID` Bahasa Indonesia ↔ `EN` English) with persistent preference storage.
+- **Private Access Gatekeeper**: Built-in botanical passcode protection overlay with automatic device session memory.
+- **Zero-Dependency Architecture**: Pure HTML5, modern CSS, and vanilla JavaScript. No build step, no Node.js dependencies, and zero maintenance overhead.
+- **Production-Ready Hosting**: Deployed on GitHub Pages with custom domain and automated SSL/TLS encryption.
+
+---
+
+## 📁 Repository Structure
+
+```text
+komorebi-creations/
+├── index.html            # Primary landing page & private lock screen
+├── styles.css            # Custom botanical stylesheet (1:1 responsive layout)
+├── site-content.js       # Central data file (texts, links, catalog, prices & auth)
+├── app.js                # Interactive application controller & state engine
+├── CNAME                 # Custom domain configuration (komorebicreations.com)
+├── komorebi-logo.png     # Studio brand logo
+├── README.md             # Project documentation
+└── img/                  # High-resolution product & botanical photography
+    ├── hero.png          # Pl. I Helianthus annuus hero plate
+    ├── kit.png           # Overhead kit contents flatlay
+    ├── lavender.png      # Lavender product photography
+    ├── macro.png         # Fig. 1 Chenille stem pile macro close-up
+    ├── rose.png          # Rose product photography
+    ├── sunflower.png     # Sunflower product photography
+    ├── tulip.png         # Tulip product photography
+    └── us.png            # Maker studio table
 ```
 
 ---
 
-## ✏️ How to Edit Texts, Prices, Links & Images in VS Code
+## 🛠️ How to Customize (Editing Content)
 
-All website content is cleanly separated and well-commented in:
-👉 **`site-content.js`**
+All content on the website is configured in a single, well-organized file: [`site-content.js`](site-content.js). You can edit this file in any text editor or VS Code:
 
-Open `site-content.js` in **VS Code** or any text editor:
-
-### 1. Store Links & Contact:
+### 1. Store Details & Social Links
+Open `site-content.js` and locate the `store` object:
 ```javascript
 store: {
   brandName: "Komorebi",
   instagramUrl: "https://instagram.com/komorebi",
-  tokopediaUrl: "https://www.tokopedia.com",
-  shopeeUrl: "https://shopee.co.id",
+  tokopediaUrl: "https://www.tokopedia.com/...",
+  shopeeUrl: "https://shopee.co.id/...",
   whatsappNumber: "6281234567890", // Update with your WhatsApp number
   ...
 }
 ```
 
-### 2. Product Prices:
+### 2. Product Prices
+Update prices for any species and format:
 ```javascript
 Sunflower: {
   prices: {
@@ -56,32 +97,28 @@ Sunflower: {
 }
 ```
 
-### 3. Website Texts (Indonesian & English):
-- `id:` Contains all Indonesian texts (titles, blurbs, steps, FAQs, about story).
-- `en:` Contains all English texts.
+### 3. Texts & Translations
+Modify copy under `translations.id` (Indonesian) or `translations.en` (English) to update headlines, FAQs, instructions, or stories.
 
-After editing, simply save the file (**`Ctrl + S`**) and refresh your browser (**`F5`**).
+### 4. Private Access Passcode
+To update the private gatekeeper passcode, change line 21 in `site-content.js`:
+```javascript
+auth: {
+  enabled: true,
+  passcode: "YOUR_SECRET_CODE"
+}
+```
 
 ---
 
-## 📦 Files to Upload to GitHub
+## 🚀 Running Locally
 
-```text
-komorebi-creations/
-├── index.html            ✅ Main website page (with private lock screen)
-├── styles.css            ✅ Botanical stylesheet
-├── site-content.js       ✅ Content data, prices, links & passcode
-├── app.js                ✅ Website logic, WhatsApp generator & passcode verifier
-├── CNAME                 ✅ Domain file (komorebicreations.com)
-├── komorebi-logo.png     ✅ Brand logo
-├── README.md             ✅ Guide & documentation
-└── img/                  ✅ High-resolution botanical photos
-    ├── hero.png
-    ├── kit.png
-    ├── lavender.png
-    ├── macro.png
-    ├── rose.png
-    ├── sunflower.png
-    ├── tulip.png
-    └── us.png
-```
+No installation or command-line setup is required:
+1. Clone or download this repository.
+2. Double-click `index.html` to open it in your browser.
+
+---
+
+<div align="center">
+  <sub>© 2026 Komorebi Creations. Handcrafted with love.</sub>
+</div>

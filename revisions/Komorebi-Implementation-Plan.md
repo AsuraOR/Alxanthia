@@ -244,28 +244,28 @@ Likely files: `index.html`, `app.js`, `site-content.js`, README, metadata/static
 
 ### 5.1 Prepare the appropriate entry experience
 
-- [ ] For a public prelaunch site, prepare an honest coming-soon page with a confirmed launch window and verified contact/social CTA. Do not add a signup form without a working, authorized destination.
-- [ ] For an open store, remove the customer-facing passcode overlay and “Lock Site” control as part of the authorized release.
-- [ ] For genuinely private staging, identify a hosting-supported authentication approach. Apply access/deployment changes only under the owner's authorization; do not introduce a new provider solely for this task.
-- [ ] Remove client-side passcode dependence from the intended public architecture. Never treat robots directives or a hidden overlay as authentication.
+- [x] For a public prelaunch site, prepare an honest coming-soon page with a confirmed launch window and verified contact/social CTA. Do not add a signup form without a working, authorized destination.
+- [x] For an open store, remove the customer-facing passcode overlay and “Lock Site” control as part of the authorized release.
+- [x] For genuinely private staging, identify a hosting-supported authentication approach. Apply access/deployment changes only under the owner's authorization; do not introduce a new provider solely for this task.
+- [x] Remove client-side passcode dependence from the intended public architecture. Never treat robots directives or a hidden overlay as authentication.
 
 ### 5.2 Search and social presentation
 
-- [ ] Add an accurate page title and meta description reflecting the brand and relevant Indonesian product terms without keyword stuffing.
-- [ ] Add canonical URL, favicon, Open Graph, and Twitter/social-card metadata with a suitable optimized preview image and absolute public URLs.
-- [ ] Verify preview image accessibility and cropping. Metadata enables previews but does not guarantee every platform immediately refreshes its cached card.
-- [ ] Add appropriate sitemap and robots handling for the actual public deployment; keep staging and public indexing policies distinct.
-- [ ] Ensure meaningful product and descriptive content remains available without waiting for client-side JavaScript where practical in the existing stack.
-- [ ] Consider Organization/WebSite and Product/Offer structured data only where the visible page and confirmed catalog support it. Prices, currency, availability, and URLs must match the page.
-- [ ] Verify current search-engine guidance before implementing schema. FAQ markup is optional and must not be sold as a guaranteed rich-result improvement. Do not add fabricated ratings or reviews.
+- [x] Add an accurate page title and meta description reflecting the brand and relevant Indonesian product terms without keyword stuffing.
+- [x] Add canonical URL, favicon, Open Graph, and Twitter/social-card metadata with a suitable optimized preview image and absolute public URLs.
+- [x] Verify preview image accessibility and cropping. Metadata enables previews but does not guarantee every platform immediately refreshes its cached card.
+- [x] Add appropriate sitemap and robots handling for the actual public deployment; keep staging and public indexing policies distinct.
+- [x] Ensure meaningful product and descriptive content remains available without waiting for client-side JavaScript where practical in the existing stack.
+- [x] Consider Organization/WebSite and Product/Offer structured data only where the visible page and confirmed catalog support it. Prices, currency, availability, and URLs must match the page.
+- [x] Verify current search-engine guidance before implementing schema. FAQ markup is optional and must not be sold as a guaranteed rich-result improvement. Do not add fabricated ratings or reviews.
 
 ### 5.3 Remove misleading maintenance behavior
 
-- [ ] Inspect editor dependencies before cleanup. Remove/update README and content-file instructions for the nonexistent “Mode Edit” button.
-- [ ] Default to documenting the actual content-file workflow, not reintroducing a public editor. Remove unused editor files only after confirming they have no supported use; preserve history through normal version control.
-- [ ] Remove unexplained deletion of `komorebi_custom_data` after determining whether any supported saved edits need migration. Do not silently discard user-authored data.
-- [ ] Document the new product-option fields, unavailable-channel behavior, image export workflow, launch mode, and accurate maintenance process.
-- [ ] Confirm the Phase 1 identifier migration and rendering changes have no stale consumers or misleading comments.
+- [x] Inspect editor dependencies before cleanup. Remove/update README and content-file instructions for the nonexistent “Mode Edit” button.
+- [x] Default to documenting the actual content-file workflow, not reintroducing a public editor. Remove unused editor files only after confirming they have no supported use; preserve history through normal version control.
+- [x] Remove unexplained deletion of `komorebi_custom_data` after determining whether any supported saved edits need migration. Do not silently discard user-authored data.
+- [x] Document the new product-option fields, unavailable-channel behavior, image export workflow, launch mode, and accurate maintenance process.
+- [x] Confirm the Phase 1 identifier migration and rendering changes have no stale consumers or misleading comments.
 
 **Acceptance:** Metadata matches visible facts; the chosen entry experience is honest; no public secret-based overlay is presented as secure protection. Documentation describes features that actually exist. Deployment/access changes are prepared or completed only within authorization.
 

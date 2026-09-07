@@ -108,13 +108,13 @@ window.KOMOREBI_DATA = {
         name: "Sunflower",
         makes: "3 flowers",
         size: "45 cm stem, 12 cm head",
-        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
+        blurb: "Our signature design. Layered ochre petals with a textured brown center handcrafted from chenille wire."
       },
       id: {
         name: "Bunga Matahari",
         makes: "3 bunga",
         size: "tangkai 45 cm, kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
+        blurb: "Bunga andalan kami. Kelopak kuning oker berlapis dengan inti tengah cokelat bertekstur khas kawat bulu."
       }
     },
     Rose: {
@@ -161,13 +161,13 @@ window.KOMOREBI_DATA = {
         name: "Rose",
         makes: "3 flowers",
         size: "40 cm stem",
-        blurb: "Spiralled petals wound one by one. The most patient flower in the set."
+        blurb: "Layered spiralling petals wound one by one. A stunning bloom for desk display."
       },
       id: {
         name: "Mawar",
         makes: "3 bunga",
         size: "tangkai 40 cm",
-        blurb: "Kelopak melingkar dipasang satu per satu. Bunga paling menuntut kesabaran."
+        blurb: "Kelopak melingkar yang dirangkai lapis demi lapis. Paling menawan untuk pajangan meja."
       }
     },
     Tulip: {
@@ -214,13 +214,13 @@ window.KOMOREBI_DATA = {
         name: "Tulip",
         makes: "4 flowers",
         size: "38 cm stem",
-        blurb: "Six clean petals and a single leaf. The easiest first flower to build."
+        blurb: "Six clean petals and a slender leaf. Our easiest first bloom for beginners to build."
       },
       id: {
         name: "Tulip",
         makes: "4 bunga",
         size: "tangkai 38 cm",
-        blurb: "Enam kelopak bersih dan satu daun. Bunga pertama yang paling mudah dibuat."
+        blurb: "Enam kelopak ramping dan satu daun segar. Paling ramah untuk pemula yang baru pertama kali merangkai."
       }
     },
     Lavender: {
@@ -267,13 +267,13 @@ window.KOMOREBI_DATA = {
         name: "Lavender",
         makes: "9 spikes",
         size: "32 cm stem",
-        blurb: "Nine slender spikes to a bundle. Made for narrow vases and desks."
+        blurb: "Nine slender spikes to a bundle. A timeless arrangement made for narrow vases and desks."
       },
       id: {
         name: "Lavender",
         makes: "9 tangkai",
         size: "tangkai 32 cm",
-        blurb: "Sembilan tangkai ramping per ikat. Cocok untuk vas sempit dan meja kerja."
+        blurb: "Sembilan tangkai ramping per ikat. Rangkaian klasik yang pas untuk vas ramping atau meja kerja."
       }
     }
   },
@@ -291,7 +291,7 @@ window.KOMOREBI_DATA = {
       navFaq: "FAQ",
       navOrder: "Pesan",
 
-      heroEyebrow: "Kit bunga DIY · benang chenille",
+      heroEyebrow: "Kit bunga DIY · kawat bulu chenille",
       heroTitle: "Bunga yang tak pernah layu — dirangkai tangan Anda sendiri.",
       heroSub: "Satu kit lengkap untuk membuat bunga, setiap bagiannya sudah disiapkan. Bentuk, rangkai, lalu simpan bunga buatan Anda — sekitar 20 menit saja.",
       heroPlateCaption: "Helianthus annuus",
@@ -341,10 +341,9 @@ window.KOMOREBI_DATA = {
         { label: "Menghasilkan", value: "3 bunga" },
         { label: "Ukuran jadi", value: "tangkai 45 cm, kepala 12 cm" },
         { label: "Waktu", value: "±20 menit per bunga" },
-        { label: "Tingkat", value: "Pemula" },
-        { label: "Usia disarankan", value: "12+" },
-        { label: "Anak lebih kecil", value: "Sebaiknya didampingi orang dewasa" }
+        { label: "Tingkat", value: "Pemula" }
       ],
+      specGuidance: "Direkomendasikan untuk usia 12 tahun ke atas. Ujung kawat telah dilipat rapi sebelum dikemas; anak yang lebih kecil disarankan didampingi orang dewasa, terutama saat menggunakan lem.",
 
       howEyebrow: "Cara membuatnya",
       howTitle: "Empat langkah, sekitar dua puluh menit",
@@ -356,13 +355,12 @@ window.KOMOREBI_DATA = {
       ],
 
       matEyebrow: "Bahannya",
-      matTitle: "Mengapa chenille bergerak seperti kelopak",
-      matCaption: "Gbr. 1 — serat chenille pada inti kawat berpuntir",
-      matBody: "Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.",
+      matTitle: "Lembut di tangan, mudah dibentuk sesuai keinginan",
+      matBody: "Kawat bulu chenille memadukan serat lembut dengan inti kawat yang lentur. Kelopak mudah dilengkungkan dengan jari tanpa alat khusus, dan dapat dibentuk ulang kapan saja hingga hasilnya memuaskan Anda.",
       matPoints: [
-        { n: "i", lead: "Dirancang untuk dibentuk ulang.", rest: "Salah melengkung? Cukup lengkungkan kembali." },
-        { n: "ii", lead: "Ujung kawat sudah dilipat.", rest: "Disarankan untuk usia 12+; anak yang lebih kecil sebaiknya didampingi." },
-        { n: "iii", lead: "Dibuat untuk pajangan dalam ruangan jangka panjang.", rest: "Jauhkan dari lembap dan sinar matahari langsung yang lama." }
+        { n: "i", lead: "Mudah dibentuk & dirapikan kembali.", rest: "Cukup lengkungkan dengan jari. Jika kurang pas, bisa diluruskan dan dibentuk ulang." },
+        { n: "ii", lead: "Nyaman dan ramah pemula.", rest: "Kawat sudah dipotong sesuai ukuran dengan ujung yang dilipat rapi." },
+        { n: "iii", lead: "Dibuat untuk pajangan jangka panjang.", rest: "Tanpa air dan tanpa layu, cukup bersihkan debunya sesekali." }
       ],
 
       orderEyebrow: "Pesan",
@@ -421,7 +419,7 @@ window.KOMOREBI_DATA = {
       aboutEyebrow: "Siapa yang membuat",
       aboutLede: "Kami mulai memotong kelopak di meja dapur, satu bunga demi satu bunga, sampai potongannya cukup rapi untuk diberikan kepada orang lain.",
       aboutBody: "Setiap kit masih dipotong, dihitung, dan dikemas oleh kami berdua. Bunga baru ditambahkan setelah kami gambar dan uji — empat sekarang, akan terus bertambah.",
-      aboutIg: "Ikuti workshop kami di Instagram",
+      aboutIg: "Lihat proses merangkai bunga kami di Instagram",
       footerCare: "Pengiriman & perawatan",
       copyright: "© 2026 Komorebi"
     },
@@ -484,10 +482,9 @@ window.KOMOREBI_DATA = {
         { label: "Makes", value: "3 flowers" },
         { label: "Finished size", value: "45 cm stem, 12 cm head" },
         { label: "Time", value: "~20 min per flower" },
-        { label: "Difficulty", value: "Beginner" },
-        { label: "Recommended age", value: "12+" },
-        { label: "Younger makers", value: "Adult supervision recommended" }
+        { label: "Difficulty", value: "Beginner" }
       ],
+      specGuidance: "Recommended for ages 12 and up. Wire ends are neatly folded before packing; younger makers should be assisted by an adult, especially when using glue.",
 
       howEyebrow: "How it works",
       howTitle: "Four steps, about twenty minutes",
@@ -499,13 +496,12 @@ window.KOMOREBI_DATA = {
       ],
 
       matEyebrow: "The material",
-      matTitle: "Why chenille behaves like a petal",
-      matCaption: "Fig. 1 — chenille pile on a twisted wire core",
-      matBody: "A soft chenille pile over a twisted wire core: it takes a curve the way a petal does, and then it holds it. That is what makes these flowers read as grown rather than folded.",
+      matTitle: "Soft in hand, effortless to shape and reshape",
+      matBody: "Chenille stems combine plush, velvety fibers over a pliable wire core. Petals curve naturally under your fingertips without special tools, and can be reshaped at any time until you love the result.",
       matPoints: [
-        { n: "i", lead: "Designed to be reshaped.", rest: "Bend a petal wrong and you can simply bend it back." },
-        { n: "ii", lead: "Prepared with folded wire ends.", rest: "Recommended for ages 12+; adult supervision for younger makers." },
-        { n: "iii", lead: "Made for long-lasting indoor display.", rest: "Keep away from moisture and prolonged direct sunlight." }
+        { n: "i", lead: "Forgiving and reshapeable.", rest: "Bend petals gently with your fingers. If a curve isn't right, simply reshape it." },
+        { n: "ii", lead: "Gentle and beginner friendly.", rest: "Wire stems are cut to length with folded ends for comfortable handling." },
+        { n: "iii", lead: "Made for long-lasting indoor display.", rest: "No water needed—simply dust occasionally to keep your blooms vibrant." }
       ],
 
       orderEyebrow: "Order",
@@ -564,7 +560,7 @@ window.KOMOREBI_DATA = {
       aboutEyebrow: "Who makes these",
       aboutLede: "We started cutting petals at a kitchen table, one flower at a time, until the pieces fit together well enough to hand to a stranger.",
       aboutBody: "Every kit is still cut, counted and packed by the two of us. New flowers are added as we draw and test them — four today, more on the way.",
-      aboutIg: "Follow the workshop on Instagram",
+      aboutIg: "See our flower-making process on Instagram",
       footerCare: "Shipping & care",
       copyright: "© 2026 Komorebi"
     }

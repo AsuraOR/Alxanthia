@@ -9,7 +9,7 @@
 
   // Constants & Storage Keys
   const LANG_KEY = 'komorebi.lang';
-  const CUSTOM_DATA_KEY = 'komorebi_custom_data';
+  const AUTH_KEY = 'komorebi_unlocked';
 
   // State
   let currentLang = 'id';
@@ -21,10 +21,6 @@
    * Load data directly from site-content.js (window.KOMOREBI_DATA)
    */
   function loadData() {
-    try {
-      localStorage.removeItem(CUSTOM_DATA_KEY);
-    } catch (e) {}
-
     if (window.KOMOREBI_DATA) {
       siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
     }
@@ -283,12 +279,12 @@
       const card = document.createElement('article');
       card.className = 'flower-card';
       card.innerHTML = `
-        <div class="flower-photo-wrapper">
+        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name} — ${t.buyKitPrefix || 'Pesan'}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
         </div>
         <div class="flower-info">
-          <h3 class="flower-name">${trans.name}</h3>
+          <h3 class="flower-name" tabindex="0" role="button" aria-label="${trans.name} — ${t.buyKitPrefix || 'Pesan'}">${trans.name}</h3>
           <p class="flower-blurb">${trans.blurb}</p>
           <p class="flower-makes">${t.makesPrefix} ${trans.makes} · ${trans.size}</p>
           ${siteData.store.showPrices ? `<p class="flower-price">${t.kitPricePrefix} ${priceKit}</p>` : ''}
@@ -301,6 +297,32 @@
           </div>
         </div>
       `;
+
+      // Photo and Title activate product selection smoothly
+      const photoWrap = card.querySelector('.flower-photo-wrapper');
+      const nameHeading = card.querySelector('.flower-name');
+      const handleCardSelect = (e) => {
+        e.preventDefault();
+        quickOrder(key, 'Kit');
+      };
+
+      if (photoWrap) {
+        photoWrap.addEventListener('click', handleCardSelect);
+        photoWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleCardSelect(e);
+          }
+        });
+      }
+
+      if (nameHeading) {
+        nameHeading.addEventListener('click', handleCardSelect);
+        nameHeading.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleCardSelect(e);
+          }
+        });
+      }
 
       const buyBtn = card.querySelector('.btn-buy-kit');
       if (buyBtn) {
@@ -362,7 +384,7 @@
       });
     }
 
-    // Specifications
+    // Specifications Metrics
     setText('#specs-title', t.specTitle);
     const specsEl = document.getElementById('specs-grid');
     if (specsEl && t.specs) {
@@ -377,6 +399,9 @@
         specsEl.appendChild(div);
       });
     }
+
+    // Safety & Guidance Note
+    setText('#specs-guidance', t.specGuidance || '');
   }
 
   /**
@@ -408,7 +433,6 @@
   function renderMaterial(t) {
     setText('#mat-eyebrow', t.matEyebrow);
     setText('#mat-title', t.matTitle);
-    setText('#mat-caption', t.matCaption);
     setText('#mat-body', t.matBody);
     setAttr('#material-image', 'src', siteData.images.macro);
     setAttr('#material-image', 'alt', currentLang === 'en'
@@ -458,9 +482,15 @@
       if (existingChips.length === siteData.flowerOrder.length) {
         existingChips.forEach((btn, index) => {
           const key = siteData.flowerOrder[index];
+          const fl = siteData.flowers[key];
+          const flTrans = fl ? (fl[currentLang] || fl.en) : null;
           const isActive = key === selectedFlower;
           btn.classList.toggle('active', isActive);
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          if (flTrans) {
+            btn.setAttribute('aria-label', flTrans.name);
+            btn.innerHTML = `<span class="chip-dot" style="background:${fl.accent}"></span>${flTrans.name}`;
+          }
         });
       } else {
         flowerChipsEl.innerHTML = '';
@@ -483,7 +513,13 @@
       }
     }
 
-    // Step 2: Formats with radiogroup semantics (preserves keyboard focus)
+    const curFlower = siteData.flowers[selectedFlower] || siteData.flowers.Sunflower;
+    const curFlowerTrans = curFlower[currentLang] || curFlower.en;
+    const curFormatObj = t.formats.find(f => f.key === selectedFormat) || t.formats[0];
+    const optMeta = getOptionMeta(curFlower, selectedFormat);
+    const curPrice = getPriceDisplay(curFlower, selectedFormat);
+
+    // Step 2: Formats with radiogroup semantics & live transparent pricing
     const formatCardsEl = document.getElementById('format-cards');
     if (formatCardsEl) {
       formatCardsEl.setAttribute('role', 'radiogroup');
@@ -496,19 +532,32 @@
           const isActive = f.key === selectedFormat;
           btn.classList.toggle('active', isActive);
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          const fPrice = getPriceDisplay(curFlower, f.key);
+          btn.setAttribute('aria-label', `${f.label} (${fPrice}): ${f.note}`);
+
+          const labelSpan = btn.querySelector('.format-label');
+          if (labelSpan) labelSpan.textContent = f.label;
+
+          const priceSpan = btn.querySelector('.format-price');
+          if (priceSpan) priceSpan.textContent = fPrice;
+
+          const noteSpan = btn.querySelector('.format-note');
+          if (noteSpan) noteSpan.textContent = f.note;
         });
       } else {
         formatCardsEl.innerHTML = '';
         t.formats.forEach(f => {
           const isActive = f.key === selectedFormat;
+          const fPrice = getPriceDisplay(curFlower, f.key);
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = `format-card ${isActive ? 'active' : ''}`;
           btn.setAttribute('role', 'radio');
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-          btn.setAttribute('aria-label', `${f.label}: ${f.note}`);
+          btn.setAttribute('aria-label', `${f.label} (${fPrice}): ${f.note}`);
           btn.innerHTML = `
             <span class="format-label">${f.label}</span>
+            <span class="format-price">${fPrice}</span>
             <span class="format-note">${f.note}</span>
           `;
           btn.addEventListener('click', () => selectFormat(f.key));
@@ -517,14 +566,9 @@
       }
     }
 
-    // Summary Box
-    const curFlower = siteData.flowers[selectedFlower] || siteData.flowers.Sunflower;
-    const curFlowerTrans = curFlower[currentLang] || curFlower.en;
-    const curFormatObj = t.formats.find(f => f.key === selectedFormat) || t.formats[0];
-    const optMeta = getOptionMeta(curFlower, selectedFormat);
-    const curPrice = getPriceDisplay(curFlower, selectedFormat);
-
-    // Summary Title & Latin
+    // Summary Box: Photo preview, Title, Latin
+    setAttr('#summary-img', 'src', curFlower.photo);
+    setAttr('#summary-img', 'alt', `${curFlowerTrans.name} — ${curFormatObj.label}`);
     setText('#summary-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
     setText('#summary-latin', curFlower.latin);
 
@@ -722,7 +766,6 @@
     renderFooter(t);
   }
 
-  const AUTH_KEY = 'komorebi_unlocked';
 
   function updateLockA11y(isLocked) {
     const mainContent = document.getElementById('main-content');
@@ -994,7 +1037,6 @@
       setLanguage: setLanguage,
       renderAll: renderAll,
       reloadOriginal: () => {
-        localStorage.removeItem(CUSTOM_DATA_KEY);
         siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
         renderAll();
       }

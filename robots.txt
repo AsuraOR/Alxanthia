@@ -1,0 +1,7 @@
+# Komorebi Creations robots.txt
+# https://komorebicreations.com/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://komorebicreations.com/sitemap.xml

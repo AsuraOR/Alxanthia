@@ -16,6 +16,30 @@
 <body>
 
   <!-- ========================================================================
+       PRIVATE ACCESS LOCK SCREEN
+       ======================================================================== -->
+  <div id="lock-screen" class="lock-screen">
+    <div class="lock-card">
+      <img src="komorebi-logo.png" alt="Komorebi" class="lock-logo" />
+      <h2 class="lock-brand">Komorebi</h2>
+      <p class="lock-subtitle">Private Access · Enter Passcode</p>
+      <form id="lock-form" class="lock-form" autocomplete="off">
+        <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••" autofocus required />
+        <button type="submit" class="lock-btn">Unlock →</button>
+      </form>
+      <p id="lock-error" class="lock-error"></p>
+    </div>
+  </div>
+  <script>
+    // Instant unlock check to prevent flash of lock screen for verified visitors
+    try {
+      if (localStorage.getItem('komorebi_unlocked') === 'true') {
+        document.getElementById('lock-screen').classList.add('unlocked');
+      }
+    } catch (e) {}
+  </script>
+
+  <!-- ========================================================================
        STICKY HEADER
        ======================================================================== -->
   <header class="site-header">
@@ -273,6 +297,7 @@
         <a href="#" id="footer-link-tokopedia" target="_blank" rel="noopener">Tokopedia</a>
         <a href="#" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
         <a href="#faq" id="footer-care">Pengiriman & perawatan</a>
+        <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
         <span id="footer-copyright">© 2026 Komorebi</span>
       </div>
     </div>

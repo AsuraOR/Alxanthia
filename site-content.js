@@ -16,6 +16,12 @@
  */
 
 window.KOMOREBI_DATA = {
+  // Private Access Passcode Protection
+  auth: {
+    enabled: true,
+    passcode: "22062024" // You can change this passcode anytime
+  },
+
   // Store & Contact Links
   store: {
     brandName: "Komorebi",

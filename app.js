@@ -523,8 +523,81 @@
     renderFooter(t);
   }
 
+  const AUTH_KEY = 'komorebi_unlocked';
+
   /**
-   * Global event listeners
+   * Setup Passcode Gatekeeper
+   */
+  function setupAuth() {
+    const lockScreen = document.getElementById('lock-screen');
+    const lockForm = document.getElementById('lock-form');
+    const passInput = document.getElementById('passcode-input');
+    const lockError = document.getElementById('lock-error');
+    const relockBtn = document.getElementById('btn-lock-site');
+
+    const authConfig = siteData.auth || { enabled: true, passcode: '22062024' };
+
+    // If disabled in site-content.js, unlock automatically
+    if (!authConfig.enabled) {
+      if (lockScreen) lockScreen.classList.add('unlocked');
+      if (relockBtn) relockBtn.style.display = 'none';
+      return;
+    }
+
+    // Check if previously unlocked
+    try {
+      if (localStorage.getItem(AUTH_KEY) === 'true') {
+        if (lockScreen) lockScreen.classList.add('unlocked');
+      } else {
+        if (lockScreen) lockScreen.classList.remove('unlocked');
+      }
+    } catch (e) {}
+
+    // Form submission
+    if (lockForm) {
+      lockForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const entered = (passInput ? passInput.value : '').trim();
+        const expected = String(authConfig.passcode || '22062024').trim();
+
+        if (entered === expected) {
+          try {
+            localStorage.setItem(AUTH_KEY, 'true');
+          } catch (err) {}
+          if (lockError) lockError.textContent = '';
+          if (lockScreen) lockScreen.classList.add('unlocked');
+        } else {
+          if (lockError) {
+            lockError.textContent = currentLang === 'en' ? 'Incorrect passcode. Try again.' : 'Kata sandi salah. Coba lagi.';
+          }
+          if (passInput) {
+            passInput.value = '';
+            passInput.focus();
+          }
+        }
+      });
+    }
+
+    // Relock button in footer
+    if (relockBtn) {
+      relockBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        try {
+          localStorage.removeItem(AUTH_KEY);
+        } catch (err) {}
+        if (lockScreen) {
+          lockScreen.classList.remove('unlocked');
+          if (passInput) {
+            passInput.value = '';
+            passInput.focus();
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Setup Event Listeners
    */
   function setupEventListeners() {
     const btnId = document.getElementById('lang-id');
@@ -541,6 +614,7 @@
     loadData();
     initLang();
     setupEventListeners();
+    setupAuth();
     renderAll();
 
     // Export API for Visual Editor

@@ -1148,3 +1148,136 @@ button {
     font-size: 12px;
   }
 }
+
+/* ==========================================================================
+   PRIVATE ACCESS LOCK SCREEN
+   ========================================================================== */
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background-color: var(--bg-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.lock-screen.unlocked {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lock-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 48px 36px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(35, 32, 27, 0.08);
+}
+
+.lock-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  margin: 0 auto 16px;
+}
+
+.lock-brand {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  letter-spacing: 0.2em;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--text-dark);
+  margin: 0 0 6px;
+}
+
+.lock-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-ochre);
+  margin: 0 0 28px;
+}
+
+.lock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lock-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-medium);
+  border-radius: 2px;
+  background: #FFF;
+  color: var(--text-dark);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.25em;
+  text-align: center;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, outline 0.2s ease;
+}
+
+.lock-input:focus {
+  outline: 2px solid var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.lock-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: var(--text-dark);
+  color: var(--bg-main);
+  border: none;
+  border-radius: 2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.lock-btn:hover {
+  background: var(--accent-green);
+}
+
+.lock-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #C0614E;
+}
+
+.btn-relock {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.btn-relock:hover {
+  color: var(--text-dark);
+}
+

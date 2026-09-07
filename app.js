@@ -40,6 +40,9 @@
         currentLang = saved;
       }
     } catch (e) {}
+    try {
+      document.documentElement.lang = currentLang;
+    } catch (e) {}
   }
 
   /**
@@ -49,41 +52,99 @@
     if (lang !== 'id' && lang !== 'en') return;
     currentLang = lang;
     try {
+      document.documentElement.lang = lang;
       localStorage.setItem(LANG_KEY, lang);
     } catch (e) {}
     renderAll();
   }
 
   /**
+   * Helper: Get formatted price display string
+   */
+  function getPriceDisplay(flower, format) {
+    if (!flower || !flower.prices || !flower.prices[format]) return 'Rp 0';
+    const p = flower.prices[format];
+    return typeof p === 'object' ? p.display : p;
+  }
+
+  /**
+   * Helper: Get option metadata (yield, time, availability, channel URLs)
+   */
+  function getOptionMeta(flower, format) {
+    const isEn = currentLang === 'en';
+    if (!flower || !flower.options || !flower.options[format]) {
+      return {
+        yield: isEn ? '1 stem' : '1 tangkai',
+        assemblyTime: null,
+        availability: 'available',
+        channels: { tokopediaUrl: null, shopeeUrl: null }
+      };
+    }
+    const opt = flower.options[format];
+    return {
+      yield: isEn ? opt.yieldEn : opt.yieldId,
+      assemblyTime: isEn ? opt.assemblyTimeEn : opt.assemblyTimeId,
+      availability: opt.availability || 'available',
+      channels: opt.channels || { tokopediaUrl: null, shopeeUrl: null }
+    };
+  }
+
+  /**
+   * Smoothly scroll to in-page section with sticky header offset compensation
+   */
+  function scrollToSection(selector) {
+    const target = typeof selector === 'string' ? document.querySelector(selector) : selector;
+    if (!target) return;
+    const header = document.querySelector('.site-header');
+    const headerHeight = header ? header.getBoundingClientRect().height : 68;
+    const targetY = target.getBoundingClientRect().top + window.scrollY - headerHeight - 16;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({
+      top: Math.max(0, targetY),
+      behavior: prefersReducedMotion ? 'auto' : 'smooth'
+    });
+  }
+
+  /**
+   * Atomic Order Selection: updates flower and/or format in a single pass
+   */
+  function setOrderSelection(flowerKey, formatKey, scroll = false) {
+    let changed = false;
+    if (flowerKey && siteData.flowers[flowerKey] && selectedFlower !== flowerKey) {
+      selectedFlower = flowerKey;
+      changed = true;
+    }
+    if (formatKey && siteData.formatKeys.includes(formatKey) && selectedFormat !== formatKey) {
+      selectedFormat = formatKey;
+      changed = true;
+    }
+    if (changed) {
+      renderOrderSection();
+    }
+    if (scroll) {
+      scrollToSection('#order');
+    }
+  }
+
+  /**
    * Select a flower species
    */
   function selectFlower(flowerKey) {
-    if (siteData.flowers[flowerKey]) {
-      selectedFlower = flowerKey;
-      renderOrderSection();
-    }
+    setOrderSelection(flowerKey, null, false);
   }
 
   /**
    * Select a format (Kit, Stem, Bouquet)
    */
   function selectFormat(formatKey) {
-    if (siteData.formatKeys.includes(formatKey)) {
-      selectedFormat = formatKey;
-      renderOrderSection();
-    }
+    setOrderSelection(null, formatKey, false);
   }
 
   /**
    * Quick order handler from collection card buttons
    */
   function quickOrder(flowerKey, formatKey) {
-    selectFlower(flowerKey);
-    selectFormat(formatKey);
-    const orderSection = document.getElementById('order');
-    if (orderSection) {
-      orderSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    setOrderSelection(flowerKey, formatKey, true);
   }
 
   /**
@@ -97,12 +158,14 @@
   }
 
   /**
-   * Helper: safe attribute replacement
+   * Helper: safe attribute replacement with duplicate avoidance
    */
   function setAttr(selector, attr, val) {
     const el = typeof selector === 'string' ? document.querySelector(selector) : selector;
     if (el && val !== undefined && val !== null) {
-      el.setAttribute(attr, val);
+      if (el.getAttribute(attr) !== val) {
+        el.setAttribute(attr, val);
+      }
     }
   }
 
@@ -115,17 +178,39 @@
     setText('#nav-how', t.navHow);
     setText('#nav-faq', t.navFaq);
     setText('#nav-order', t.navOrder);
+    setText('#mobile-order-btn', t.navOrder || 'Pesan');
+
+    // Responsive brand logo
+    if (siteData.store.logo) {
+      setAttr('.brand-logo', 'src', siteData.store.logo);
+      if (siteData.store.logo2x) {
+        setAttr('.brand-logo', 'srcset', `${siteData.store.logo} 1x, ${siteData.store.logo2x} 2x`);
+      }
+    }
 
     const btnId = document.getElementById('lang-id');
     const btnEn = document.getElementById('lang-en');
     if (btnId && btnEn) {
       if (currentLang === 'id') {
         btnId.classList.add('active');
+        btnId.setAttribute('aria-pressed', 'true');
         btnEn.classList.remove('active');
+        btnEn.setAttribute('aria-pressed', 'false');
       } else {
         btnId.classList.remove('active');
+        btnId.setAttribute('aria-pressed', 'false');
         btnEn.classList.add('active');
+        btnEn.setAttribute('aria-pressed', 'true');
       }
+    }
+
+    const navToggle = document.getElementById('nav-toggle');
+    if (navToggle) {
+      const isExpanded = navToggle.getAttribute('aria-expanded') === 'true';
+      navToggle.setAttribute('aria-label', isExpanded
+        ? (currentLang === 'en' ? 'Close navigation menu' : 'Tutup menu navigasi')
+        : (currentLang === 'en' ? 'Open navigation menu' : 'Buka menu navigasi')
+      );
     }
   }
 
@@ -150,6 +235,13 @@
     setText('#hero-caption-pl', t.heroPlatePl || 'PL. I');
 
     setAttr('#hero-image', 'src', siteData.images.hero);
+    setAttr('#hero-image', 'alt', currentLang === 'en'
+      ? 'A finished sunflower made from chenille stems, on cream paper'
+      : 'Bunga matahari jadi dari kawat bulu chenille di atas kertas krem');
+    if (siteData.images.heroSrcset) {
+      setAttr('#hero-image', 'srcset', siteData.images.heroSrcset);
+      setAttr('#hero-image', 'sizes', siteData.images.heroSizes || '(max-width: 768px) 90vw, 496px');
+    }
   }
 
   /**
@@ -183,21 +275,24 @@
       const flower = siteData.flowers[key];
       if (!flower) return;
       const trans = flower[currentLang] || flower.en;
-      const priceKit = flower.prices.Kit;
+      const priceKit = getPriceDisplay(flower, 'Kit');
+      const flowerAlt = currentLang === 'en'
+        ? (flower.alt || `${trans.name} handcrafted from chenille stems`)
+        : `${trans.name} buatan tangan dari benang chenille`;
 
       const card = document.createElement('article');
       card.className = 'flower-card';
       card.innerHTML = `
         <div class="flower-photo-wrapper">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
-          <img src="${flower.photo}" alt="${flower.alt || trans.name}" class="flower-photo" loading="lazy" />
+          <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
         </div>
         <div class="flower-info">
           <h3 class="flower-name">${trans.name}</h3>
           <p class="flower-blurb">${trans.blurb}</p>
           <p class="flower-makes">${t.makesPrefix} ${trans.makes} · ${trans.size}</p>
           ${siteData.store.showPrices ? `<p class="flower-price">${t.kitPricePrefix} ${priceKit}</p>` : ''}
-          <a href="#order" class="btn-buy-kit" data-flower="${key}" data-format="Kit" style="background:#23201B">
+          <a href="#order" class="btn-buy-kit" data-flower="${key}" data-format="Kit">
             ${t.buyKitPrefix} ${trans.name} ${t.buyKitSuffix || ''}
           </a>
           <div class="flower-quick-links">
@@ -207,11 +302,8 @@
         </div>
       `;
 
-      // Hover color on buy kit button
       const buyBtn = card.querySelector('.btn-buy-kit');
       if (buyBtn) {
-        buyBtn.addEventListener('mouseenter', () => { buyBtn.style.backgroundColor = flower.accent; });
-        buyBtn.addEventListener('mouseleave', () => { buyBtn.style.backgroundColor = '#23201B'; });
         buyBtn.addEventListener('click', (e) => {
           e.preventDefault();
           quickOrder(key, 'Kit');
@@ -246,6 +338,13 @@
     setText('#kit-title', t.kitTitle);
     setText('#kit-intro', t.kitIntro);
     setAttr('#kit-image', 'src', siteData.images.kit);
+    setAttr('#kit-image', 'alt', currentLang === 'en'
+      ? 'Overhead view of one sunflower DIY kit with components neatly arranged'
+      : 'Tampilan atas satu kit DIY bunga matahari dengan seluruh komponen tertata rapi');
+    if (siteData.images.kitSrcset) {
+      setAttr('#kit-image', 'srcset', siteData.images.kitSrcset);
+      setAttr('#kit-image', 'sizes', siteData.images.kitSizes || '(max-width: 768px) 90vw, 540px');
+    }
 
     // List of kit contents
     const listEl = document.getElementById('kit-list');
@@ -312,6 +411,13 @@
     setText('#mat-caption', t.matCaption);
     setText('#mat-body', t.matBody);
     setAttr('#material-image', 'src', siteData.images.macro);
+    setAttr('#material-image', 'alt', currentLang === 'en'
+      ? 'Close-up texture of soft chenille wire stems'
+      : 'Tekstur dekat kawat bulu chenille yang lembut');
+    if (siteData.images.macroSrcset) {
+      setAttr('#material-image', 'srcset', siteData.images.macroSrcset);
+      setAttr('#material-image', 'sizes', siteData.images.macroSizes || '(max-width: 768px) 90vw, 540px');
+    }
 
     const pointsEl = document.getElementById('material-points');
     if (pointsEl && t.matPoints) {
@@ -341,49 +447,82 @@
     setText('#step3-label', t.step3);
     setText('#selection-label', t.selectionLabel);
     setText('#includes-label', t.includesLabel);
-    setText('#order-note', t.orderNote);
 
-    // Step 1: Flower chips
+    // Step 1: Flower chips with radiogroup semantics (preserves keyboard focus)
     const flowerChipsEl = document.getElementById('flower-chips');
     if (flowerChipsEl) {
-      flowerChipsEl.innerHTML = '';
-      siteData.flowerOrder.forEach(key => {
-        const fl = siteData.flowers[key];
-        if (!fl) return;
-        const flTrans = fl[currentLang] || fl.en;
-        const isActive = key === selectedFlower;
+      flowerChipsEl.setAttribute('role', 'radiogroup');
+      flowerChipsEl.setAttribute('aria-label', t.step1);
 
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `chip-flower ${isActive ? 'active' : ''}`;
-        btn.innerHTML = `<span class="chip-dot" style="background:${fl.accent}"></span>${flTrans.name}`;
-        btn.addEventListener('click', () => selectFlower(key));
-        flowerChipsEl.appendChild(btn);
-      });
+      const existingChips = flowerChipsEl.querySelectorAll('.chip-flower');
+      if (existingChips.length === siteData.flowerOrder.length) {
+        existingChips.forEach((btn, index) => {
+          const key = siteData.flowerOrder[index];
+          const isActive = key === selectedFlower;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        });
+      } else {
+        flowerChipsEl.innerHTML = '';
+        siteData.flowerOrder.forEach(key => {
+          const fl = siteData.flowers[key];
+          if (!fl) return;
+          const flTrans = fl[currentLang] || fl.en;
+          const isActive = key === selectedFlower;
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `chip-flower ${isActive ? 'active' : ''}`;
+          btn.setAttribute('role', 'radio');
+          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          btn.setAttribute('aria-label', flTrans.name);
+          btn.innerHTML = `<span class="chip-dot" style="background:${fl.accent}"></span>${flTrans.name}`;
+          btn.addEventListener('click', () => selectFlower(key));
+          flowerChipsEl.appendChild(btn);
+        });
+      }
     }
 
-    // Step 2: Formats
+    // Step 2: Formats with radiogroup semantics (preserves keyboard focus)
     const formatCardsEl = document.getElementById('format-cards');
     if (formatCardsEl) {
-      formatCardsEl.innerHTML = '';
-      t.formats.forEach(f => {
-        const isActive = f.key === selectedFormat;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `format-card ${isActive ? 'active' : ''}`;
-        btn.innerHTML = `
-          <span class="format-label">${f.label}</span>
-          <span class="format-note">${f.note}</span>
-        `;
-        btn.addEventListener('click', () => selectFormat(f.key));
-        formatCardsEl.appendChild(btn);
-      });
+      formatCardsEl.setAttribute('role', 'radiogroup');
+      formatCardsEl.setAttribute('aria-label', t.step2);
+
+      const existingCards = formatCardsEl.querySelectorAll('.format-card');
+      if (existingCards.length === t.formats.length) {
+        existingCards.forEach((btn, index) => {
+          const f = t.formats[index];
+          const isActive = f.key === selectedFormat;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        });
+      } else {
+        formatCardsEl.innerHTML = '';
+        t.formats.forEach(f => {
+          const isActive = f.key === selectedFormat;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `format-card ${isActive ? 'active' : ''}`;
+          btn.setAttribute('role', 'radio');
+          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          btn.setAttribute('aria-label', `${f.label}: ${f.note}`);
+          btn.innerHTML = `
+            <span class="format-label">${f.label}</span>
+            <span class="format-note">${f.note}</span>
+          `;
+          btn.addEventListener('click', () => selectFormat(f.key));
+          formatCardsEl.appendChild(btn);
+        });
+      }
     }
 
     // Summary Box
     const curFlower = siteData.flowers[selectedFlower] || siteData.flowers.Sunflower;
     const curFlowerTrans = curFlower[currentLang] || curFlower.en;
     const curFormatObj = t.formats.find(f => f.key === selectedFormat) || t.formats[0];
+    const optMeta = getOptionMeta(curFlower, selectedFormat);
+    const curPrice = getPriceDisplay(curFlower, selectedFormat);
 
     // Summary Title & Latin
     setText('#summary-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
@@ -391,7 +530,6 @@
 
     // Price
     const priceEl = document.getElementById('summary-price');
-    const curPrice = curFlower.prices[selectedFormat] || 'Rp 0';
     if (priceEl) {
       if (siteData.store.showPrices) {
         priceEl.style.display = 'block';
@@ -407,12 +545,15 @@
       includesListEl.innerHTML = '';
       const templateLines = t.includes[selectedFormat] || [];
       const computedLines = templateLines.map(line =>
-        line.replace('{flower}', curFlowerTrans.name).replace('{size}', curFlowerTrans.size)
+        line.replace('{flower}', curFlowerTrans.name)
+            .replace('{size}', curFlowerTrans.size)
+            .replace('{yield}', optMeta.yield)
       );
 
-      // If kit, also append makes line
+      // If kit, also show yield and assembly time clearly
       if (selectedFormat === 'Kit') {
-        computedLines.push(`${t.makesPrefix} ${curFlowerTrans.makes} · ${curFlowerTrans.size}`);
+        const timeNote = optMeta.assemblyTime ? ` · ${optMeta.assemblyTime}` : '';
+        computedLines.push(`${t.makesPrefix} ${optMeta.yield}${timeNote} · ${curFlowerTrans.size}`);
       }
 
       computedLines.forEach(line => {
@@ -429,54 +570,105 @@
     const btnShopee = document.getElementById('btn-shopee');
     const btnWhatsapp = document.getElementById('btn-whatsapp');
 
+    const tokopUrl = optMeta.channels?.tokopediaUrl || siteData.store.tokopediaUrl;
+    const shopUrl = optMeta.channels?.shopeeUrl || siteData.store.shopeeUrl;
+
     if (btnTokopedia) {
       btnTokopedia.style.display = ch.showTokopedia ? 'flex' : 'none';
-      btnTokopedia.href = siteData.store.tokopediaUrl || '#';
-      btnTokopedia.querySelector('.channel-action').textContent = t.openLabel;
+      if (tokopUrl) {
+        btnTokopedia.href = tokopUrl;
+        btnTokopedia.removeAttribute('aria-disabled');
+        btnTokopedia.classList.remove('btn-disabled');
+        btnTokopedia.querySelector('.channel-action').textContent = t.openLabel;
+      } else {
+        btnTokopedia.removeAttribute('href');
+        btnTokopedia.setAttribute('aria-disabled', 'true');
+        btnTokopedia.classList.add('btn-disabled');
+        btnTokopedia.querySelector('.channel-action').textContent = t.channelComingSoon || 'segera hadir';
+      }
     }
 
     if (btnShopee) {
       btnShopee.style.display = ch.showShopee ? 'flex' : 'none';
-      btnShopee.href = siteData.store.shopeeUrl || '#';
-      btnShopee.querySelector('.channel-action').textContent = t.openLabel;
+      if (shopUrl) {
+        btnShopee.href = shopUrl;
+        btnShopee.removeAttribute('aria-disabled');
+        btnShopee.classList.remove('btn-disabled');
+        btnShopee.querySelector('.channel-action').textContent = t.openLabel;
+      } else {
+        btnShopee.removeAttribute('href');
+        btnShopee.setAttribute('aria-disabled', 'true');
+        btnShopee.classList.add('btn-disabled');
+        btnShopee.querySelector('.channel-action').textContent = t.channelComingSoon || 'segera hadir';
+      }
     }
 
     if (btnWhatsapp) {
       btnWhatsapp.style.display = ch.showWhatsapp ? 'flex' : 'none';
-      const waNumber = siteData.store.whatsappNumber.replace(/[^0-9]/g, '');
+      btnWhatsapp.classList.remove('btn-disabled');
+      const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
       const waTpl = currentLang === 'en'
-        ? (siteData.store.whatsappTemplateEn || 'Hello! I want to order {flower} — {format} ({price})')
-        : (siteData.store.whatsappTemplateId || 'Halo! Saya ingin memesan {flower} — {format} ({price})');
+        ? (siteData.store.whatsappTemplateEn || 'Hello! I want to order {flower} — {format} ({quantity}, {price})')
+        : (siteData.store.whatsappTemplateId || 'Halo! Saya ingin memesan {flower} — {format} ({quantity}, {price})');
 
       const waMsg = waTpl
         .replace('{flower}', curFlowerTrans.name)
         .replace('{format}', curFormatObj.label)
+        .replace('{quantity}', optMeta.yield)
         .replace('{price}', curPrice);
 
       btnWhatsapp.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`;
       btnWhatsapp.querySelector('.channel-name').textContent = t.waLabel;
       btnWhatsapp.querySelector('.channel-action').textContent = t.messageLabel;
     }
+
+    // Dynamic order note: honest marketplace status & WhatsApp notice
+    const hasMarketplaceListing = Boolean(tokopUrl || shopUrl);
+    const orderNoteText = hasMarketplaceListing
+      ? t.orderNote
+      : `${t.channelUnavailableNotice || t.orderNote} ${t.waDraftNotice || ''}`;
+    setText('#order-note', orderNoteText);
+
+    // Polite live region announcement
+    const announcer = document.getElementById('order-announcer');
+    if (announcer) {
+      const announceText = currentLang === 'en'
+        ? `${curFlowerTrans.name} — ${curFormatObj.label} selected. Price ${curPrice}.`
+        : `${curFlowerTrans.name} — ${curFormatObj.label} dipilih. Harga ${curPrice}.`;
+      announcer.textContent = announceText;
+    }
+
+    // Update sticky mobile order bar
+    setText('#sticky-order-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
+    setText('#sticky-order-price', curPrice);
+    setText('#sticky-order-cta', `${t.navOrder || 'Pesan'} →`);
   }
 
   /**
-   * Render FAQ Section
+   * Render FAQ Section (Accessible Accordion / Disclosure)
    */
   function renderFaq(t) {
     setText('#faq-eyebrow', t.faqEyebrow);
     setText('#faq-title', t.faqTitle);
 
-    const faqGrid = document.getElementById('faq-grid');
-    if (faqGrid && t.faqs) {
-      faqGrid.innerHTML = '';
-      t.faqs.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'faq-card';
-        div.innerHTML = `
-          <h3 class="faq-question">${item.q}</h3>
-          <p class="faq-answer">${item.a}</p>
+    const faqAccordion = document.getElementById('faq-accordion');
+    if (faqAccordion && t.faqs) {
+      faqAccordion.innerHTML = '';
+      t.faqs.forEach((item, index) => {
+        const details = document.createElement('details');
+        details.className = 'faq-item';
+        // Open the first FAQ by default for immediate context
+        if (index === 0) details.open = true;
+        details.innerHTML = `
+          <summary class="faq-summary">
+            <h3 class="faq-question">${item.q}</h3>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </summary>
+          <div class="faq-answer">
+            <p>${item.a}</p>
+          </div>
         `;
-        faqGrid.appendChild(div);
+        faqAccordion.appendChild(details);
       });
     }
   }
@@ -491,6 +683,13 @@
     setText('#about-ig', t.aboutIg);
     setAttr('#about-ig', 'href', siteData.store.instagramUrl || '#');
     setAttr('#about-image', 'src', siteData.images.us);
+    setAttr('#about-image', 'alt', currentLang === 'en'
+      ? 'Handcrafting flower stems and packing kits at the workshop table'
+      : 'Proses pembuatan tangkai bunga dan pengemasan kit di meja workshop');
+    if (siteData.images.usSrcset) {
+      setAttr('#about-image', 'srcset', siteData.images.usSrcset);
+      setAttr('#about-image', 'sizes', siteData.images.usSizes || '(max-width: 768px) 90vw, 540px');
+    }
   }
 
   /**
@@ -525,6 +724,25 @@
 
   const AUTH_KEY = 'komorebi_unlocked';
 
+  function updateLockA11y(isLocked) {
+    const mainContent = document.getElementById('main-content');
+    const header = document.querySelector('.site-header');
+    const footer = document.querySelector('.site-footer');
+    const stickyBar = document.getElementById('sticky-order-bar');
+
+    [mainContent, header, footer, stickyBar].forEach(el => {
+      if (el) {
+        if (isLocked) {
+          el.setAttribute('aria-hidden', 'true');
+          if ('inert' in el) el.inert = true;
+        } else {
+          el.removeAttribute('aria-hidden');
+          if ('inert' in el) el.inert = false;
+        }
+      }
+    });
+  }
+
   /**
    * Setup Passcode Gatekeeper
    */
@@ -541,6 +759,7 @@
     if (!authConfig.enabled) {
       if (lockScreen) lockScreen.classList.add('unlocked');
       if (relockBtn) relockBtn.style.display = 'none';
+      updateLockA11y(false);
       return;
     }
 
@@ -548,10 +767,15 @@
     try {
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) lockScreen.classList.add('unlocked');
+        updateLockA11y(false);
       } else {
         if (lockScreen) lockScreen.classList.remove('unlocked');
+        updateLockA11y(true);
+        if (passInput) passInput.focus();
       }
-    } catch (e) {}
+    } catch (e) {
+      updateLockA11y(false);
+    }
 
     // Form submission
     if (lockForm) {
@@ -566,6 +790,7 @@
           } catch (err) {}
           if (lockError) lockError.textContent = '';
           if (lockScreen) lockScreen.classList.add('unlocked');
+          updateLockA11y(false);
         } else {
           if (lockError) {
             lockError.textContent = currentLang === 'en' ? 'Incorrect passcode. Try again.' : 'Kata sandi salah. Coba lagi.';
@@ -587,11 +812,80 @@
         } catch (err) {}
         if (lockScreen) {
           lockScreen.classList.remove('unlocked');
+          updateLockA11y(true);
           if (passInput) {
             passInput.value = '';
             passInput.focus();
           }
         }
+      });
+    }
+  }
+
+  /**
+   * Setup Sticky Mobile Order Bar
+   */
+  function initStickyOrderBar() {
+    const stickyBar = document.getElementById('sticky-order-bar');
+    const heroEl = document.getElementById('hero');
+    const orderEl = document.getElementById('order');
+    const footerEl = document.getElementById('site-footer') || document.querySelector('.site-footer');
+    if (!stickyBar || !heroEl || !orderEl) return;
+
+    let heroVisible = true;
+    let orderVisible = false;
+    let footerVisible = false;
+
+    function updateSticky() {
+      if (!heroVisible && !orderVisible && !footerVisible) {
+        stickyBar.classList.add('visible');
+        stickyBar.setAttribute('aria-hidden', 'false');
+      } else {
+        stickyBar.classList.remove('visible');
+        stickyBar.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.target === heroEl) {
+            heroVisible = entry.isIntersecting;
+          } else if (entry.target === orderEl) {
+            orderVisible = entry.isIntersecting;
+          } else if (entry.target === footerEl) {
+            footerVisible = entry.isIntersecting;
+          }
+        });
+        updateSticky();
+      }, { threshold: 0.05 });
+
+      observer.observe(heroEl);
+      observer.observe(orderEl);
+      if (footerEl) observer.observe(footerEl);
+    } else {
+      window.addEventListener('scroll', () => {
+        const heroRect = heroEl.getBoundingClientRect();
+        const orderRect = orderEl.getBoundingClientRect();
+        heroVisible = heroRect.bottom > 64;
+        orderVisible = orderRect.top < window.innerHeight && orderRect.bottom > 0;
+        if (footerEl) {
+          const footerRect = footerEl.getBoundingClientRect();
+          footerVisible = footerRect.top < window.innerHeight && footerRect.bottom > 0;
+        }
+        updateSticky();
+      }, { passive: true });
+    }
+
+    const cta = document.getElementById('sticky-order-cta');
+    if (cta) {
+      cta.addEventListener('click', (e) => {
+        e.preventDefault();
+        scrollToSection('#order');
+        setTimeout(() => {
+          const activeChip = document.querySelector('.chip-flower.active') || document.querySelector('.chip-flower');
+          if (activeChip) activeChip.focus();
+        }, 350);
       });
     }
   }
@@ -605,6 +899,78 @@
 
     if (btnId) btnId.addEventListener('click', () => setLanguage('id'));
     if (btnEn) btnEn.addEventListener('click', () => setLanguage('en'));
+
+    // Mobile Navigation Toggle
+    const navToggle = document.getElementById('nav-toggle');
+    const navMenu = document.getElementById('nav-menu');
+
+    function openNavMenu() {
+      if (!navMenu || !navToggle) return;
+      navMenu.classList.add('open');
+      navToggle.setAttribute('aria-expanded', 'true');
+      navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Close navigation menu' : 'Tutup menu navigasi');
+      const firstLink = navMenu.querySelector('.nav-link');
+      if (firstLink) firstLink.focus();
+    }
+
+    function closeNavMenu() {
+      if (!navMenu || !navToggle) return;
+      navMenu.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+      navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Open navigation menu' : 'Buka menu navigasi');
+    }
+
+    if (navToggle && navMenu) {
+      navToggle.addEventListener('click', () => {
+        if (navMenu.classList.contains('open')) {
+          closeNavMenu();
+        } else {
+          openNavMenu();
+        }
+      });
+    }
+
+    // Escape closes mobile nav and restores focus
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && navMenu && navMenu.classList.contains('open')) {
+        closeNavMenu();
+        if (navToggle) navToggle.focus();
+      }
+    });
+
+    // Close when clicking outside header
+    document.addEventListener('click', (e) => {
+      if (navMenu && navMenu.classList.contains('open')) {
+        const header = document.querySelector('.site-header');
+        if (header && !header.contains(e.target)) {
+          closeNavMenu();
+        }
+      }
+    });
+
+    // Close when clicking nav links
+    document.querySelectorAll('.nav-link, .nav-cta, .nav-cta-mobile').forEach(link => {
+      link.addEventListener('click', () => {
+        closeNavMenu();
+      });
+    });
+
+    // Brand link scroll to top
+    const brandLink = document.getElementById('brand-link');
+    if (brandLink) {
+      brandLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeNavMenu();
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({
+          top: 0,
+          behavior: prefersReducedMotion ? 'auto' : 'smooth'
+        });
+      });
+    }
+
+    // Initialize Sticky Order Bar
+    initStickyOrderBar();
   }
 
   /**

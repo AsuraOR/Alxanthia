@@ -26,14 +26,15 @@ window.KOMOREBI_DATA = {
   store: {
     brandName: "Komorebi",
     tagline: "est. 2026",
-    logo: "komorebi-logo.png",
+    logo: "komorebi-logo-96.webp",
+    logo2x: "komorebi-logo-192.webp",
     instagramUrl: "https://instagram.com/komorebi",
-    tokopediaUrl: "https://www.tokopedia.com",
-    shopeeUrl: "https://shopee.co.id",
+    tokopediaUrl: null, // Marketplace listing URLs pending confirmation in Phase 1
+    shopeeUrl: null,
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
-    whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {flower} — {format} ({price}). Apakah masih tersedia?",
-    whatsappTemplateEn: "Hello Komorebi! I would like to order {flower} — {format} ({price}). Is it available?",
+    whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {flower} — {format} ({quantity}, {price}). Apakah masih tersedia?",
+    whatsappTemplateEn: "Hello Komorebi! I would like to order {flower} — {format} ({quantity}, {price}). Is it available?",
     // Marketplace & Channel visibility toggles
     channels: {
       showTokopedia: true,
@@ -43,12 +44,20 @@ window.KOMOREBI_DATA = {
     showPrices: true
   },
 
-  // General Images used on the landing page
+  // General Images used on the landing page (WebP derivatives)
   images: {
-    hero: "img/hero.png",
-    kit: "img/kit.png",
-    macro: "img/macro.png",
-    us: "img/us.png"
+    hero: "img/hero-800.webp",
+    heroSrcset: "img/hero-400.webp 400w, img/hero-800.webp 800w, img/hero-1122.webp 1122w",
+    heroSizes: "(max-width: 768px) 90vw, 496px",
+    kit: "img/kit-960.webp",
+    kitSrcset: "img/kit-480.webp 480w, img/kit-960.webp 960w, img/kit-1448.webp 1448w",
+    kitSizes: "(max-width: 768px) 90vw, 540px",
+    macro: "img/macro-960.webp",
+    macroSrcset: "img/macro-480.webp 480w, img/macro-960.webp 960w, img/macro-1254.webp 1254w",
+    macroSizes: "(max-width: 768px) 90vw, 540px",
+    us: "img/us-960.webp",
+    usSrcset: "img/us-480.webp 480w, img/us-960.webp 960w, img/us-1448.webp 1448w",
+    usSizes: "(max-width: 768px) 90vw, 540px"
   },
 
   // Flower Catalog & Specific Settings
@@ -56,15 +65,44 @@ window.KOMOREBI_DATA = {
 
   flowers: {
     Sunflower: {
-      id: "Sunflower",
+      key: "Sunflower",
+      slug: "sunflower",
       latin: "Helianthus annuus",
       accent: "#C89A3C",
-      photo: "img/sunflower.png",
+      photo: "img/sunflower-720.webp",
+      srcset: "img/sunflower-360.webp 360w, img/sunflower-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille sunflowers with green leaves",
       prices: {
-        Kit: "Rp 95.000",
-        Stem: "Rp 55.000",
-        Bouquet: "Rp 285.000"
+        Kit: { amount: 95000, currency: "IDR", display: "Rp 95.000" },
+        Stem: { amount: 55000, currency: "IDR", display: "Rp 55.000" },
+        Bouquet: { amount: 285000, currency: "IDR", display: "Rp 285.000" }
+      },
+      options: {
+        Kit: {
+          yieldEn: "3 flowers",
+          yieldId: "3 bunga",
+          assemblyTimeEn: "~20 min per flower",
+          assemblyTimeId: "±20 menit per bunga",
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Stem: {
+          yieldEn: "1 stem",
+          yieldId: "1 tangkai jadi",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Bouquet: {
+          yieldEn: "5 stems",
+          yieldId: "5 tangkai",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        }
       },
       en: {
         name: "Sunflower",
@@ -80,15 +118,44 @@ window.KOMOREBI_DATA = {
       }
     },
     Rose: {
-      id: "Rose",
+      key: "Rose",
+      slug: "rose",
       latin: "Rosa centifolia",
       accent: "#A8586A",
-      photo: "img/rose.png",
+      photo: "img/rose-720.webp",
+      srcset: "img/rose-360.webp 360w, img/rose-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille roses in dusty pink",
       prices: {
-        Kit: "Rp 105.000",
-        Stem: "Rp 60.000",
-        Bouquet: "Rp 305.000"
+        Kit: { amount: 105000, currency: "IDR", display: "Rp 105.000" },
+        Stem: { amount: 60000, currency: "IDR", display: "Rp 60.000" },
+        Bouquet: { amount: 305000, currency: "IDR", display: "Rp 305.000" }
+      },
+      options: {
+        Kit: {
+          yieldEn: "3 flowers",
+          yieldId: "3 bunga",
+          assemblyTimeEn: "~20 min per flower",
+          assemblyTimeId: "±20 menit per bunga",
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Stem: {
+          yieldEn: "1 stem",
+          yieldId: "1 tangkai jadi",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Bouquet: {
+          yieldEn: "5 stems",
+          yieldId: "5 tangkai",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        }
       },
       en: {
         name: "Rose",
@@ -104,15 +171,44 @@ window.KOMOREBI_DATA = {
       }
     },
     Tulip: {
-      id: "Tulip",
+      key: "Tulip",
+      slug: "tulip",
       latin: "Tulipa gesneriana",
       accent: "#C0614E",
-      photo: "img/tulip.png",
+      photo: "img/tulip-720.webp",
+      srcset: "img/tulip-360.webp 360w, img/tulip-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille tulips with slender leaves",
       prices: {
-        Kit: "Rp 85.000",
-        Stem: "Rp 50.000",
-        Bouquet: "Rp 265.000"
+        Kit: { amount: 85000, currency: "IDR", display: "Rp 85.000" },
+        Stem: { amount: 50000, currency: "IDR", display: "Rp 50.000" },
+        Bouquet: { amount: 265000, currency: "IDR", display: "Rp 265.000" }
+      },
+      options: {
+        Kit: {
+          yieldEn: "4 flowers",
+          yieldId: "4 bunga",
+          assemblyTimeEn: "~20 min per flower",
+          assemblyTimeId: "±20 menit per bunga",
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Stem: {
+          yieldEn: "1 stem",
+          yieldId: "1 tangkai jadi",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Bouquet: {
+          yieldEn: "7 stems",
+          yieldId: "7 tangkai",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        }
       },
       en: {
         name: "Tulip",
@@ -128,15 +224,44 @@ window.KOMOREBI_DATA = {
       }
     },
     Lavender: {
-      id: "Lavender",
+      key: "Lavender",
+      slug: "lavender",
       latin: "Lavandula angustifolia",
       accent: "#7B6E9B",
-      photo: "img/lavender.png",
+      photo: "img/lavender-720.webp",
+      srcset: "img/lavender-360.webp 360w, img/lavender-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "A bundle of handmade chenille lavender spikes",
       prices: {
-        Kit: "Rp 90.000",
-        Stem: "Rp 65.000",
-        Bouquet: "Rp 275.000"
+        Kit: { amount: 90000, currency: "IDR", display: "Rp 90.000" },
+        Stem: { amount: 65000, currency: "IDR", display: "Rp 65.000" },
+        Bouquet: { amount: 275000, currency: "IDR", display: "Rp 275.000" }
+      },
+      options: {
+        Kit: {
+          yieldEn: "9 spikes",
+          yieldId: "9 tangkai",
+          assemblyTimeEn: "~20 min per spike",
+          assemblyTimeId: "±20 menit per tangkai",
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Stem: {
+          yieldEn: "1 bundle (9 spikes)",
+          yieldId: "1 ikat (9 tangkai)",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        },
+        Bouquet: {
+          yieldEn: "11 spikes",
+          yieldId: "11 tangkai",
+          assemblyTimeEn: null,
+          assemblyTimeId: null,
+          availability: "available",
+          channels: { tokopediaUrl: null, shopeeUrl: null }
+        }
       },
       en: {
         name: "Lavender",
@@ -241,21 +366,24 @@ window.KOMOREBI_DATA = {
       ],
 
       orderEyebrow: "Pesan",
-      orderTitle: "Susun pesanan Anda, lalu lanjut ke checkout",
+      orderTitle: "Susun pesanan Anda, lalu pilih tempat membeli",
       step1: "Langkah 1 — pilih bunga",
       step2: "Langkah 2 — pilih bentuk",
-      step3: "Langkah 3 — lanjut ke",
+      step3: "Langkah 3 — pilih tempat membeli",
       selectionLabel: "Pilihan Anda",
       includesLabel: "Termasuk",
       openLabel: "buka →",
       messageLabel: "chat →",
-      waLabel: "WhatsApp — tanya atau custom",
-      orderNote: "Pembayaran dan pengiriman ditangani marketplace, lengkap dengan perlindungan pembelinya.",
+      channelComingSoon: "segera hadir",
+      channelUnavailableNotice: "Listing marketplace segera dibuka. Saat ini pemesanan dilayani langsung via WhatsApp.",
+      waDraftNotice: "Membuka draft pesan di WhatsApp (tidak terkirim otomatis).",
+      waLabel: "WhatsApp — tanya atau pesan",
+      orderNote: "Pembayaran dan pengiriman ditangani marketplace resmi, lengkap dengan perlindungan pembeli.",
 
       formats: [
         { key: "Kit", label: "Kit DIY", note: "Anda rangkai sendiri — sekitar 20 menit per bunga" },
-        { key: "Stem", label: "Tangkai jadi", note: "Kami rangkai, dibalut kertas" },
-        { key: "Bouquet", label: "Buket", note: "5–11 tangkai, disusun dan dibungkus" }
+        { key: "Stem", label: "Tangkai jadi", note: "Kami rangkai, dibalut kertas — siap dipajang" },
+        { key: "Bouquet", label: "Buket", note: "Rangkaian bertema bunga pilihan, diikat & dibungkus" }
       ],
 
       includes: {
@@ -266,16 +394,16 @@ window.KOMOREBI_DATA = {
           "Lem, panduan bergambar, dan QR video"
         ],
         Stem: [
-          "{flower} jadi, dirangkai oleh kami",
+          "{yield} {flower}, dirangkai rapi oleh kami",
           "{size}, siap ditaruh di vas",
-          "Dibalut kertas, dikemas dalam kotak",
-          "Kartu perawatan disertakan"
+          "Dibalut kertas kraft, dikemas dalam kotak",
+          "Kartu panduan perawatan disertakan"
         ],
         Bouquet: [
-          "5–11 tangkai jadi, disusun oleh kami",
-          "Campuran bunga dan warna sesuai permintaan",
-          "Diikat, dibungkus, dan dikotakkan",
-          "Dibuat sesuai pesanan — chat kami untuk palet khusus"
+          "{yield} bertema {flower}, disusun oleh kami",
+          "Dibalut kertas kraft & pita, siap dijadikan kado",
+          "Dikemas rapi dalam kotak pengiriman khusus",
+          "Dibuat sesuai pesanan — chat kami untuk request khusus"
         ]
       },
 
@@ -381,21 +509,24 @@ window.KOMOREBI_DATA = {
       ],
 
       orderEyebrow: "Order",
-      orderTitle: "Build your order, then continue to checkout",
+      orderTitle: "Build your order, then choose where to buy",
       step1: "Step 1 — choose a flower",
       step2: "Step 2 — choose a format",
-      step3: "Step 3 — continue to",
+      step3: "Step 3 — choose where to buy",
       selectionLabel: "Your selection",
       includesLabel: "Includes",
       openLabel: "open →",
       messageLabel: "message →",
-      waLabel: "WhatsApp — ask or customise",
-      orderNote: "Payment and delivery are handled by the marketplace, with their buyer protection.",
+      channelComingSoon: "coming soon",
+      channelUnavailableNotice: "Marketplace listings opening soon. In the meantime, orders are welcomed directly via WhatsApp.",
+      waDraftNotice: "Opens a draft message in WhatsApp (does not send automatically).",
+      waLabel: "WhatsApp — ask or order",
+      orderNote: "Payment and delivery are handled by official marketplaces with buyer protection.",
 
       formats: [
         { key: "Kit", label: "DIY kit", note: "You build it — about 20 min per flower" },
-        { key: "Stem", label: "Finished stem", note: "Assembled by us, wrapped in paper" },
-        { key: "Bouquet", label: "Bouquet", note: "5–11 stems, arranged and sleeved" }
+        { key: "Stem", label: "Finished stem", note: "Assembled by us, wrapped in paper — ready to display" },
+        { key: "Bouquet", label: "Bouquet", note: "Arranged with your chosen bloom, tied & boxed" }
       ],
 
       includes: {
@@ -406,16 +537,16 @@ window.KOMOREBI_DATA = {
           "Glue, illustrated plate and video QR code"
         ],
         Stem: [
-          "{flower}, assembled by us",
+          "{yield} {flower}, neatly assembled by us",
           "{size}, ready to place in a vase",
-          "Wrapped in paper, boxed for delivery",
-          "Care card included"
+          "Wrapped in kraft paper, boxed for delivery",
+          "Care guide card included"
         ],
         Bouquet: [
-          "5–11 finished stems, arranged by us",
-          "Mixed flowers and colours on request",
-          "Tied, sleeved and boxed",
-          "Made to order — message us for custom palettes"
+          "{yield} themed with {flower}, arranged by us",
+          "Wrapped in kraft paper & ribbon, gift-ready",
+          "Safely packaged in a dedicated presentation box",
+          "Made to order — message us for custom requests"
         ]
       },
 

@@ -26,6 +26,16 @@
   --font-serif: 'Cormorant Garamond', Georgia, serif;
   --font-sans: 'Karla', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  /* Motion System Tokens (Komorebi Animation Brief) */
+  --motion-duration-btn: 180ms;
+  --motion-duration-preview: 200ms;
+  --motion-duration-disclosure: 220ms;
+  --motion-duration-reveal: 450ms;
+  --motion-duration-hero: 500ms;
+  --motion-duration-hover: 300ms;
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 *, *::before, *::after {
@@ -230,12 +240,18 @@ button {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   text-decoration: none;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .nav-cta-mobile:hover {
   background: var(--text-dark);
   color: var(--bg-main);
+}
+
+.nav-cta-mobile:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .nav-toggle {
@@ -321,7 +337,13 @@ button {
   color: var(--text-body);
   background: transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.lang-btn:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .lang-btn.active {
@@ -349,12 +371,18 @@ button {
   letter-spacing: 0.08em;
   font-size: 12px;
   text-transform: uppercase;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .nav-cta:hover {
   background: var(--text-dark);
   color: var(--bg-main);
+}
+
+.nav-cta:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 /* ==========================================================================
@@ -411,12 +439,18 @@ button {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .btn-primary:hover {
   background: var(--accent-green);
   color: var(--bg-main);
+}
+
+.btn-primary:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .btn-secondary {
@@ -431,12 +465,19 @@ button {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color var(--motion-duration-btn) var(--motion-ease-out),
+              background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .btn-secondary:hover {
   border-color: var(--text-dark);
   background: rgba(35, 32, 27, 0.04);
+}
+
+.btn-secondary:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .hero-benefits {
@@ -562,7 +603,7 @@ button {
   background: var(--bg-card);
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .flower-photo-wrapper:hover {
@@ -584,10 +625,10 @@ button {
   aspect-ratio: 3 / 4;
   object-fit: cover;
   background: var(--bg-card);
-  transition: transform 0.3s ease;
+  transition: transform var(--motion-duration-hover) var(--motion-ease-out);
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .flower-photo-wrapper:hover .flower-photo {
     transform: scale(1.025);
   }
@@ -657,12 +698,18 @@ button {
   text-transform: uppercase;
   margin-bottom: 10px;
   text-decoration: none;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .btn-buy-kit:hover {
   background: var(--accent-green) !important;
   color: var(--bg-main);
+}
+
+.btn-buy-kit:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .flower-quick-links {
@@ -682,6 +729,8 @@ button {
   border-bottom: 1px solid var(--border-medium);
   padding: 0 4px;
   color: var(--text-dark);
+  transition: border-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .quick-link:hover {
@@ -955,7 +1004,7 @@ button {
   background: transparent;
   color: var(--text-dark);
   min-height: 44px;
-  padding: 10px 14px;
+  padding: 10px 12px;
   border-radius: 2px;
   cursor: pointer;
   font-family: var(--font-serif);
@@ -964,12 +1013,19 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              border-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
   white-space: nowrap;
 }
 
 .chip-flower:hover {
   border-color: var(--text-dark);
+}
+
+.chip-flower:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .chip-flower.active {
@@ -984,6 +1040,29 @@ button {
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
+}
+
+.chip-name {
+  display: inline-block;
+}
+
+.chip-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--accent-green);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 150ms var(--motion-ease-out),
+              transform 150ms var(--motion-ease-out);
+  flex-shrink: 0;
+}
+
+.chip-flower.active .chip-check {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .format-cards {
@@ -1006,11 +1085,18 @@ button {
   row-gap: 4px;
   align-items: baseline;
   min-height: 52px;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              border-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .format-card:hover {
   border-color: var(--text-dark);
+}
+
+.format-card:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .format-card.active {
@@ -1018,12 +1104,37 @@ button {
   background: var(--bg-card);
 }
 
+.format-header-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .format-label {
   font-family: var(--font-serif);
   font-size: 21px;
-  grid-column: 1;
-  grid-row: 1;
   color: var(--text-dark);
+}
+
+.format-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--accent-green);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 150ms var(--motion-ease-out),
+              transform 150ms var(--motion-ease-out);
+  flex-shrink: 0;
+}
+
+.format-card.active .format-check {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .format-price {
@@ -1063,14 +1174,57 @@ button {
   margin-bottom: 20px;
 }
 
-.summary-photo {
+.summary-photo-frame {
+  position: relative;
   width: 76px;
   height: 76px;
-  object-fit: cover;
+  aspect-ratio: 1 / 1;
   border-radius: 2px;
   border: 1px solid var(--border-medium);
   background: var(--bg-main);
+  overflow: hidden;
   flex-shrink: 0;
+}
+
+.summary-photo-frame .summary-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+  background: transparent;
+  transition: opacity var(--motion-duration-preview) var(--motion-ease-in-out);
+}
+
+.summary-photo-frame .summary-photo-prev {
+  opacity: 1;
+  z-index: 1;
+}
+
+.summary-photo-frame .summary-photo-main {
+  opacity: 1;
+  z-index: 2;
+}
+
+.summary-photo-frame.is-crossfading .summary-photo-main {
+  opacity: 0;
+}
+
+.summary-photo-frame.is-loading {
+  opacity: 0.88;
+}
+
+.summary-photo-frame.has-error::after {
+  content: '🌿';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: var(--bg-card);
+  z-index: 3;
 }
 
 .summary-meta {
@@ -1093,6 +1247,11 @@ button {
   font-style: italic;
   font-size: 15px;
   color: var(--text-muted);
+  transition: opacity 180ms var(--motion-ease-in-out);
+}
+
+.summary-latin.fading-out {
+  opacity: 0;
 }
 
 .summary-price {
@@ -1140,8 +1299,15 @@ button {
   gap: 16px;
   padding: 18px 20px;
   border-radius: 2px;
-  transition: all 0.2s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              border-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
   text-decoration: none;
+}
+
+.btn-channel:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .btn-channel .channel-name {
@@ -1292,23 +1458,65 @@ button:focus-visible,
 }
 
 .faq-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  color: var(--dark-accent);
-  transition: transform 0.2s ease;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
-details[open] .faq-icon {
-  transform: rotate(45deg);
+.faq-icon::before,
+.faq-icon::after {
+  content: '';
+  position: absolute;
+  background-color: var(--dark-accent);
+  border-radius: 1px;
+}
+
+/* Horizontal bar remains visible as the minus sign */
+.faq-icon::before {
+  width: 14px;
+  height: 2px;
+}
+
+/* Vertical bar fades out and scales down vertically to morph '+' into '−' */
+.faq-icon::after {
+  width: 2px;
+  height: 14px;
+  transform-origin: center;
+  transition: transform var(--motion-duration-disclosure) var(--motion-ease-out),
+              opacity var(--motion-duration-disclosure) var(--motion-ease-out);
+}
+
+details[open] .faq-icon::after {
+  transform: scaleY(0);
+  opacity: 0;
+}
+
+details.is-closing .faq-icon::after {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.faq-answer-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-duration-disclosure) var(--motion-ease-out);
+}
+
+details[open] > .faq-answer-wrapper {
+  grid-template-rows: 1fr;
+}
+
+details.is-closing > .faq-answer-wrapper {
+  grid-template-rows: 0fr;
 }
 
 .faq-answer {
+  min-height: 0;
+  overflow: hidden;
   padding-bottom: 22px;
   font-size: 14.5px;
   line-height: 1.65;
@@ -1472,16 +1680,20 @@ details[open] .faq-icon {
   padding: 10px 20px;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   box-shadow: 0 -4px 18px rgba(35, 32, 27, 0.08);
-  transform: translateY(100%);
+  transform: translateY(12px);
   opacity: 0;
   pointer-events: none;
-  transition: transform 0.25s ease, opacity 0.25s ease;
+  visibility: hidden;
+  transition: transform var(--motion-duration-disclosure) var(--motion-ease-out),
+              opacity var(--motion-duration-disclosure) var(--motion-ease-out),
+              visibility var(--motion-duration-disclosure) var(--motion-ease-out);
 }
 
 .sticky-order-bar.visible {
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .sticky-order-inner {
@@ -1532,11 +1744,17 @@ details[open] .faq-icon {
   text-transform: uppercase;
   text-decoration: none;
   flex-shrink: 0;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .btn-sticky-order:hover {
   background: var(--accent-green);
+}
+
+.btn-sticky-order:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 @media (min-width: 861px) {
@@ -1600,7 +1818,9 @@ details[open] .faq-icon {
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
-    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
+    transition: transform var(--motion-duration-disclosure) var(--motion-ease-out),
+                opacity var(--motion-duration-disclosure) var(--motion-ease-out),
+                visibility var(--motion-duration-disclosure) var(--motion-ease-out);
   }
 
   .nav-group.open {
@@ -1899,19 +2119,148 @@ details[open] .faq-icon {
   }
 }
 
-/* Reduced Motion Support */
+/* ==========================================================================
+   HERO & SECTION ENTRANCE REVEALS (PHASE D)
+   ========================================================================== */
+
+/* Visible by default (guarantees visibility without JS or upon observer error) */
+.hero-title,
+.hero-sub,
+.hero-actions,
+.reveal-item {
+  opacity: 1;
+  transform: none;
+}
+
+/* Added dynamically by JS only when motion is allowed */
+.hero-title.reveal-item,
+.hero-sub.reveal-item,
+.hero-actions.reveal-item {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity var(--motion-duration-hero) var(--motion-ease-out),
+              transform var(--motion-duration-hero) var(--motion-ease-out);
+}
+
+.hero-title.revealed,
+.hero-sub.revealed,
+.hero-actions.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hero-actions.reveal-item {
+  transition-delay: 40ms;
+}
+
+.reveal-item {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity var(--motion-duration-reveal) var(--motion-ease-out),
+              transform var(--motion-duration-reveal) var(--motion-ease-out);
+}
+
+.reveal-item.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger collection cards on desktop (50ms stagger, max 150ms delay) */
+@media (min-width: 769px) {
+  .collection-grid .flower-card:nth-child(1).reveal-item { transition-delay: 0ms; }
+  .collection-grid .flower-card:nth-child(2).reveal-item { transition-delay: 50ms; }
+  .collection-grid .flower-card:nth-child(3).reveal-item { transition-delay: 100ms; }
+  .collection-grid .flower-card:nth-child(4).reveal-item { transition-delay: 150ms; }
+}
+
+@media (max-width: 768px) {
+  .collection-grid .flower-card.reveal-item {
+    transition-delay: 0ms !important;
+  }
+}
+
+/* Print Stylesheet: strictly 100% visible */
+@media print {
+  .hero-title,
+  .hero-sub,
+  .hero-actions,
+  .reveal-item,
+  .reveal-item.revealed {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Reduced Motion Support (Komorebi Animation Brief) */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+  html {
     scroll-behavior: auto !important;
   }
 
-  .sticky-order-bar,
+  /* Reveal items immediately visible without translation or opacity transitions */
+  .hero-copy-group,
+  .hero-actions,
+  .reveal-item,
+  .reveal-item.revealed {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Product cards and preview images */
+  .flower-photo {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .summary-photo-frame .summary-photo,
+  .summary-photo-frame .summary-photo-prev {
+    transition: none !important;
+  }
+
+  .summary-latin {
+    transition: none !important;
+  }
+
+  /* Selection checkmarks and chips */
+  .chip-check,
+  .format-check {
+    transition: none !important;
+  }
+
+  /* Buttons: retain color/border feedback, eliminate scaling transform */
+  .btn-primary:active,
+  .btn-secondary:active,
+  .btn-buy-kit:active,
+  .btn-sticky-order:active,
+  .btn-channel:active,
+  .chip-flower:active,
+  .format-card:active,
+  .lock-btn:active,
+  .lang-btn:active,
+  .nav-cta:active,
+  .nav-cta-mobile:active {
+    transform: none !important;
+  }
+
+  /* Disclosures: instant menu, instant order bar, instant FAQ */
+  .sticky-order-bar {
+    transition: none !important;
+  }
+
   .nav-group {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .faq-icon::before,
+  .faq-icon::after {
+    transition: none !important;
+  }
+
+  .faq-answer-wrapper {
     transition: none !important;
   }
 }
@@ -2013,11 +2362,17 @@ details[open] .faq-icon {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
 .lock-btn:hover {
   background: var(--accent-green);
+}
+
+.lock-btn:active:not([aria-disabled="true"]):not(.btn-disabled) {
+  transform: scale(0.98);
 }
 
 .lock-error {

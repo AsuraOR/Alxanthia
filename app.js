@@ -16,6 +16,9 @@
   let selectedFlower = 'Sunflower';
   let selectedFormat = 'Kit';
   let siteData = null;
+  let activePreviewToken = 0;
+  let currentLoadedSrc = '';
+  let currentLatinText = '';
 
   /**
    * Load data directly from site-content.js (window.KOMOREBI_DATA)
@@ -459,6 +462,97 @@
   }
 
   /**
+   * Product Preview Crossfade (Phase B)
+   * Fixed-size container, race-condition safe token, neutral fallback, 200ms ease-in-out
+   */
+  function updateSummaryPhoto(targetSrc, targetAlt) {
+    const frame = document.getElementById('summary-photo-frame');
+    const mainImg = document.getElementById('summary-img');
+    const prevImg = document.getElementById('summary-img-prev');
+
+    if (!mainImg || !targetSrc) return;
+
+    // Same image already loaded? Update alt text only
+    if (currentLoadedSrc === targetSrc) {
+      mainImg.alt = targetAlt;
+      if (frame) frame.classList.remove('has-error', 'is-loading');
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      if (frame) frame.classList.remove('is-loading', 'has-error');
+      mainImg.src = targetSrc;
+      mainImg.alt = targetAlt;
+      if (prevImg) prevImg.src = targetSrc;
+      currentLoadedSrc = targetSrc;
+      return;
+    }
+
+    const requestToken = ++activePreviewToken;
+    if (frame) {
+      frame.classList.add('is-loading');
+      frame.classList.remove('has-error');
+    }
+
+    const preloader = new Image();
+    preloader.onload = () => {
+      if (requestToken !== activePreviewToken) return; // Discard obsolete load from rapid clicks
+      if (frame) frame.classList.remove('is-loading');
+
+      if (prevImg && currentLoadedSrc) {
+        prevImg.src = currentLoadedSrc;
+      }
+
+      if (frame) frame.classList.add('is-crossfading');
+      mainImg.src = targetSrc;
+      mainImg.alt = targetAlt;
+
+      // Trigger reflow for transition
+      void mainImg.offsetWidth;
+
+      if (frame) frame.classList.remove('is-crossfading');
+      currentLoadedSrc = targetSrc;
+    };
+
+    preloader.onerror = () => {
+      if (requestToken !== activePreviewToken) return;
+      if (frame) {
+        frame.classList.remove('is-loading');
+        frame.classList.add('has-error');
+      }
+    };
+
+    preloader.src = targetSrc;
+  }
+
+  /**
+   * Botanical Name Caption Crossfade (Phase B Optional Detail)
+   * 180ms ease-in-out only when latin name changes
+   */
+  function updateSummaryLatin(newLatin) {
+    const latinEl = document.getElementById('summary-latin');
+    if (!latinEl) return;
+
+    if (currentLatinText === newLatin) return; // Keep static if unchanged (e.g. format switch)
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion || !currentLatinText) {
+      latinEl.textContent = newLatin;
+      currentLatinText = newLatin;
+      return;
+    }
+
+    latinEl.classList.add('fading-out');
+    setTimeout(() => {
+      latinEl.textContent = newLatin;
+      latinEl.classList.remove('fading-out');
+      currentLatinText = newLatin;
+    }, 90);
+  }
+
+  /**
    * Render Order Builder & Summary Box
    */
   function renderOrderSection() {
@@ -478,6 +572,8 @@
       flowerChipsEl.setAttribute('role', 'radiogroup');
       flowerChipsEl.setAttribute('aria-label', t.step1);
 
+      const checkSvg = '<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4.5 8 10.5 2"></polyline></svg>';
+
       const existingChips = flowerChipsEl.querySelectorAll('.chip-flower');
       if (existingChips.length === siteData.flowerOrder.length) {
         existingChips.forEach((btn, index) => {
@@ -489,7 +585,8 @@
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
           if (flTrans) {
             btn.setAttribute('aria-label', flTrans.name);
-            btn.innerHTML = `<span class="chip-dot" style="background:${fl.accent}"></span>${flTrans.name}`;
+            const nameSpan = btn.querySelector('.chip-name');
+            if (nameSpan) nameSpan.textContent = flTrans.name;
           }
         });
       } else {
@@ -506,7 +603,11 @@
           btn.setAttribute('role', 'radio');
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
           btn.setAttribute('aria-label', flTrans.name);
-          btn.innerHTML = `<span class="chip-dot" style="background:${fl.accent}"></span>${flTrans.name}`;
+          btn.innerHTML = `
+            <span class="chip-dot" style="background:${fl.accent}"></span>
+            <span class="chip-name">${flTrans.name}</span>
+            <span class="chip-check" aria-hidden="true">${checkSvg}</span>
+          `;
           btn.addEventListener('click', () => selectFlower(key));
           flowerChipsEl.appendChild(btn);
         });
@@ -524,6 +625,8 @@
     if (formatCardsEl) {
       formatCardsEl.setAttribute('role', 'radiogroup');
       formatCardsEl.setAttribute('aria-label', t.step2);
+
+      const checkSvg = '<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4.5 8 10.5 2"></polyline></svg>';
 
       const existingCards = formatCardsEl.querySelectorAll('.format-card');
       if (existingCards.length === t.formats.length) {
@@ -556,7 +659,10 @@
           btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
           btn.setAttribute('aria-label', `${f.label} (${fPrice}): ${f.note}`);
           btn.innerHTML = `
-            <span class="format-label">${f.label}</span>
+            <span class="format-header-line">
+              <span class="format-label">${f.label}</span>
+              <span class="format-check" aria-hidden="true">${checkSvg}</span>
+            </span>
             <span class="format-price">${fPrice}</span>
             <span class="format-note">${f.note}</span>
           `;
@@ -566,11 +672,10 @@
       }
     }
 
-    // Summary Box: Photo preview, Title, Latin
-    setAttr('#summary-img', 'src', curFlower.photo);
-    setAttr('#summary-img', 'alt', `${curFlowerTrans.name} — ${curFormatObj.label}`);
+    // Summary Box: Photo preview with crossfade, Title, Latin caption with transition
+    updateSummaryPhoto(curFlower.photo, `${curFlowerTrans.name} — ${curFormatObj.label}`);
     setText('#summary-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
-    setText('#summary-latin', curFlower.latin);
+    updateSummaryLatin(curFlower.latin);
 
     // Price
     const priceEl = document.getElementById('summary-price');
@@ -706,10 +811,12 @@
         details.innerHTML = `
           <summary class="faq-summary">
             <h3 class="faq-question">${item.q}</h3>
-            <span class="faq-icon" aria-hidden="true">+</span>
+            <span class="faq-icon" aria-hidden="true"></span>
           </summary>
-          <div class="faq-answer">
-            <p>${item.a}</p>
+          <div class="faq-answer-wrapper">
+            <div class="faq-answer">
+              <p>${item.a}</p>
+            </div>
           </div>
         `;
         faqAccordion.appendChild(details);
@@ -880,7 +987,8 @@
     let footerVisible = false;
 
     function updateSticky() {
-      if (!heroVisible && !orderVisible && !footerVisible) {
+      const focusInside = stickyBar.contains(document.activeElement);
+      if ((!heroVisible && !orderVisible && !footerVisible) || focusInside) {
         stickyBar.classList.add('visible');
         stickyBar.setAttribute('aria-hidden', 'false');
       } else {
@@ -888,6 +996,11 @@
         stickyBar.setAttribute('aria-hidden', 'true');
       }
     }
+
+    stickyBar.addEventListener('focusin', updateSticky);
+    stickyBar.addEventListener('focusout', () => {
+      setTimeout(updateSticky, 50);
+    });
 
     if ('IntersectionObserver' in window) {
       const observer = new IntersectionObserver((entries) => {
@@ -1012,8 +1125,113 @@
       });
     }
 
+    // FAQ Accordion smooth collapse handling
+    const faqAccordion = document.getElementById('faq-accordion');
+    if (faqAccordion) {
+      faqAccordion.addEventListener('click', (e) => {
+        const summary = e.target.closest('.faq-summary');
+        if (!summary) return;
+        const details = summary.parentElement;
+        if (!details || details.tagName !== 'DETAILS') return;
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReducedMotion) return; // Allow native instant behavior
+
+        if (details.open && !details.classList.contains('is-closing')) {
+          e.preventDefault();
+          details.classList.add('is-closing');
+          setTimeout(() => {
+            details.open = false;
+            details.classList.remove('is-closing');
+          }, 220);
+        }
+      });
+    }
+
     // Initialize Sticky Order Bar
     initStickyOrderBar();
+  }
+
+  /**
+   * Dynamic Reduced-Motion Listener (Komorebi Animation Brief)
+   * Instantly cancels active motion and reveals content if preference toggles mid-session
+   */
+  function setupReducedMotionListener() {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function handleMotionChange(e) {
+      if (e.matches) {
+        document.querySelectorAll('.reveal-item').forEach(el => {
+          el.classList.add('revealed');
+        });
+      }
+    }
+    if (motionQuery.addEventListener) {
+      motionQuery.addEventListener('change', handleMotionChange);
+    } else if (motionQuery.addListener) {
+      motionQuery.addListener(handleMotionChange);
+    }
+  }
+
+  /**
+   * Section & Hero Entrances (Phase D)
+   * Elements are visible by default. .reveal-item is attached dynamically.
+   * Single observer unobserves each element once revealed.
+   * Replaced immediately on focus or anchor navigation.
+   */
+  function initScrollReveals() {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return;
+    if (!('IntersectionObserver' in window)) return;
+
+    const targets = document.querySelectorAll(
+      '.hero-title, .hero-sub, .hero-actions, .section-header-flex, .kit-grid, .specs-card, .steps-grid, .material-figure, .material-text-col, .summary-box, .about-figure, .about-text-col, .faq-accordion, .flower-card'
+    );
+
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+
+    targets.forEach(el => {
+      if (el.contains(document.activeElement)) {
+        el.classList.add('revealed');
+      } else {
+        el.classList.add('reveal-item');
+        revealObserver.observe(el);
+      }
+    });
+
+    // Instant reveal on keyboard focus
+    document.addEventListener('focusin', (e) => {
+      const parentReveal = e.target.closest('.reveal-item');
+      if (parentReveal) {
+        parentReveal.classList.add('revealed');
+        revealObserver.unobserve(parentReveal);
+      }
+    });
+
+    // Instant reveal on anchor navigation / deep link
+    function revealTargetAnchor() {
+      if (window.location.hash) {
+        const target = document.querySelector(window.location.hash);
+        if (target) {
+          if (target.classList.contains('reveal-item')) {
+            target.classList.add('revealed');
+            revealObserver.unobserve(target);
+          }
+          target.querySelectorAll('.reveal-item').forEach(el => {
+            el.classList.add('revealed');
+            revealObserver.unobserve(el);
+          });
+        }
+      }
+    }
+    window.addEventListener('hashchange', revealTargetAnchor);
+    revealTargetAnchor();
   }
 
   /**
@@ -1023,8 +1241,10 @@
     loadData();
     initLang();
     setupEventListeners();
+    setupReducedMotionListener();
     setupAuth();
     renderAll();
+    initScrollReveals();
 
     // Export API for Visual Editor
     window.KomorebiApp = {

@@ -1,70 +1,69 @@
-# 🌸 Komorebi Creations — Website & Editor Guide (Panduan Pengguna)
+# 🌸 Komorebi Creations — Website & Guide
 
-Selamat datang di website **Komorebi Creations (DIY Flower Kit)**!
-Website ini dibuat persis **1:1** dengan desain botani orisinal, dan dirancang khusus agar **sangat mudah diedit oleh non-developer** (tanpa perlu paham koding).
+Website resmi **Komorebi Creations (DIY Flower Kit)** dengan desain botani orisinal 1:1, elegan, cepat, dan responsif.
 
 ---
 
 ## 🚀 Cara Menjalankan Website
 
-Cukup **klik dua kali** file `index.html` di komputer Anda, atau buka dengan browser apa saja (Google Chrome, Microsoft Edge, Safari, Mozilla Firefox). 
-Tidak butuh install Node.js, bun, server, atau software apapun!
+Cukup **klik dua kali** file `index.html` di komputer Anda, atau buka dengan browser apa saja (Google Chrome, Microsoft Edge, Safari, Firefox).
+Tidak butuh install software, server, atau compiler apapun.
 
 ---
 
-## ✏️ Cara 1: Mengedit Langsung di Browser (Paling Praktis / Tanpa Koding)
+## ✏️ Cara Mengedit Teks, Harga, Link & Gambar di VS Code / Text Editor
 
-Website ini dilengkapi dengan **Fitur Mode Edit Visual**:
+Semua data website sudah dipisahkan dengan sangat rapi dan ramah dibaca di dalam file:
+👉 **`site-content.js`**
 
-1. Buka `index.html` di browser Anda.
-2. Di pojok kanan bawah, klik tombol **"⚙️ Mode Edit / Editor"** (atau tekan tombol keyboard `Ctrl + Shift + E`).
-3. Bar alat editor akan muncul di bagian bawah:
-   - **Mengedit Teks**: Klik langsung teks mana saja di halaman web (judul, paragraf, langkah, dll), lalu ketik teks baru Anda seperti di Microsoft Word.
-   - **Mengedit Gambar**: Klik gambar mana saja (Hero, Isi Kit, Material, Foto Kami) untuk mengubah nama file atau link gambarnya.
-   - **Mengedit Link & Harga**: Klik tombol **"⚙️ Pengaturan Link & Harga"** di bar bawah untuk membuka panel:
-     - Mengganti nomor WhatsApp (misal: `6281234567890`) & pesan otomatisnya.
-     - Mengganti link toko Tokopedia, Shopee, atau Instagram.
-     - Mengganti harga Bunga Matahari, Mawar, Tulip, Lavender (Kit, Tangkai Jadi, Buket).
-     - Menyalakan/mematikan tombol Tokopedia, Shopee, atau WhatsApp.
-4. Klik **"💾 Simpan di Browser"** untuk menyimpan perubahan di browser Anda.
-5. Klik **"⬇️ Unduh site-content.js"**:
-   - Browser akan mengunduh file bernama `site-content.js`.
-   - Pindahkan/timpa file `site-content.js` hasil unduhan tersebut ke dalam folder website ini.
-   - **Selesai!** Perubahan Anda kini permanen dan akan terlihat oleh semua pengunjung website!
+Anda cukup buka file `site-content.js` menggunakan **VS Code**, **Notepad**, atau editor teks favorit Anda:
 
----
-
-## 📝 Cara 2: Mengedit Lewat File `site-content.js`
-
-Jika Anda lebih suka mengedit lewat teks:
-1. Buka file `site-content.js` dengan **Notepad**, **VS Code**, atau editor teks biasa.
-2. Semua kata-kata dalam Bahasa Indonesia dan Bahasa Inggris, daftar harga, dan tautan sosial media tertata rapi di dalamnya.
-3. Edit kata-kata di antara tanda petik `"..."`.
-4. Simpan file (`Ctrl + S`), lalu refresh halaman `index.html` di browser Anda.
-
----
-
-## 🌐 Cara Mempublikasikan Website ke Internet
-
-Website ini adalah **Static Web App murni**, sehingga bisa di-hosting secara **GRATIS** dan cepat di:
-- **Netlify**: Cukup drag-and-drop folder ini ke [app.netlify.com/drop](https://app.netlify.com/drop).
-- **Vercel**: Hubungkan repository atau deploy via Vercel CLI.
-- **GitHub Pages**: Aktifkan GitHub Pages pada repository di tab Settings -> Pages -> Deploy from branch `main`.
-- **cPanel / Hosting Biasa**: Upload semua file di folder ini ke folder `public_html`.
-
----
-
-## 📂 Struktur Folder
+### 1. Mengubah Link & Nomor Kontak:
+Cari bagian `store`:
+```javascript
+store: {
+  brandName: "Komorebi",
+  instagramUrl: "https://instagram.com/komorebi",
+  tokopediaUrl: "https://www.tokopedia.com/...",
+  shopeeUrl: "https://shopee.co.id/...",
+  whatsappNumber: "6281234567890", // Ganti dengan nomor WhatsApp Anda
+  ...
+}
 ```
+
+### 2. Mengubah Daftar Harga:
+Cari nama bunganya di bagian `flowers`:
+```javascript
+Sunflower: {
+  prices: {
+    Kit: "Rp 95.000",
+    Stem: "Rp 55.000",
+    Bouquet: "Rp 285.000"
+  }
+}
+```
+
+### 3. Mengubah Semua Teks (Bahasa Indonesia & Bahasa Inggris):
+Cari bagian `translations`:
+- `id:` untuk semua teks dalam Bahasa Indonesia (Judul, deskripsi, FAQ, panduan langkah, tentang kami).
+- `en:` untuk semua teks dalam Bahasa Inggris.
+
+Setelah selesai mengedit, cukup tekan **Ctrl + S** untuk menyimpan file, lalu **refresh browser (`F5`)**. Semua perubahan Anda langsung tampil!
+
+---
+
+## 📦 File yang Perlu Di-upload ke GitHub
+
+```text
 komorebi-creations/
-├── index.html            <- Halaman utama website
-├── styles.css            <- Desain tampilan & warna botani (1:1)
-├── site-content.js       <- Pusat data teks, harga, link & gambar yang bisa diedit
-├── app.js                <- Logika interaktif (pilih bunga, format, hitung harga, WhatsApp)
-├── editor.js             <- Fitur editor visual in-browser untuk non-developer
-├── editor.css            <- Tampilan bar & modal editor
-├── komorebi-logo.png     <- Logo Komorebi
-└── img/                  <- Foto-foto bunga & produk
+├── index.html            ✅ Halaman utama
+├── styles.css            ✅ File stylesheet desain
+├── site-content.js       ✅ File data teks, link, harga, & gambar
+├── app.js                ✅ Logika website & WhatsApp
+├── CNAME                 ✅ Domain: komorebicreations.com
+├── komorebi-logo.png     ✅ Logo brand
+├── README.md             ✅ Dokumentasi
+└── img/                  ✅ Folder foto produk
     ├── hero.png
     ├── kit.png
     ├── lavender.png

@@ -10,9 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Karla:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- Stylesheets -->
+  <!-- Botanical Stylesheet -->
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="editor.css" />
 </head>
 <body>
 
@@ -50,32 +49,32 @@
        ======================================================================== -->
   <section class="hero-section container">
     <div>
-      <p class="eyebrow" id="hero-eyebrow" data-editable="heroEyebrow">Kit bunga DIY · benang chenille</p>
-      <h1 class="hero-title" id="hero-title" data-editable="heroTitle">Bunga yang tak pernah layu — dirangkai tangan Anda sendiri.</h1>
-      <p class="hero-sub" id="hero-sub" data-editable="heroSub">Satu kit lengkap untuk membuat bunga, setiap bagiannya sudah disiapkan. Bentuk, rangkai, lalu simpan bunga buatan Anda — sekitar 20 menit saja.</p>
+      <p class="eyebrow" id="hero-eyebrow">Kit bunga DIY · benang chenille</p>
+      <h1 class="hero-title" id="hero-title">Bunga yang tak pernah layu — dirangkai tangan Anda sendiri.</h1>
+      <p class="hero-sub" id="hero-sub">Satu kit lengkap untuk membuat bunga, setiap bagiannya sudah disiapkan. Bentuk, rangkai, lalu simpan bunga buatan Anda — sekitar 20 menit saja.</p>
 
       <div class="hero-actions">
-        <a href="#collection" class="btn-primary" id="cta-browse" data-editable="ctaBrowse">Lihat koleksi</a>
-        <a href="#kit" class="btn-secondary" id="cta-inside" data-editable="ctaInside">Lihat isi kitnya</a>
+        <a href="#collection" class="btn-primary" id="cta-browse">Lihat koleksi</a>
+        <a href="#kit" class="btn-secondary" id="cta-inside">Lihat isi kitnya</a>
       </div>
 
       <dl class="hero-benefits">
         <div class="benefit-item">
-          <dt id="ben1-t" data-editable="ben1t">Semua sudah termasuk</dt>
-          <dd id="ben1-d" data-editable="ben1d">Bahan, tangkai, lem, dan panduan ada di dalam kotak.</dd>
+          <dt id="ben1-t">Semua sudah termasuk</dt>
+          <dd id="ben1-d">Bahan, tangkai, lem, dan panduan ada di dalam kotak.</dd>
         </div>
         <div class="benefit-item">
-          <dt id="ben2-t" data-editable="ben2t">Ramah pemula</dt>
-          <dd id="ben2-d" data-editable="ben2d">Bahan sudah dipotong dan ada panduan bertahap.</dd>
+          <dt id="ben2-t">Ramah pemula</dt>
+          <dd id="ben2-d">Bahan sudah dipotong dan ada panduan bertahap.</dd>
         </div>
         <div class="benefit-item">
-          <dt id="ben3-t" data-editable="ben3t">Dibuat untuk disimpan</dt>
-          <dd id="ben3-d" data-editable="ben3d">Untuk pajangan dalam ruangan yang tahan lama.</dd>
+          <dt id="ben3-t">Dibuat untuk disimpan</dt>
+          <dd id="ben3-d">Untuk pajangan dalam ruangan yang tahan lama.</dd>
         </div>
       </dl>
     </div>
 
-    <figure class="hero-figure editable-image-wrapper" data-image-key="hero">
+    <figure class="hero-figure">
       <img id="hero-image" src="img/hero.png" alt="A finished sunflower made from chenille stems, on cream paper" class="hero-img" fetchpriority="high" />
       <figcaption class="hero-caption">
         <span class="hero-caption-latin" id="hero-caption-latin">Helianthus annuus</span>
@@ -89,7 +88,7 @@
        ======================================================================== -->
   <section class="trust-bar">
     <div class="container trust-inner" id="trust-inner">
-      <!-- Dynamically populated -->
+      <!-- Dynamically populated from site-content.js -->
     </div>
   </section>
 
@@ -99,10 +98,10 @@
   <section id="collection" class="collection-section container">
     <div class="section-header-flex">
       <div>
-        <p class="eyebrow" id="col-eyebrow" data-editable="colEyebrow">Koleksi</p>
-        <h2 class="section-title" id="col-title" data-editable="colTitle">Empat bunga untuk dipilih</h2>
+        <p class="eyebrow" id="col-eyebrow">Koleksi</p>
+        <h2 class="section-title" id="col-title">Empat bunga untuk dipilih</h2>
       </div>
-      <p class="section-sub" id="col-intro" data-editable="colIntro">Setiap bunga tersedia tiga pilihan — kit untuk dirangkai sendiri, tangkai jadi, atau buket yang kami susun.</p>
+      <p class="section-sub" id="col-intro">Setiap bunga tersedia tiga pilihan — kit untuk dirangkai sendiri, tangkai jadi, atau buket yang kami susun.</p>
     </div>
 
     <div class="collection-grid" id="collection-grid">
@@ -114,12 +113,12 @@
        INSIDE YOUR KIT SECTION
        ======================================================================== -->
   <section id="kit" class="kit-section container">
-    <p class="eyebrow" id="kit-eyebrow" data-editable="kitEyebrow">Isi kit Anda</p>
-    <h2 class="section-title" id="kit-title" data-editable="kitTitle">Setiap bagian, tertata sebelum Anda mulai</h2>
-    <p class="section-sub" id="kit-intro" data-editable="kitIntro" style="margin-bottom: 44px; max-width: 56ch;">Satu kit bunga matahari, dibuka. Tidak ada yang perlu dibeli terpisah, tidak ada yang perlu dipotong atau diukur sendiri.</p>
+    <p class="eyebrow" id="kit-eyebrow">Isi kit Anda</p>
+    <h2 class="section-title" id="kit-title">Setiap bagian, tertata sebelum Anda mulai</h2>
+    <p class="section-sub" id="kit-intro" style="margin-bottom: 44px; max-width: 56ch;">Satu kit bunga matahari, dibuka. Tidak ada yang perlu dibeli terpisah, tidak ada yang perlu dipotong atau diukur sendiri.</p>
 
     <div class="kit-grid">
-      <figure class="kit-figure editable-image-wrapper" data-image-key="kit">
+      <figure class="kit-figure">
         <img id="kit-image" src="img/kit.png" alt="Overhead view of one sunflower kit" class="kit-img" loading="lazy" />
       </figure>
 
@@ -143,8 +142,8 @@
        ======================================================================== -->
   <section id="howto" class="how-section dark-section">
     <div class="container">
-      <p class="eyebrow" id="how-eyebrow" data-editable="howEyebrow">Cara membuatnya</p>
-      <h2 class="section-title" id="how-title" data-editable="howTitle">Empat langkah, sekitar dua puluh menit</h2>
+      <p class="eyebrow" id="how-eyebrow">Cara membuatnya</p>
+      <h2 class="section-title" id="how-title">Empat langkah, sekitar dua puluh menit</h2>
 
       <div class="steps-grid" id="steps-grid">
         <!-- Dynamically populated with 4 steps -->
@@ -156,15 +155,15 @@
        MATERIAL SECTION
        ======================================================================== -->
   <section id="material" class="material-section container">
-    <figure class="material-figure editable-image-wrapper" data-image-key="macro">
+    <figure class="material-figure">
       <img id="material-image" src="img/macro.png" alt="Close-up of chenille stems" class="material-img" loading="lazy" />
-      <figcaption class="material-caption" id="mat-caption" data-editable="matCaption">Gbr. 1 — serat chenille pada inti kawat berpuntir</figcaption>
+      <figcaption class="material-caption" id="mat-caption">Gbr. 1 — serat chenille pada inti kawat berpuntir</figcaption>
     </figure>
 
     <div>
-      <p class="eyebrow" id="mat-eyebrow" data-editable="matEyebrow">Bahannya</p>
-      <h2 class="section-title" id="mat-title" data-editable="matTitle">Mengapa chenille bergerak seperti kelopak</h2>
-      <p class="material-body" id="mat-body" data-editable="matBody">Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.</p>
+      <p class="eyebrow" id="mat-eyebrow">Bahannya</p>
+      <h2 class="section-title" id="mat-title">Mengapa chenille bergerak seperti kelopak</h2>
+      <p class="material-body" id="mat-body">Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.</p>
       
       <ul class="material-points" id="material-points">
         <!-- Dynamically populated with 3 points -->
@@ -176,8 +175,8 @@
        ORDER / CUSTOMIZER SECTION
        ======================================================================== -->
   <section id="order" class="order-section container">
-    <p class="eyebrow" id="order-eyebrow" data-editable="orderEyebrow">Pesan</p>
-    <h2 class="section-title" id="order-title" data-editable="orderTitle">Susun pesanan Anda, lalu lanjut ke checkout</h2>
+    <p class="eyebrow" id="order-eyebrow">Pesan</p>
+    <h2 class="section-title" id="order-title">Susun pesanan Anda, lalu lanjut ke checkout</h2>
 
     <div class="order-grid">
       <!-- Selection Controls -->
@@ -224,7 +223,7 @@
           </a>
         </div>
 
-        <p class="order-note" id="order-note" data-editable="orderNote">Pembayaran dan pengiriman ditangani marketplace, lengkap dengan perlindungan pembelinya.</p>
+        <p class="order-note" id="order-note">Pembayaran dan pengiriman ditangani marketplace, lengkap dengan perlindungan pembelinya.</p>
       </div>
     </div>
   </section>
@@ -234,8 +233,8 @@
        ======================================================================== -->
   <section id="faq" class="faq-section dark-section">
     <div class="container">
-      <p class="eyebrow" id="faq-eyebrow" data-editable="faqEyebrow">Pertanyaan</p>
-      <h2 class="section-title" id="faq-title" data-editable="faqTitle">Sebelum Anda memesan</h2>
+      <p class="eyebrow" id="faq-eyebrow">Pertanyaan</p>
+      <h2 class="section-title" id="faq-title">Sebelum Anda memesan</h2>
 
       <div class="faq-grid" id="faq-grid">
         <!-- Dynamically populated with 6 FAQs -->
@@ -247,15 +246,15 @@
        ABOUT / STORY SECTION
        ======================================================================== -->
   <section id="about" class="about-section container">
-    <figure class="about-figure editable-image-wrapper" data-image-key="us">
+    <figure class="about-figure">
       <img id="about-image" src="img/us.png" alt="The two of us assembling flowers and packing kits at our kitchen table" class="about-img" loading="lazy" />
     </figure>
 
     <div>
-      <p class="eyebrow" id="about-eyebrow" data-editable="aboutEyebrow">Siapa yang membuat</p>
-      <p class="about-lede" id="about-lede" data-editable="aboutLede">Kami mulai memotong kelopak di meja dapur, satu bunga demi satu bunga, sampai potongannya cukup rapi untuk diberikan kepada orang lain.</p>
-      <p class="about-body" id="about-body" data-editable="aboutBody">Setiap kit masih dipotong, dihitung, dan dikemas oleh kami berdua. Bunga baru ditambahkan setelah kami gambar dan uji — empat sekarang, akan terus bertambah.</p>
-      <a href="#" class="about-link" id="about-ig" target="_blank" rel="noopener" data-editable="aboutIg">Ikuti workshop kami di Instagram</a>
+      <p class="eyebrow" id="about-eyebrow">Siapa yang membuat</p>
+      <p class="about-lede" id="about-lede">Kami mulai memotong kelopak di meja dapur, satu bunga demi satu bunga, sampai potongannya cukup rapi untuk diberikan kepada orang lain.</p>
+      <p class="about-body" id="about-body">Setiap kit masih dipotong, dihitung, dan dikemas oleh kami berdua. Bunga baru ditambahkan setelah kami gambar dan uji — empat sekarang, akan terus bertambah.</p>
+      <a href="#" class="about-link" id="about-ig" target="_blank" rel="noopener">Ikuti workshop kami di Instagram</a>
     </div>
   </section>
 
@@ -273,7 +272,7 @@
         <a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a>
         <a href="#" id="footer-link-tokopedia" target="_blank" rel="noopener">Tokopedia</a>
         <a href="#" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
-        <a href="#faq" id="footer-care" data-editable="footerCare">Pengiriman & perawatan</a>
+        <a href="#faq" id="footer-care">Pengiriman & perawatan</a>
         <span id="footer-copyright">© 2026 Komorebi</span>
       </div>
     </div>
@@ -282,6 +281,5 @@
   <!-- Scripts -->
   <script src="site-content.js"></script>
   <script src="app.js"></script>
-  <script src="editor.js"></script>
 </body>
 </html>

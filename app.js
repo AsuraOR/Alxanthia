@@ -18,19 +18,14 @@
   let siteData = null;
 
   /**
-   * Load data with fallback to default window.KOMOREBI_DATA
+   * Load data directly from site-content.js (window.KOMOREBI_DATA)
    */
   function loadData() {
     try {
-      const custom = localStorage.getItem(CUSTOM_DATA_KEY);
-      if (custom) {
-        siteData = JSON.parse(custom);
-      }
-    } catch (e) {
-      console.warn('Could not load custom data from localStorage:', e);
-    }
+      localStorage.removeItem(CUSTOM_DATA_KEY);
+    } catch (e) {}
 
-    if (!siteData && window.KOMOREBI_DATA) {
+    if (window.KOMOREBI_DATA) {
       siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
     }
   }

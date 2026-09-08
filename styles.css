@@ -27,6 +27,11 @@
   --font-sans: 'Karla', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
+  /* Type Scale Floors (Tier 2 audit: labels/badges/eyebrows, buttons, body copy) */
+  --fs-label: 13px;
+  --fs-button: 14px;
+  --fs-body: 16px;
+
   /* Motion System Tokens (Komorebi Animation Brief) */
   --motion-duration-btn: 180ms;
   --motion-duration-preview: 200ms;
@@ -89,8 +94,9 @@ button {
 .font-mono { font-family: var(--font-mono); }
 
 .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--accent-ochre);
@@ -110,7 +116,7 @@ button {
 }
 
 .section-sub {
-  font-size: 15px;
+  font-size: var(--fs-body);
   line-height: 1.65;
   color: var(--text-body);
   max-width: 48ch;
@@ -219,8 +225,9 @@ button {
 }
 
 .brand-est {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.18em;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -363,8 +370,9 @@ body.nav-open {
   min-height: 44px;
   min-width: 44px;
   padding: 0 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.12em;
   color: var(--text-body);
   background: transparent;
@@ -677,8 +685,8 @@ body.nav-open {
   border: 1px solid var(--border-medium);
   border-radius: 0;
   padding: 4px 10px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -734,8 +742,9 @@ body.nav-open {
 
 .flower-spec-line {
   margin: 0 0 6px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -743,9 +752,10 @@ body.nav-open {
 
 .flower-price-line {
   margin: 0 0 10px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.02em;
   color: var(--text-dark);
 }
 
@@ -753,7 +763,7 @@ body.nav-open {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   line-height: 1.4;
   color: var(--text-muted);
   background: rgba(63, 85, 69, 0.06);
@@ -788,9 +798,9 @@ body.nav-open {
   background: var(--text-dark);
   color: var(--bg-main);
   border-radius: 0;
-  font-size: 11px;
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-bottom: 10px;
   text-decoration: none;
@@ -814,9 +824,10 @@ body.nav-open {
   padding: 10px 14px;
   cursor: pointer;
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-button);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-green);
   border-radius: 0;
@@ -871,9 +882,9 @@ body.nav-open {
 }
 
 .category-tab {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 9px 20px;
@@ -926,8 +937,9 @@ body.nav-open {
 }
 
 .category-mono-label {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1039,8 +1051,9 @@ body.nav-open {
 }
 
 .bouquet-stems-label {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--accent-ochre);
@@ -1058,9 +1071,9 @@ body.nav-open {
   right: 12px;
   background: var(--accent-ochre);
   color: #FFF;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 4px 10px;
   border-radius: 0;
@@ -1099,9 +1112,10 @@ body.nav-open {
 
 .bouquet-price {
   margin: 0 0 18px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--text-dark);
   border-top: 1px solid var(--border-plate);
   padding-top: 14px;
@@ -1126,9 +1140,9 @@ body.nav-open {
   color: var(--bg-main);
   border-radius: 0;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1176,10 +1190,10 @@ body.nav-open {
   background: none;
   border: 0;
   color: var(--accent-green);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
   padding: 6px 4px 2px;
@@ -1261,7 +1275,7 @@ body.nav-open {
 
 .custom-builder-intro {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-body);
   line-height: 1.65;
   color: var(--text-body);
   max-width: 56ch;
@@ -1286,10 +1300,10 @@ body.nav-open {
   color: var(--bg-main);
   border: 1px solid var(--text-dark);
   border-radius: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(35, 32, 27, 0.16);
@@ -1316,8 +1330,8 @@ body.nav-open {
   min-height: 44px;
   padding: 7px 16px;
   margin-top: 14px;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--fs-label);
+  font-weight: 600;
 }
 
 .btn-toggle-custom[aria-expanded="true"]:hover {
@@ -1380,9 +1394,10 @@ body.nav-open {
 
 .custom-flower-price {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.02em;
   color: var(--text-muted);
 }
 
@@ -1418,7 +1433,8 @@ body.nav-open {
 .stepper-count {
   min-width: 40px;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-weight: 600;
   font-size: 14px;
   color: var(--text-dark);
 }
@@ -1432,9 +1448,10 @@ body.nav-open {
 }
 
 .custom-stem-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -1444,9 +1461,10 @@ body.nav-open {
   background: transparent;
   padding: 10px 16px;
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-button);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-green);
   border-radius: 0;
@@ -1488,8 +1506,9 @@ body.nav-open {
 
 .custom-est-row dd {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
   color: var(--text-dark);
 }
 
@@ -1516,7 +1535,7 @@ body.nav-open {
 
 .custom-est-total-row dd {
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-dark);
   font-weight: 600;
@@ -1543,9 +1562,9 @@ body.nav-open {
   color: var(--bg-main);
   border-radius: 0;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
   transition: background-color var(--motion-duration-btn) var(--motion-ease-out);
@@ -1622,8 +1641,9 @@ body.nav-open {
 }
 
 .step-kicker {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.14em;
   color: var(--dark-accent);
   margin: 0 0 14px;
@@ -1675,6 +1695,14 @@ body.nav-open {
   background: var(--bg-card);
 }
 
+.material-caption {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+}
+
 .material-body {
   font-size: 16px;
   line-height: 1.7;
@@ -1702,8 +1730,9 @@ body.nav-open {
 }
 
 .material-point-num {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   color: var(--accent-ochre);
   padding-top: 4px;
 }
@@ -1736,8 +1765,9 @@ body.nav-open {
 }
 
 .step-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1776,7 +1806,7 @@ body.nav-open {
 }
 
 .stem-qty-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 18px;
   font-weight: 700;
   min-width: 32px;
@@ -1901,9 +1931,10 @@ body.nav-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-green);
   background: none;
@@ -2009,9 +2040,10 @@ body.nav-open {
 
 .summary-photo-caption-note {
   margin: 4px 0 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.02em;
   color: var(--accent-ochre);
 }
 
@@ -2028,7 +2060,7 @@ body.nav-open {
 
 .summary-price-container .summary-price {
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 20px;
   letter-spacing: 0.04em;
   color: var(--text-dark);
@@ -2038,10 +2070,11 @@ body.nav-open {
 }
 
 .summary-shipping-note {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
   color: var(--text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .summary-includes-list {
@@ -2126,9 +2159,10 @@ body.nav-open {
 }
 
 .btn-channel .channel-action {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.16em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -2245,9 +2279,9 @@ body.nav-open {
 }
 
 .btn-shopee .channel-action {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #D34324;
   font-weight: 600;
@@ -2285,10 +2319,10 @@ body.nav-open {
 }
 
 .mkt-badge {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
   background: var(--bg-main);
   padding: 2px 7px;
@@ -2297,9 +2331,10 @@ body.nav-open {
 }
 
 .mkt-soon-tag {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent-ochre);
   background: #FDF4E7;
@@ -2308,9 +2343,9 @@ body.nav-open {
 }
 
 .mkt-active-tag {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #B23A1E;
   background: #FDF1ED;
@@ -2538,11 +2573,16 @@ details.is-closing > .faq-answer-wrapper {
   align-items: center;
   flex-wrap: wrap;
   gap: 16px 24px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.16em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.footer-soon-tag {
+  font-size: 1em;
 }
 
 .footer-links a,
@@ -2641,7 +2681,7 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 .sticky-order-price {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-ochre);
@@ -2815,8 +2855,8 @@ details.is-closing > .faq-answer-wrapper {
     width: 100%;
     min-height: 44px;
     padding: 10px 8px;
-    font-size: 11px;
-    letter-spacing: 0.06em;
+    font-size: var(--fs-label);
+    letter-spacing: 0.04em;
     border-radius: 0;
     text-align: center;
     white-space: normal;
@@ -2866,7 +2906,7 @@ details.is-closing > .faq-answer-wrapper {
   .hero-sub {
     order: 3;
     margin-bottom: 18px;
-    font-size: 15px;
+    font-size: var(--fs-body);
     line-height: 1.55;
   }
 
@@ -2946,17 +2986,17 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .flower-spec-line {
-    font-size: 11px;
+    font-size: var(--fs-label);
     margin-bottom: 4px;
   }
 
   .flower-price-line {
-    font-size: 12.5px;
+    font-size: var(--fs-label);
     margin-bottom: 8px;
   }
 
   .flower-single-note {
-    font-size: 11px;
+    font-size: var(--fs-label);
     line-height: 1.35;
     padding: 5px 8px;
     margin-bottom: 10px;
@@ -2972,7 +3012,8 @@ details.is-closing > .faq-answer-wrapper {
   .btn-order-stem {
     min-height: 44px;
     padding: 10px 8px;
-    font-size: 11px;
+    font-size: var(--fs-label);
+    letter-spacing: 0.04em;
     margin-bottom: 0;
     width: 100%;
     justify-content: center;
@@ -2982,7 +3023,8 @@ details.is-closing > .faq-answer-wrapper {
   .btn-add-bouquet {
     min-height: 44px;
     padding: 10px 8px;
-    font-size: 11px;
+    font-size: var(--fs-label);
+    letter-spacing: 0.04em;
     width: 100%;
     justify-content: center;
     text-align: center;
@@ -2998,7 +3040,7 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .bouquet-stems-label {
-    font-size: 11px;
+    font-size: var(--fs-label);
   }
 
   .bouquet-title {
@@ -3025,7 +3067,8 @@ details.is-closing > .faq-answer-wrapper {
   .btn-choose-bouquet {
     min-height: 44px;
     padding: 10px 8px;
-    font-size: 11px;
+    font-size: var(--fs-label);
+    letter-spacing: 0.04em;
     width: 100%;
     justify-content: center;
     text-align: center;
@@ -3034,7 +3077,7 @@ details.is-closing > .faq-answer-wrapper {
   .btn-pkg-continue {
     min-height: 44px;
     padding: 10px 8px;
-    font-size: 11px;
+    font-size: var(--fs-label);
     width: 100%;
     text-align: center;
   }
@@ -3204,8 +3247,8 @@ details.is-closing > .faq-answer-wrapper {
     align-items: center;
     justify-content: center;
     gap: 8px 18px;
-    font-size: 11.5px;
-    letter-spacing: 0.14em;
+    font-size: var(--fs-label);
+    letter-spacing: 0.08em;
     max-width: 320px;
     margin: 0 auto;
   }
@@ -3221,8 +3264,8 @@ details.is-closing > .faq-answer-wrapper {
     justify-content: center;
     min-height: 28px;
     margin-top: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.16em;
+    font-size: var(--fs-label);
+    letter-spacing: 0.1em;
     color: var(--text-muted);
   }
 }
@@ -3636,9 +3679,10 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 .lock-subtitle {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent-ochre);
   margin: 0 0 28px;
@@ -3678,9 +3722,9 @@ details.is-closing > .faq-answer-wrapper {
   border: none;
   border-radius: 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-button);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
   transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
@@ -3699,9 +3743,10 @@ details.is-closing > .faq-answer-wrapper {
 .lock-error {
   min-height: 20px;
   margin: 12px 0 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
   color: #C0614E;
 }
 
@@ -3709,9 +3754,10 @@ details.is-closing > .faq-answer-wrapper {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.16em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
   padding: 0;

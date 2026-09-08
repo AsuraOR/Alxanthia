@@ -254,6 +254,12 @@
         document.getElementById('lock-screen').classList.add('unlocked');
       }
     } catch (e) {}
+    window.addEventListener('DOMContentLoaded', function() {
+      if (window.location.hash) {
+        var el = document.querySelector(window.location.hash);
+        if (el) el.scrollIntoView();
+      }
+    });
   </script>
 
   <!-- ========================================================================

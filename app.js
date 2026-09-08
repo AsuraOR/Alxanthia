@@ -158,8 +158,10 @@
    * Order action: Change single stem quantity
    */
   function bumpStemQty(delta) {
+    orderMode = 'stem';
     selectedStemQty = Math.max(1, Math.min(30, selectedStemQty + delta));
     hasUserSelected = true;
+    renderBouquetsUI();
     renderOrderSection();
   }
 
@@ -224,11 +226,11 @@
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
     customCounts[flowerKey] = Math.max(0, cur + delta);
+    orderMode = 'custom';
     hasUserSelected = true;
     renderCustomBuilder();
-    if (orderMode === 'custom') {
-      renderOrderSection();
-    }
+    renderBouquetsUI();
+    renderOrderSection();
   }
 
   /**
@@ -238,10 +240,11 @@
     (siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera']).forEach(k => {
       customCounts[k] = 0;
     });
+    orderMode = 'custom';
+    hasUserSelected = true;
     renderCustomBuilder();
-    if (orderMode === 'custom') {
-      renderOrderSection();
-    }
+    renderBouquetsUI();
+    renderOrderSection();
   }
 
   /**
@@ -305,6 +308,15 @@
     if (closeBtn) closeBtn.focus();
   }
 
+  function restoreModalFocus() {
+    if (modalReturnElement && typeof modalReturnElement.focus === 'function') {
+      try {
+        modalReturnElement.focus();
+      } catch (e) {}
+    }
+    modalReturnElement = null;
+  }
+
   function closeImageModal() {
     const modal = document.getElementById('image-modal');
     if (!modal) return;
@@ -312,11 +324,8 @@
       modal.close();
     } else {
       modal.removeAttribute('open');
+      restoreModalFocus();
     }
-    if (modalReturnElement && typeof modalReturnElement.focus === 'function') {
-      modalReturnElement.focus();
-    }
-    modalReturnElement = null;
   }
 
   /**
@@ -964,7 +973,19 @@
 
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
 
-    if (orderMode === 'package') {
+    if (!hasUserSelected) {
+      selTitle = t.emptySummaryTitle || (currentLang === 'en' ? 'No flower selected yet' : 'Belum ada bunga dipilih');
+      selSub = t.emptySummarySub || (currentLang === 'en' ? 'Choose a stem or bouquet above' : 'Pilih bunga satuan atau buket di atas');
+      selPrice = t.emptySummaryPrice || '—';
+      photoSrc = siteData.images?.hero || 'img/hero-800.webp';
+      photoAlt = selTitle;
+      baseIncludes = t.emptySummaryIncludes || [
+        currentLang === 'en'
+          ? 'Select a single stem above, a bouquet package, or assemble your own custom bouquet.'
+          : 'Pilih bunga satuan di atas, paket buket, atau susun buket custom Anda sendiri.'
+      ];
+      isCustomInvalid = false;
+    } else if (orderMode === 'package') {
       const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
       const pkg = siteData.packages[pkgIdx];
       selTitle = t.pkgNames[pkgIdx];
@@ -1021,7 +1042,7 @@
     // Custom illustration photo note
     const photoNote = document.getElementById('summary-photo-caption-note');
     if (photoNote) {
-      if (orderMode === 'custom') {
+      if (hasUserSelected && orderMode === 'custom') {
         photoNote.style.display = 'block';
         photoNote.textContent = t.customIllustrativeNote || 'Foto ilustrasi buket';
       } else {
@@ -1043,7 +1064,7 @@
     // Custom minimum warning banner
     const minWarningEl = document.getElementById('custom-min-warning-banner');
     if (minWarningEl) {
-      if (orderMode === 'custom' && isCustomInvalid) {
+      if (hasUserSelected && orderMode === 'custom' && isCustomInvalid) {
         minWarningEl.style.display = 'block';
         setText('#custom-min-warning-text', t.customMinErrorSummary || t.minHint);
       } else {
@@ -1051,37 +1072,66 @@
       }
     }
 
-    // Render includes list
+    // Render includes list (Safe textContent assignment for gift notes & inputs - R02)
     function renderSummaryIncludes() {
       const includesListEl = document.getElementById('summary-includes-list');
       if (includesListEl) {
         includesListEl.innerHTML = '';
         const allIncludes = [...baseIncludes];
-        allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
-        if (orderNote.trim()) {
-          allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
+        if (hasUserSelected) {
+          allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
+          if (orderNote.trim()) {
+            allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
+          }
         }
 
         allIncludes.forEach(text => {
           const li = document.createElement('li');
           li.className = 'summary-includes-item';
-          li.innerHTML = `<span class="bullet-dot" aria-hidden="true">·</span><span>${text}</span>`;
+          const dot = document.createElement('span');
+          dot.className = 'bullet-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          dot.textContent = '·';
+          const textSpan = document.createElement('span');
+          textSpan.textContent = text;
+          li.appendChild(dot);
+          li.appendChild(textSpan);
           includesListEl.appendChild(li);
         });
       }
     }
     renderSummaryIncludes();
 
-    // 6. Marketplace (Shopee) & WhatsApp Channel Buttons
+    // 6. Marketplace (Shopee) & WhatsApp Channel Buttons (R01 & R03)
     const btnWhatsapp = document.getElementById('btn-whatsapp');
     const btnShopee = document.getElementById('btn-shopee');
     const mktNoticeBox = document.getElementById('marketplace-status-box');
 
+    const isShopeeActive = siteData.store.channels?.showShopee !== false &&
+      !!siteData.store.shopeeUrl &&
+      siteData.store.shopeeUrl.trim() !== '' &&
+      siteData.store.shopeeUrl !== 'https://shopee.co.id' &&
+      siteData.store.shopeeUrl !== '#';
+
     if (btnShopee) {
-      if (siteData.store.channels?.showShopee !== false && siteData.store.shopeeUrl) {
-        btnShopee.href = siteData.store.shopeeUrl;
+      if (siteData.store.channels?.showShopee === false) {
+        btnShopee.style.display = 'none';
+      } else if (!isShopeeActive) {
         btnShopee.style.display = 'flex';
+        btnShopee.removeAttribute('href');
+        btnShopee.setAttribute('aria-disabled', 'true');
+        btnShopee.classList.add('btn-disabled');
+        const shopName = btnShopee.querySelector('.channel-name');
+        if (shopName) shopName.textContent = t.shopeeLabel || 'Shopee';
+        const shopSub = document.getElementById('shopee-channel-sub');
+        if (shopSub) shopSub.textContent = currentLang === 'en' ? 'Official Store · Coming soon' : 'Toko Resmi · Segera hadir';
+        const shopAction = document.getElementById('shopee-channel-action');
+        if (shopAction) shopAction.textContent = t.channelComingSoon || (currentLang === 'en' ? 'coming soon' : 'segera hadir');
+      } else {
+        btnShopee.style.display = 'flex';
+        btnShopee.classList.remove('btn-disabled');
         btnShopee.removeAttribute('aria-disabled');
+        btnShopee.href = siteData.store.shopeeUrl;
         const shopName = btnShopee.querySelector('.channel-name');
         if (shopName) shopName.textContent = t.shopeeLabel || 'Shopee';
         const shopSub = document.getElementById('shopee-channel-sub');
@@ -1100,29 +1150,52 @@
             }
           });
         }
-      } else {
-        btnShopee.style.display = 'none';
       }
     }
 
     if (mktNoticeBox) {
-      setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
-      setText('#marketplace-status-text', t.marketplaceNotice || (currentLang === 'en'
-        ? 'Our official Shopee store is open for convenient checkout. For custom bouquets & consultation, order directly via WhatsApp studio.'
-        : 'Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan langsung via WhatsApp studio.'));
+      if (isShopeeActive) {
+        setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
+        setText('#marketplace-status-text', t.marketplaceNoticeActive || t.marketplaceNotice || (currentLang === 'en'
+          ? 'Our official Shopee store is open for standard checkouts. Note: custom bouquets and personalized message cards require direct order via WhatsApp studio.'
+          : 'Toko Shopee resmi kami siap melayani pesanan standar. Catatan: buket kustom dan kartu ucapan khusus memerlukan konfirmasi via WhatsApp studio.'));
+      } else {
+        setText('#mkt-soon-tag', t.channelComingSoon || (currentLang === 'en' ? 'Coming Soon' : 'Segera Hadir'));
+        setText('#marketplace-status-text', t.marketplaceNoticeComingSoon || t.channelUnavailableNotice || (currentLang === 'en'
+          ? 'Shopee official listing is currently in preparation. All orders, custom arrangements, and handwritten message cards are currently serviced directly via studio WhatsApp.'
+          : 'Listing Shopee sedang disiapkan. Seluruh pesanan, buket custom, dan kartu ucapan saat ini dilayani langsung via WhatsApp studio.'));
+      }
     }
 
     function updateWhatsAppLink() {
       if (!btnWhatsapp) return;
 
-      if (orderMode === 'custom' && isCustomInvalid) {
+      if (siteData.store.channels?.showWhatsapp === false) {
+        btnWhatsapp.style.display = 'none';
+        return;
+      }
+      btnWhatsapp.style.display = 'flex';
+
+      if (!hasUserSelected) {
         btnWhatsapp.removeAttribute('href');
         btnWhatsapp.setAttribute('aria-disabled', 'true');
         btnWhatsapp.classList.add('btn-disabled');
         const channelName = btnWhatsapp.querySelector('.channel-name');
-        if (channelName) channelName.textContent = t.customMinHint || 'Minimal 3 tangkai';
+        if (channelName) channelName.textContent = t.emptySummaryPrompt || (currentLang === 'en' ? 'Please select a flower first' : 'Silakan pilih bunga terlebih dahulu');
         const channelAction = btnWhatsapp.querySelector('.channel-action');
-        if (channelAction) channelAction.textContent = 'atur ↑';
+        if (channelAction) channelAction.textContent = t.emptySummaryBtn || (currentLang === 'en' ? 'select above ↑' : 'pilih di atas ↑');
+        return;
+      }
+
+      if (orderMode === 'custom' && isCustomInvalid) {
+        btnWhatsapp.removeAttribute('href');
+        btnWhatsapp.setAttribute('aria-disabled', 'true');
+        btnWhatsapp.classList.add('btn-disabled');
+        const minStemsCount = siteData.minStems ?? 3;
+        const channelName = btnWhatsapp.querySelector('.channel-name');
+        if (channelName) channelName.textContent = (t.customMinHint || (currentLang === 'en' ? 'Minimum {n} stems' : 'Minimal {n} tangkai')).replace('{n}', minStemsCount);
+        const channelAction = btnWhatsapp.querySelector('.channel-action');
+        if (channelAction) channelAction.textContent = t.configureStemsCta || (currentLang === 'en' ? 'configure ↑' : 'atur ↑');
         return;
       }
 
@@ -1179,20 +1252,23 @@
       announcer.textContent = `${selTitle} — ${selPrice}.`;
     }
 
-    // 7. Update sticky mobile order bar
+    // 7. Update sticky mobile order bar (R04)
     if (!hasUserSelected) {
       setText('#sticky-order-title', 'Komorebi Creations');
-      setText('#sticky-order-price', t.stickyPrompt || 'Pilih bunga');
-      setText('#sticky-order-cta', `${t.ctaBrowse || 'Lihat bunga'} ↓`);
+      setText('#sticky-order-price', t.stickyPrompt || (currentLang === 'en' ? 'Choose flowers' : 'Pilih bunga'));
+      setText('#sticky-order-cta', `${t.ctaBrowse || (currentLang === 'en' ? 'Browse' : 'Lihat bunga')} ↓`);
     } else {
       if (orderMode === 'custom' && isCustomInvalid) {
-        setText('#sticky-order-title', `${t.customTitleShort} (0)`);
-        setText('#sticky-order-price', 'Min. 3 tangkai');
-        setText('#sticky-order-cta', 'Atur bunga ↑');
+        const tot = getCustomTotals();
+        const minStemsCount = siteData.minStems ?? 3;
+        const minPrompt = (t.minStemsRequired || (currentLang === 'en' ? 'Min. {n} stems' : 'Min. {n} tangkai')).replace('{n}', minStemsCount);
+        setText('#sticky-order-title', `${t.customTitleShort} (${tot.stems})`);
+        setText('#sticky-order-price', minPrompt);
+        setText('#sticky-order-cta', t.configureStemsCta || (currentLang === 'en' ? 'Configure stems ↑' : 'Atur bunga ↑'));
       } else {
         setText('#sticky-order-title', selTitle);
         setText('#sticky-order-price', selPrice);
-        setText('#sticky-order-cta', `${t.navOrder || 'Pesan'} →`);
+        setText('#sticky-order-cta', `${t.navOrder || (currentLang === 'en' ? 'Order' : 'Pesan')} →`);
       }
     }
   }
@@ -1238,14 +1314,24 @@
 
     const shopLink = document.getElementById('footer-link-shopee');
     if (shopLink) {
-      if (siteData.store.channels?.showShopee !== false && siteData.store.shopeeUrl) {
+      const isShopeeActive = siteData.store.channels?.showShopee !== false &&
+        !!siteData.store.shopeeUrl &&
+        siteData.store.shopeeUrl.trim() !== '' &&
+        siteData.store.shopeeUrl !== 'https://shopee.co.id' &&
+        siteData.store.shopeeUrl !== '#';
+
+      if (siteData.store.channels?.showShopee === false) {
+        shopLink.style.display = 'none';
+      } else if (isShopeeActive) {
+        shopLink.style.display = '';
         shopLink.href = siteData.store.shopeeUrl;
         shopLink.textContent = t.shopeeLabel || 'Shopee';
         shopLink.removeAttribute('aria-disabled');
       } else {
+        shopLink.style.display = '';
         shopLink.removeAttribute('href');
         shopLink.setAttribute('aria-disabled', 'true');
-        shopLink.innerHTML = `Shopee <small class="footer-soon-tag">(${t.marketplaceComingSoonBadge || 'segera hadir'})</small>`;
+        shopLink.innerHTML = `Shopee <small class="footer-soon-tag">(${t.channelComingSoon || t.marketplaceComingSoonBadge || 'segera hadir'})</small>`;
       }
     }
   }
@@ -1564,22 +1650,32 @@
       });
     }
 
-    // Product Image Inspector Modal (P3.11)
+    // Product Image Inspector Modal (P3.11 & R05)
     const imageModal = document.getElementById('image-modal');
     const imageModalClose = document.getElementById('image-modal-close');
     if (imageModalClose) {
       imageModalClose.addEventListener('click', closeImageModal);
     }
     if (imageModal) {
-      imageModal.addEventListener('cancel', () => {
-        if (modalReturnElement && typeof modalReturnElement.focus === 'function') {
-          modalReturnElement.focus();
-        }
-        modalReturnElement = null;
-      });
+      imageModal.addEventListener('close', restoreModalFocus);
+      imageModal.addEventListener('cancel', restoreModalFocus);
       imageModal.addEventListener('click', (e) => {
         if (e.target === imageModal) {
           closeImageModal();
+        }
+      });
+    }
+
+    const btnWhatsapp = document.getElementById('btn-whatsapp');
+    if (btnWhatsapp) {
+      btnWhatsapp.addEventListener('click', (e) => {
+        if (btnWhatsapp.getAttribute('aria-disabled') === 'true') {
+          e.preventDefault();
+          if (!hasUserSelected) {
+            scrollToSection('#collection');
+          } else if (orderMode === 'custom' && !getCustomTotals().isValid) {
+            scrollToSection('#custom-builder');
+          }
         }
       });
     }
@@ -1694,6 +1790,23 @@
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
       resetCustom: resetCustomCounts,
+      useCustom: useCustomBouquet,
+      selectWrap: selectWrap,
+      setOrderNote: (note) => {
+        orderNote = typeof note === 'string' ? note : '';
+        renderOrderSection();
+      },
+      resetToInitial: () => {
+        hasUserSelected = false;
+        orderMode = 'stem';
+        selectedFlower = 'Sunflower';
+        selectedStemQty = 1;
+        selectedPackage = 1;
+        customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
+        selectedWrap = 'kraft';
+        orderNote = '';
+        renderAll();
+      },
       getCustomTotals: getCustomTotals,
       getState: () => ({
         currentLang,

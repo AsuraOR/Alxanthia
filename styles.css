@@ -1398,7 +1398,7 @@ body.nav-open {
 
 .step-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1658,7 +1658,7 @@ body.nav-open {
 .summary-photo-caption-note {
   margin: 4px 0 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.04em;
   color: var(--accent-ochre);
 }
@@ -1921,7 +1921,7 @@ body.nav-open {
 
 .mkt-badge {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -1933,7 +1933,7 @@ body.nav-open {
 
 .mkt-soon-tag {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-ochre);
@@ -1944,7 +1944,7 @@ body.nav-open {
 
 .mkt-active-tag {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #D34324;
@@ -2509,18 +2509,18 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .flower-spec-line {
-    font-size: 9px;
+    font-size: 11px;
     margin-bottom: 4px;
   }
 
   .flower-price-line {
-    font-size: 11px;
+    font-size: 12.5px;
     margin-bottom: 10px;
   }
 
   .flower-single-note {
-    font-size: 10px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.4;
     margin-bottom: 8px;
   }
 
@@ -2532,9 +2532,9 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .btn-order-stem {
-    min-height: 40px;
-    padding: 9px 8px;
-    font-size: 10px;
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 11px;
     margin-bottom: 0;
     width: 100%;
     justify-content: center;
@@ -2542,9 +2542,9 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .btn-add-bouquet {
-    min-height: 40px;
-    padding: 8px 8px;
-    font-size: 10px;
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 11px;
     width: 100%;
     justify-content: center;
     text-align: center;
@@ -2560,7 +2560,7 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .bouquet-stems-label {
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .bouquet-title {
@@ -2579,24 +2579,24 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .bouquet-price {
-    font-size: 12.5px;
+    font-size: 13.5px;
     margin-bottom: 10px;
     padding-top: 8px;
   }
 
   .btn-choose-bouquet {
-    min-height: 40px;
-    padding: 8px 8px;
-    font-size: 10px;
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 11px;
     width: 100%;
     justify-content: center;
     text-align: center;
   }
 
   .btn-pkg-continue {
-    min-height: 38px;
-    padding: 7px 6px;
-    font-size: 9.5px;
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 11px;
     width: 100%;
     text-align: center;
   }

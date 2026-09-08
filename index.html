@@ -751,19 +751,45 @@
        FOOTER
        ======================================================================== -->
   <footer class="site-footer" id="site-footer">
-    <div class="footer-inner container">
-      <span class="footer-brand">
-        <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32" height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
-        Komorebi
-      </span>
-
-      <div class="footer-links">
-        <a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a>
-        <a href="https://shopee.co.id" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
-        <a href="#faq" id="footer-care">Pengiriman & perawatan</a>
-        <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
-        <span id="footer-copyright">© 2026 Komorebi</span>
+    <div class="footer-main container">
+      <div class="footer-col footer-col-brand">
+        <span class="footer-brand">
+          <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32" height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
+          Komorebi
+        </span>
+        <p class="footer-tagline" id="footer-tagline">est. 2026</p>
       </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-contact-title">Kontak</h3>
+        <ul class="footer-col-list">
+          <li><a href="#" id="footer-link-whatsapp" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a></li>
+          <li id="footer-email-row" hidden><a href="#" id="footer-link-email"></a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-help-title">Bantuan</h3>
+        <ul class="footer-col-list">
+          <li><a href="#faq" id="footer-care">Pengiriman & perawatan</a></li>
+          <li><a href="#order" id="footer-link-order">Cara pesan</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-store-title">Toko</h3>
+        <ul class="footer-col-list">
+          <li><a href="https://shopee.co.id" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a></li>
+          <li class="footer-note" id="footer-payment-note">Pembayaran dikonfirmasi via WhatsApp</li>
+          <li class="footer-note" id="footer-address-row" hidden></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom container">
+      <span id="footer-copyright">© 2026 Komorebi</span>
+      <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
     </div>
   </footer>
 

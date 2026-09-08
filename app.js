@@ -591,15 +591,32 @@
   /**
    * Render Trust Guarantees Bar
    */
+  const TRUST_ICONS = [
+    // Shipping box (delivered nationwide)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>',
+    // Clock (turnaround time)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>',
+    // Shield-check (packed to arrive intact)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>',
+    // Chat bubble (direct order via WhatsApp)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.3 8.3 0 0 1-4-1l-4.5 1 1-4.4a8.3 8.3 0 0 1-1-4 8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"></path></svg>'
+  ];
+
   function renderTrustBar(t) {
     const el = document.getElementById('trust-inner');
     if (!el) return;
-    el.innerHTML = `
-      <p class="trust-item"><strong>${t.tr1t}</strong><br />${t.tr1d}</p>
-      <p class="trust-item"><strong>${t.tr2t}</strong><br />${t.tr2d}</p>
-      <p class="trust-item"><strong>${t.tr3t}</strong><br />${t.tr3d}</p>
-      <p class="trust-item"><strong>${t.tr4t}</strong><br />${t.tr4d}</p>
-    `;
+    const rows = [
+      [t.tr1t, t.tr1d],
+      [t.tr2t, t.tr2d],
+      [t.tr3t, t.tr3d],
+      [t.tr4t, t.tr4d]
+    ];
+    el.innerHTML = rows.map(([title, desc], i) => `
+      <div class="trust-item">
+        <span class="trust-icon" aria-hidden="true">${TRUST_ICONS[i]}</span>
+        <p class="trust-item-text"><strong>${title}</strong>${desc}</p>
+      </div>
+    `).join('');
   }
 
   /**
@@ -1678,8 +1695,51 @@
   function renderFooter(t) {
     setText('#footer-care', t.footerCare);
     setText('#footer-copyright', t.copyright || '© 2026 Komorebi');
+    setText('#footer-tagline', siteData.store.tagline || '');
+    setText('#footer-contact-title', t.footerContactTitle || 'Kontak');
+    setText('#footer-help-title', t.footerHelpTitle || 'Bantuan');
+    setText('#footer-store-title', t.footerStoreTitle || 'Toko');
+    setText('#footer-link-order', t.footerOrderLink || 'Cara pesan');
+    setText('#footer-payment-note', t.footerPaymentNote || 'Pembayaran dikonfirmasi via WhatsApp');
 
     setAttr('#footer-link-ig', 'href', siteData.store.instagramUrl || '#');
+
+    const waFooterLink = document.getElementById('footer-link-whatsapp');
+    if (waFooterLink) {
+      setText(waFooterLink, t.footerWhatsappLabel || 'WhatsApp');
+      if (isWhatsAppReady()) {
+        const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
+        waFooterLink.href = `https://wa.me/${waNumber}`;
+        waFooterLink.removeAttribute('aria-disabled');
+      } else {
+        waFooterLink.removeAttribute('href');
+        waFooterLink.setAttribute('aria-disabled', 'true');
+      }
+    }
+
+    const emailRow = document.getElementById('footer-email-row');
+    const emailLink = document.getElementById('footer-link-email');
+    const email = (siteData.store.email || '').trim();
+    if (emailRow && emailLink) {
+      if (email) {
+        emailLink.href = `mailto:${email}`;
+        emailLink.textContent = email;
+        emailRow.hidden = false;
+      } else {
+        emailRow.hidden = true;
+      }
+    }
+
+    const addressRow = document.getElementById('footer-address-row');
+    const address = (siteData.store.address || '').trim();
+    if (addressRow) {
+      if (address) {
+        addressRow.textContent = address;
+        addressRow.hidden = false;
+      } else {
+        addressRow.hidden = true;
+      }
+    }
 
     const shopLink = document.getElementById('footer-link-shopee');
     if (shopLink) {

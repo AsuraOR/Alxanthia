@@ -29,6 +29,12 @@ window.KOMOREBI_DATA = {
     instagramUrl: "https://instagram.com/komorebi",
     // Shopee store URL: left empty until confirmed by store owner (see README.md Owner-Input List)
     shopeeUrl: "",
+    // Contact email: left empty until confirmed by store owner. The footer row only
+    // renders once this is filled in.
+    email: "",
+    // Business address: left empty until confirmed by store owner. The footer row only
+    // renders once this is filled in.
+    address: "",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
     whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {title} ({price}). {wrapInfo}{cardInfo}Apakah masih tersedia?",
@@ -433,6 +439,12 @@ window.KOMOREBI_DATA = {
       ],
 
       footerCare: "Pengiriman & perawatan",
+      footerContactTitle: "Kontak",
+      footerHelpTitle: "Bantuan",
+      footerStoreTitle: "Toko",
+      footerWhatsappLabel: "WhatsApp",
+      footerOrderLink: "Cara pesan",
+      footerPaymentNote: "Pembayaran dikonfirmasi via WhatsApp",
       copyright: "© 2026 Komorebi",
       marketplaceComingSoonBadge: "segera hadir"
     },
@@ -628,6 +640,12 @@ window.KOMOREBI_DATA = {
       ],
 
       footerCare: "Shipping & care",
+      footerContactTitle: "Contact",
+      footerHelpTitle: "Help",
+      footerStoreTitle: "Shop",
+      footerWhatsappLabel: "WhatsApp",
+      footerOrderLink: "How to order",
+      footerPaymentNote: "Payment confirmed via WhatsApp",
       copyright: "© 2026 Komorebi",
       marketplaceComingSoonBadge: "coming soon"
     }

@@ -1101,6 +1101,31 @@ Copy everything below into a fresh implementation session, replacing `<TASK IDS>
 If the implementing model has **no repository access** (a plain chat window rather than a coding
 agent), see the note at the end of this section before using the prompt.
 
+### Calibrating this spec to the implementing model
+
+The task bodies are written prescriptively — often naming the exact edit — so that a mid-tier
+model can execute them without choosing between approaches. A more capable model should be given
+latitude on **approach**, but none at all on the items below, which are facts about this repository
+or decisions already settled with the owner. They are not capability-dependent, and a stronger
+model is *more* likely to have opinions about them, not less:
+
+| Fixed regardless of model | Why |
+|---|---|
+| The six decisions in §10 | Product decisions, not engineering ones. Re-litigating them costs an owner round-trip. |
+| OD-01 (cross-cart discount) | Genuine revenue question. Still unresolved. Do not pick an answer. |
+| Placeholder discipline (§11) | A capable model is *more* likely to "helpfully" fill in a WhatsApp number or Shopee URL. |
+| The `registerEl` DOM stub | A repository fact. `tests/verify-ordering.js` is not jsdom; unregistered elements throw. |
+| Task **sequencing** in §12 | The dependency graph is real. C before D before E is not a difficulty ramp. |
+| Every acceptance criterion | These are the verification contract, not a checklist for beginners. |
+
+What a stronger model may reasonably vary: the internal structure of a function, naming, how a
+render helper is factored, and whether adjacent tasks are combined into one commit — provided the
+acceptance criteria for each task ID are still checked and reported individually.
+
+**Batch sizing.** §12's batches are the minimum safe granularity. A model that can read the repo
+and run the suite between steps may combine A+B, and C+D, in single sessions. Do not combine E with
+F: E changes the DOM and the test stub together, and F builds on the DOM that E establishes.
+
 ---
 
 > You are implementing changes to the Komorebi Creations website: a zero-dependency static site
@@ -1133,8 +1158,11 @@ agent), see the note at the end of this section before using the prompt.
 >   devDependency for tests only and must stay that way.
 > - Preserve the existing vintage-botanical visual identity. Do not redesign anything.
 > - Follow each task's `Do not change` list exactly.
-> - Where a task names a specific approach, use that approach. The audit already resolved the design
->   trade-offs; do not substitute your own solution because you prefer it.
+> - You may vary **implementation detail** — how a function is structured, naming, how a render
+>   helper is factored — where you judge it better. You may **not** vary the observable contract: the
+>   data shapes, state transitions, pricing rules, and public exports a task specifies are depended
+>   on by later tasks and by the tests. If you believe a specified contract is wrong, say so in your
+>   report and implement it as written; do not silently improve it.
 > - Section 10 of the audit lists six decisions already made (wrap scope, note scope, persistence,
 >   message templating, package pricing, line-merge behaviour). Treat those as settled requirements,
 >   not suggestions.

@@ -334,7 +334,7 @@
   <div id="lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="Akses Terbatas / Private Access Gate">
     <div class="lock-card">
       <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="48" height="48" alt="Komorebi" class="lock-logo" />
-      <h2 class="lock-brand">Komorebi</h2>
+      <p class="lock-brand">Komorebi</p>
       <p class="lock-subtitle">Akses Terbatas · Situs Sedang Dikembangkan<br /><span style="font-size: 0.85em; opacity: 0.8;">Private Preview · In Development</span></p>
       <form id="lock-form" class="lock-form" autocomplete="off">
         <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••" aria-label="Kata sandi akses / Access passcode" autofocus required />
@@ -606,9 +606,16 @@
           </div>
 
           <div class="summary-header">
-            <div class="summary-photo-frame" id="summary-photo-frame">
+            <div class="summary-photo-frame is-empty" id="summary-photo-frame">
               <img id="summary-img-prev" class="summary-photo summary-photo-prev" src="img/sunflower-720.webp" alt="" aria-hidden="true" width="76" height="76" />
               <img id="summary-img" class="summary-photo summary-photo-main" src="img/sunflower-720.webp" alt="Bunga Matahari" width="76" height="76" loading="lazy" />
+              <span class="summary-photo-empty-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <path d="M21 15l-5-5L5 21"></path>
+                </svg>
+              </span>
             </div>
             <div class="summary-meta">
               <h3 class="summary-selection-title" id="summary-title">Bunga Matahari — tangkai jadi</h3>
@@ -751,19 +758,45 @@
        FOOTER
        ======================================================================== -->
   <footer class="site-footer" id="site-footer">
-    <div class="footer-inner container">
-      <span class="footer-brand">
-        <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32" height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
-        Komorebi
-      </span>
-
-      <div class="footer-links">
-        <a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a>
-        <a href="https://shopee.co.id" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
-        <a href="#faq" id="footer-care">Pengiriman & perawatan</a>
-        <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
-        <span id="footer-copyright">© 2026 Komorebi</span>
+    <div class="footer-main container">
+      <div class="footer-col footer-col-brand">
+        <span class="footer-brand">
+          <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32" height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
+          Komorebi
+        </span>
+        <p class="footer-tagline" id="footer-tagline">est. 2026</p>
       </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-contact-title">Kontak</h3>
+        <ul class="footer-col-list">
+          <li><a href="#" id="footer-link-whatsapp" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a></li>
+          <li id="footer-email-row" hidden><a href="#" id="footer-link-email"></a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-help-title">Bantuan</h3>
+        <ul class="footer-col-list">
+          <li><a href="#faq" id="footer-care">Pengiriman & perawatan</a></li>
+          <li><a href="#order" id="footer-link-order">Cara pesan</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h3 class="footer-col-title" id="footer-store-title">Toko</h3>
+        <ul class="footer-col-list">
+          <li><a href="https://shopee.co.id" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a></li>
+          <li class="footer-note" id="footer-payment-note">Pembayaran dikonfirmasi via WhatsApp</li>
+          <li class="footer-note" id="footer-address-row" hidden></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom container">
+      <span id="footer-copyright">© 2026 Komorebi</span>
+      <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
     </div>
   </footer>
 

@@ -29,6 +29,12 @@ window.KOMOREBI_DATA = {
     instagramUrl: "https://instagram.com/komorebi",
     // Shopee store URL: left empty until confirmed by store owner (see README.md Owner-Input List)
     shopeeUrl: "",
+    // Contact email: left empty until confirmed by store owner. The footer row only
+    // renders once this is filled in.
+    email: "",
+    // Business address: left empty until confirmed by store owner. The footer row only
+    // renders once this is filled in.
+    address: "",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
     whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {title} ({price}). {wrapInfo}{cardInfo}Apakah masih tersedia?",
@@ -118,17 +124,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille sunflowers with green leaves",
       stemPrice: 55000,
+      photoStemCount: 3,
       en: {
         name: "Sunflower",
         size: "45 cm stem",
         detail: "12 cm head",
-        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
+        blurb: "Our signature. Layered ochre petals and a dense seeded crown.",
+        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
       },
       id: {
         name: "Bunga Matahari",
         size: "tangkai 45 cm",
         detail: "kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
+        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
       }
     },
     Rose: {
@@ -141,17 +150,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille roses in dusty pink",
       stemPrice: 60000,
+      photoStemCount: 3,
       en: {
         name: "Rose",
         size: "40 cm stem",
         detail: "spiralled head",
-        blurb: "Petals wound one by one into a spiral. The most patient flower we make."
+        blurb: "Petals wound one by one into a spiral. The most patient flower we make.",
+        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
       },
       id: {
         name: "Mawar",
         size: "tangkai 40 cm",
         detail: "kepala melingkar",
-        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran."
+        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
       }
     },
     Tulip: {
@@ -164,17 +176,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille tulips with slender leaves",
       stemPrice: 50000,
+      photoStemCount: 4,
       en: {
         name: "Tulip",
         size: "38 cm stem",
         detail: "6 petals",
-        blurb: "Six clean petals and a single leaf. Quiet enough for any room."
+        blurb: "Six clean petals and a single leaf. Quiet enough for any room.",
+        singleNote: "Price per finished stem · Photo shows 4 stems styled together"
       },
       id: {
         name: "Tulip",
         size: "tangkai 38 cm",
         detail: "6 kelopak",
-        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun."
+        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 4 tangkai yang ditata bersama"
       }
     },
     Gerbera: {
@@ -187,6 +202,7 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Three handmade chenille gerbera daisies in coral orange",
       stemPrice: 55000,
+      photoStemCount: 3,
       en: {
         name: "Gerbera",
         size: "40 cm stem",
@@ -282,7 +298,7 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
       pkgBlurbs: [
-        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio (draf). Pas untuk meja dan nakas.",
+        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio. Pas untuk meja dan nakas.",
         "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik studio.",
         "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
         "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
@@ -423,6 +439,12 @@ window.KOMOREBI_DATA = {
       ],
 
       footerCare: "Pengiriman & perawatan",
+      footerContactTitle: "Kontak",
+      footerHelpTitle: "Bantuan",
+      footerStoreTitle: "Toko",
+      footerWhatsappLabel: "WhatsApp",
+      footerOrderLink: "Cara pesan",
+      footerPaymentNote: "Pembayaran dikonfirmasi via WhatsApp",
       copyright: "© 2026 Komorebi",
       marketplaceComingSoonBadge: "segera hadir"
     },
@@ -477,7 +499,7 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
       pkgBlurbs: [
-        "Three stems — choice of single flower variety or studio mix (draft). Ideal for desk and bedside display.",
+        "Three stems — choice of single flower variety or studio mix. Ideal for desk and bedside display.",
         "Five stems arranged with gentle height at the centre. A balanced classic studio bouquet.",
         "Nine stems in a harmonious studio mix. 10% volume savings applied.",
         "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."
@@ -618,6 +640,12 @@ window.KOMOREBI_DATA = {
       ],
 
       footerCare: "Shipping & care",
+      footerContactTitle: "Contact",
+      footerHelpTitle: "Help",
+      footerStoreTitle: "Shop",
+      footerWhatsappLabel: "WhatsApp",
+      footerOrderLink: "How to order",
+      footerPaymentNote: "Payment confirmed via WhatsApp",
       copyright: "© 2026 Komorebi",
       marketplaceComingSoonBadge: "coming soon"
     }

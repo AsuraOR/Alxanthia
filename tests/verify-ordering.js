@@ -308,7 +308,11 @@ registerEl('p', 'summary-latin');
 registerEl('span', 'summary-price');
 registerEl('img', 'summary-photo');
 registerEl('p', 'summary-photo-caption-note');
+registerEl('span', 'summary-shipping-note');
+registerEl('p', 'includes-label');
 registerEl('ul', 'summary-includes-list');
+registerEl('div', 'stem-qty-card');
+registerEl('div', 'summary-photo-frame');
 registerEl('div', 'custom-min-warning-banner');
 registerEl('span', 'custom-min-warning-text');
 registerEl('p', 'order-note');
@@ -485,7 +489,11 @@ assert.strictEqual(state1.hasUserSelected, false, 'hasUserSelected must initiali
 const summaryTitle = mockDocument.getElementById('summary-title');
 const summaryPrice = mockDocument.getElementById('summary-price');
 const photoNote = mockDocument.getElementById('summary-photo-caption-note');
+const includesLabel = mockDocument.getElementById('includes-label');
 const includesList = mockDocument.getElementById('summary-includes-list');
+const shippingNote = mockDocument.getElementById('summary-shipping-note');
+const stemQtyCard = mockDocument.getElementById('stem-qty-card');
+const summaryPhotoFrame = mockDocument.getElementById('summary-photo-frame');
 const waBtn = mockDocument.getElementById('btn-whatsapp');
 const stickyTitle = mockDocument.getElementById('sticky-order-title');
 const stickyPrice = mockDocument.getElementById('sticky-order-price');
@@ -494,8 +502,12 @@ const stickyCta = mockDocument.getElementById('sticky-order-cta');
 assert.strictEqual(summaryTitle.textContent, 'Belum ada bunga dipilih', 'Initial title must indicate no selection');
 assert.strictEqual(summaryPrice.textContent, '—', 'Initial price must be neutral dash');
 assert.strictEqual(photoNote.style.display, 'none', 'Custom photo illustration note must be hidden');
-assert(includesList.children.length > 0, 'Includes list must display introductory guidance');
+assert.strictEqual(includesList.children.length, 0, 'Includes list must stay empty rather than show instructions in place of inclusions (T2-8)');
+assert.strictEqual(includesLabel.style.display, 'none', '"Termasuk" label must be hidden when there is nothing to include yet (T2-8)');
 assert(!includesList.textContent.includes('Kartu ucapan'), 'Includes must not claim card was prepared when none chosen');
+assert.strictEqual(shippingNote.style.display, 'none', 'Shipping note must be hidden when there is no price to qualify (T2-8)');
+assert.strictEqual(stemQtyCard.style.display, 'none', 'Stem quantity stepper must stay hidden until a stem is actually selected (T2-8)');
+assert(summaryPhotoFrame.classList.contains('is-empty'), 'Summary photo frame must show the neutral empty state, not a specific product photo (T2-8)');
 
 // WhatsApp Button must be in disabled prompt state
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must be aria-disabled');

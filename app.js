@@ -154,6 +154,11 @@
     renderAll();
   }
 
+  function fillTemplate(tpl, vars) {
+    return String(tpl).replace(/\{(\w+)\}/g, (m, k) =>
+      Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : '');
+  }
+
   /**
    * Calculate custom bouquet totals
    */
@@ -1604,11 +1609,19 @@
       const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
       const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
+      const template = siteData.store.whatsappTemplates?.[currentLang]?.[orderMode];
+      const hasTemplate = typeof template === 'string' && template.trim() !== '';
       let waMsg = '';
       if (orderMode === 'custom') {
         const tot = getCustomTotals();
         const flowerList = customFlowerSummaryList.map(item => `• ${item}`).join('\n');
-        if (currentLang === 'en') {
+        const vars = {
+          items: customFlowerSummaryList.join(', '), total: formatRp(tot.total),
+          stems: tot.stems, itemList: flowerList, wrapInfo: wrapTxt, cardInfo: cardTxt
+        };
+        if (hasTemplate) {
+          waMsg = fillTemplate(template, vars);
+        } else if (currentLang === 'en') {
           waMsg = `Hello Komorebi! I would like to order a Custom Bouquet (${tot.stems} stems, estimated ${formatRp(tot.total)}, excludes delivery fee):\n${flowerList}\n${wrapTxt}${cardTxt}Can this be arranged?`;
         } else {
           waMsg = `Halo Komorebi! Saya ingin memesan Buket Custom (${tot.stems} tangkai, estimasi ${formatRp(tot.total)}, belum termasuk ongkir):\n${flowerList}\n${wrapTxt}${cardTxt}Apakah bisa dibuatkan?`;
@@ -1616,7 +1629,14 @@
       } else if (orderMode === 'package') {
         const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
         const pkg = siteData.packages[pkgIdx];
-        if (currentLang === 'en') {
+        const items = `${selTitle} (${pkg.stems} ${currentLang === 'en' ? 'stems' : 'tangkai'})`;
+        const vars = {
+          items, total: formatRp(pkg.price), stems: pkg.stems,
+          itemList: `• ${items}`, wrapInfo: wrapTxt, cardInfo: cardTxt
+        };
+        if (hasTemplate) {
+          waMsg = fillTemplate(template, vars);
+        } else if (currentLang === 'en') {
           waMsg = `Hello Komorebi! I would like to order ${selTitle} (${pkg.stems} stems) — ${formatRp(pkg.price)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
         } else {
           waMsg = `Halo Komorebi! Saya ingin memesan ${selTitle} (${pkg.stems} tangkai) — ${formatRp(pkg.price)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
@@ -1627,10 +1647,17 @@
         const curFlower = siteData.flowers[key];
         const flTrans = curFlower[currentLang] || curFlower.en;
         const stemTotal = (curFlower.stemPrice || 55000) * selectedStemQty;
-        if (currentLang === 'en') {
-          waMsg = `Hello Komorebi! I would like to order ${selectedStemQty} × ${flTrans.name} (${t.stemSuffix}) — Total ${formatRp(stemTotal)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+        const items = `${selectedStemQty} × ${flTrans.name} ${t.stemSuffix}`;
+        const vars = {
+          items, total: formatRp(stemTotal), stems: selectedStemQty,
+          itemList: `• ${items}`, wrapInfo: wrapTxt, cardInfo: cardTxt
+        };
+        if (hasTemplate) {
+          waMsg = fillTemplate(template, vars);
+        } else if (currentLang === 'en') {
+          waMsg = `Hello Komorebi! I would like to order ${selectedStemQty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(stemTotal)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
         } else {
-          waMsg = `Halo Komorebi! Saya ingin memesan ${selectedStemQty} × ${flTrans.name} (${t.stemSuffix}) — Total ${formatRp(stemTotal)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+          waMsg = `Halo Komorebi! Saya ingin memesan ${selectedStemQty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(stemTotal)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
         }
       }
 

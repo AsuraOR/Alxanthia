@@ -15,9 +15,11 @@
   // State
   let currentLang = 'id';
   let orderMode = 'stem'; // 'stem' | 'package' | 'custom'
+  let hasUserSelected = false; // Tracks if user has explicitly picked an item
   let selectedFlower = 'Sunflower';
+  let selectedStemQty = 1; // 1, 2, 3... stems
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
-  let customCounts = { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 };
+  let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let selectedWrap = 'kraft';
   let orderNote = '';
   let siteData = null;
@@ -57,7 +59,7 @@
   }
 
   /**
-   * Switch language and update UI
+   * Switch language and update UI and document metadata
    */
   function setLanguage(lang) {
     if (lang !== 'id' && lang !== 'en') return;
@@ -66,6 +68,22 @@
       document.documentElement.lang = lang;
       localStorage.setItem(LANG_KEY, lang);
     } catch (e) {}
+
+    // Update document title and meta description
+    if (lang === 'en') {
+      document.title = 'Komorebi — Finished Chenille Stem Flowers & Handcrafted Bouquets';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', 'Chenille stem botanical flowers that never wilt: Sunflower, Rose, Tulip, and Gerbera. Handcrafted ready-to-display stems and bouquets.');
+      }
+    } else {
+      document.title = 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', 'Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang.');
+      }
+    }
+
     renderAll();
   }
 
@@ -125,6 +143,7 @@
    */
   function selectStemOrder(flowerKey, scroll = true) {
     orderMode = 'stem';
+    hasUserSelected = true;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
@@ -136,12 +155,34 @@
   }
 
   /**
+   * Order action: Change single stem quantity
+   */
+  function bumpStemQty(delta) {
+    selectedStemQty = Math.max(1, Math.min(30, selectedStemQty + delta));
+    hasUserSelected = true;
+    renderOrderSection();
+  }
+
+  /**
    * Order action: Add flower to custom bouquet
    */
   function addFlowerToBouquet(flowerKey) {
     if (!customCounts[flowerKey]) customCounts[flowerKey] = 0;
     customCounts[flowerKey] += 1;
     orderMode = 'custom';
+    hasUserSelected = true;
+
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const fl = siteData.flowers[flowerKey];
+    const name = fl ? (fl[currentLang] || fl.en).name : flowerKey;
+    const tot = getCustomTotals();
+
+    // Announce addition to screen reader
+    const announcer = document.getElementById('order-announcer');
+    if (announcer) {
+      announcer.textContent = `${name} ditambahkan ke buket. Total ${tot.stems} tangkai.`;
+    }
+
     renderCustomBuilder();
     renderBouquetsUI();
     renderOrderSection();
@@ -152,6 +193,7 @@
    */
   function selectPackageOrder(pkgIndex, scroll = false) {
     orderMode = 'package';
+    hasUserSelected = true;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
     renderBouquetsUI();
     renderOrderSection();
@@ -167,9 +209,12 @@
     const tot = getCustomTotals();
     if (tot.isValid) {
       orderMode = 'custom';
+      hasUserSelected = true;
       renderBouquetsUI();
       renderOrderSection();
       scrollToSection('#order');
+      const finishLabel = document.getElementById('finish-label');
+      if (finishLabel) finishLabel.focus();
     }
   }
 
@@ -179,6 +224,7 @@
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
     customCounts[flowerKey] = Math.max(0, cur + delta);
+    hasUserSelected = true;
     renderCustomBuilder();
     if (orderMode === 'custom') {
       renderOrderSection();
@@ -226,6 +272,51 @@
         el.setAttribute(attr, val);
       }
     }
+  }
+
+  /**
+   * Accessible Product Image Inspector Modal (P3.11)
+   */
+  let modalReturnElement = null;
+
+  function openImageModal(src, alt, title, caption, triggerEl) {
+    const modal = document.getElementById('image-modal');
+    if (!modal) return;
+    modalReturnElement = triggerEl;
+
+    const img = document.getElementById('image-modal-img');
+    const titleEl = document.getElementById('image-modal-title');
+    const captionEl = document.getElementById('image-modal-caption');
+
+    if (img) {
+      img.src = src;
+      img.alt = alt || title;
+    }
+    if (titleEl) titleEl.textContent = title;
+    if (captionEl) captionEl.textContent = caption;
+
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      modal.setAttribute('open', '');
+    }
+
+    const closeBtn = document.getElementById('image-modal-close');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeImageModal() {
+    const modal = document.getElementById('image-modal');
+    if (!modal) return;
+    if (typeof modal.close === 'function') {
+      modal.close();
+    } else {
+      modal.removeAttribute('open');
+    }
+    if (modalReturnElement && typeof modalReturnElement.focus === 'function') {
+      modalReturnElement.focus();
+    }
+    modalReturnElement = null;
   }
 
   /**
@@ -345,8 +436,12 @@
 
       const card = document.createElement('article');
       card.className = 'flower-card';
+      const singleNoteHtml = trans.singleNote
+        ? `<p class="flower-single-note">${trans.singleNote}</p>`
+        : '';
+
       card.innerHTML = `
-        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name} — ${t.orderStemLabel}">
+        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
         </div>
@@ -355,27 +450,31 @@
           <p class="flower-latin">${flower.latin}</p>
           <p class="flower-blurb">${trans.blurb}</p>
           <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
-          ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} ${t.perStemPrefix}</p>` : ''}
-          <a href="#order" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
-            ${t.orderStemLabel}
-          </a>
-          <button type="button" class="btn-add-bouquet" data-flower="${key}">
-            ${t.addToBouquetLabel}
-          </button>
+          ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
+          ${singleNoteHtml}
+          <div class="flower-actions-row">
+            <button type="button" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
+              ${t.orderStemLabel}
+            </button>
+            <button type="button" class="btn-add-bouquet" data-flower="${key}">
+              ${t.addToBouquetLabel}
+            </button>
+          </div>
         </div>
       `;
 
-      // Click card photo to trigger order
+      // Photo wrapper inspects/enlarges the product (P3.11)
       const photoWrap = card.querySelector('.flower-photo-wrapper');
       if (photoWrap) {
-        photoWrap.addEventListener('click', (e) => {
+        photoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
+        const handleOpenInspector = (e) => {
           e.preventDefault();
-          selectStemOrder(key, true);
-        });
+          openImageModal(flower.photo, flowerAlt, trans.name, `${flower.latin} · ${trans.size} · ${trans.detail}`, photoWrap);
+        };
+        photoWrap.addEventListener('click', handleOpenInspector);
         photoWrap.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            selectStemOrder(key, true);
+            handleOpenInspector(e);
           }
         });
       }
@@ -389,12 +488,21 @@
         });
       }
 
-      // Button: Add to bouquet +
+      // Button: Add to bouquet + with instant feedback
       const addBtn = card.querySelector('.btn-add-bouquet');
       if (addBtn) {
         addBtn.addEventListener('click', (e) => {
           e.preventDefault();
           addFlowerToBouquet(key);
+
+          // Inline visual badge feedback
+          const originalText = addBtn.textContent;
+          addBtn.textContent = `✓ +1 (${customCounts[key]})`;
+          addBtn.classList.add('btn-added-flash');
+          setTimeout(() => {
+            addBtn.textContent = originalText;
+            addBtn.classList.remove('btn-added-flash');
+          }, 900);
         });
       }
 
@@ -430,7 +538,7 @@
         <div class="bouquet-info">
           <div class="bouquet-meta-row">
             <span class="bouquet-stems-label">${pkg.stems} ${t.pkgStemLine}</span>
-            <span class="bouquet-dots">
+            <span class="bouquet-dots" aria-hidden="true">
               <span class="bouquet-dot" style="background:#C89A3C"></span>
               <span class="bouquet-dot" style="background:#A8586A"></span>
               <span class="bouquet-dot" style="background:#C0614E"></span>
@@ -440,9 +548,12 @@
           <h4 class="bouquet-title">${name}</h4>
           <p class="bouquet-blurb">${blurb}</p>
           ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
-          <button type="button" class="btn-choose-bouquet" data-index="${index}">
-            ${active ? t.pkgBtnActive : t.pkgBtn}
-          </button>
+          <div class="pkg-actions-col">
+            <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
+              ${active ? t.pkgBtnActive : t.pkgBtn}
+            </button>
+            ${active ? `<button type="button" class="btn-pkg-continue" data-index="${index}">${t.pkgContinueBtn || 'Lanjut ke sentuhan akhir ↓'}</button>` : ''}
+          </div>
         </div>
       `;
 
@@ -450,6 +561,15 @@
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => {
           selectPackageOrder(index, false);
+        });
+      }
+
+      const contBtn = card.querySelector('.btn-pkg-continue');
+      if (contBtn) {
+        contBtn.addEventListener('click', () => {
+          scrollToSection('#order');
+          const finishLabel = document.getElementById('finish-label');
+          if (finishLabel) finishLabel.focus();
         });
       }
 
@@ -476,6 +596,12 @@
     // List of flower rows
     const rowsList = document.getElementById('custom-rows-list');
     if (rowsList) {
+      // Record currently focused element if any
+      const activeEl = document.activeElement;
+      const activeFlower = activeEl ? activeEl.getAttribute('data-flower') : null;
+      const isInc = activeEl ? activeEl.classList.contains('btn-inc') : false;
+      const isDec = activeEl ? activeEl.classList.contains('btn-dec') : false;
+
       rowsList.innerHTML = '';
       const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
 
@@ -490,7 +616,7 @@
         li.className = 'custom-row-item';
         li.innerHTML = `
           <div class="custom-flower-meta">
-            <span class="custom-flower-dot" style="background:${flower.accent}"></span>
+            <span class="custom-flower-dot" style="background:${flower.accent}" aria-hidden="true"></span>
             <div>
               <p class="custom-flower-name">${trans.name}</p>
               <p class="custom-flower-price">${priceStr}</p>
@@ -507,6 +633,19 @@
         li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
         rowsList.appendChild(li);
       });
+
+      // Restore focus if a stepper button was clicked
+      if (activeFlower) {
+        const selector = isInc
+          ? `.btn-inc[data-flower="${activeFlower}"]`
+          : isDec
+            ? `.btn-dec[data-flower="${activeFlower}"]`
+            : null;
+        if (selector) {
+          const btnToFocus = rowsList.querySelector(selector);
+          if (btnToFocus) btnToFocus.focus();
+        }
+      }
     }
 
     // Stem count line & reset button
@@ -732,8 +871,33 @@
     setText('#selection-label', t.selectionLabel);
     setText('#includes-label', t.includesLabel);
     setText('#step3-label', t.continueLabel);
+    setText('#btn-edit-selection', t.btnEditSelection || 'Ubah pilihan ↑');
+    setText('#summary-shipping-note', t.shippingExcl || '(belum termasuk ongkir)');
 
-    // 1. Wrap colour selection chips
+    // 1. Single stem quantity stepper (visible only in stem mode)
+    const stemQtyCard = document.getElementById('stem-qty-card');
+    if (stemQtyCard) {
+      if (orderMode === 'stem') {
+        stemQtyCard.style.display = 'block';
+        setText('#stem-qty-label', t.stemQtyLabel || 'Jumlah tangkai');
+        setText('#stem-qty-count', selectedStemQty);
+        setText('#stem-qty-unit', t.stemsWord || 'tangkai');
+
+        const decBtn = document.getElementById('btn-stem-dec');
+        const incBtn = document.getElementById('btn-stem-inc');
+        if (decBtn) {
+          decBtn.onclick = () => bumpStemQty(-1);
+          decBtn.disabled = selectedStemQty <= 1;
+        }
+        if (incBtn) {
+          incBtn.onclick = () => bumpStemQty(1);
+        }
+      } else {
+        stemQtyCard.style.display = 'none';
+      }
+    }
+
+    // 2. Wrap colour selection chips
     const wrapChipsEl = document.getElementById('wrap-chips');
     if (wrapChipsEl) {
       wrapChipsEl.innerHTML = '';
@@ -745,16 +909,22 @@
         btn.className = `chip-wrap ${active ? 'active' : ''}`;
         btn.setAttribute('role', 'radio');
         btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        btn.setAttribute('aria-label', `${name} wrap paper`);
         btn.innerHTML = `
           <span class="wrap-swatch" style="background:${w.swatch}"></span>
           <span>${name}</span>
+          ${active ? '<span class="wrap-check" aria-hidden="true">✓</span>' : ''}
         `;
-        btn.addEventListener('click', () => selectWrap(w.key));
+        btn.addEventListener('click', () => {
+          selectWrap(w.key);
+          const activeChip = wrapChipsEl.querySelector('.chip-wrap.active');
+          if (activeChip) activeChip.focus();
+        });
         wrapChipsEl.appendChild(btn);
       });
     }
 
-    // 2. Message card textarea
+    // 3. Message card textarea
     const noteInput = document.getElementById('card-note-input');
     if (noteInput) {
       noteInput.placeholder = t.cardPlaceholder;
@@ -768,13 +938,29 @@
       };
     }
 
-    // 3. Prepare summary title, subtitle, price, photo, includes according to mode
+    // 4. Edit selection button route
+    const editBtn = document.getElementById('btn-edit-selection');
+    if (editBtn) {
+      editBtn.onclick = () => {
+        if (orderMode === 'custom') {
+          scrollToSection('#custom-builder');
+        } else if (orderMode === 'package') {
+          scrollToSection('#bouquets');
+        } else {
+          scrollToSection('#collection');
+        }
+      };
+    }
+
+    // 5. Prepare summary title, subtitle, price, photo, includes according to mode
     let selTitle = '';
     let selSub = '';
     let selPrice = '';
     let photoSrc = '';
     let photoAlt = '';
     let baseIncludes = [];
+    let isCustomInvalid = false;
+    let customFlowerSummaryList = [];
 
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
 
@@ -789,37 +975,61 @@
       baseIncludes = t.pkgIncludes.map(l => l.replace('{n}', pkg.stems));
     } else if (orderMode === 'custom') {
       const tot = getCustomTotals();
-      selTitle = t.customTitleShort;
+      selTitle = `${t.customTitleShort} (${tot.stems} ${t.stemsWord})`;
       selSub = `${tot.stems} ${t.stemsWord}`;
-      selPrice = tot.isValid ? formatRp(tot.total) : '—';
+      isCustomInvalid = !tot.isValid;
+      selPrice = tot.isValid ? formatRp(tot.total) : `— (${t.minHint})`;
       photoSrc = siteData.packages[1].photoWebp || siteData.packages[1].photo;
       photoAlt = `${t.customTitleShort} — ${tot.stems} ${t.stemsWord}`;
 
-      const flowerLines = (siteData.flowerOrder || []).filter(k => (customCounts[k] || 0) > 0)
+      customFlowerSummaryList = (siteData.flowerOrder || []).filter(k => (customCounts[k] || 0) > 0)
         .map(k => {
           const fl = siteData.flowers[k];
           const name = fl ? (fl[currentLang] || fl.en).name : k;
           return `${customCounts[k]} × ${name}`;
         });
-      baseIncludes = flowerLines.concat(t.customIncludesTail);
+
+      if (customFlowerSummaryList.length > 0) {
+        baseIncludes = customFlowerSummaryList.concat(t.customIncludesTail);
+      } else {
+        baseIncludes = [t.emptyCustomMsg].concat(t.customIncludesTail);
+      }
     } else {
-      // Default: 'stem' mode
+      // 'stem' mode
       const key = siteData.flowers[selectedFlower] ? selectedFlower : 'Sunflower';
       const curFlower = siteData.flowers[key];
       const flTrans = curFlower[currentLang] || curFlower.en;
-      selTitle = `${flTrans.name} ${t.stemSuffix}`;
+      selTitle = selectedStemQty > 1
+        ? `${selectedStemQty} × ${flTrans.name} ${t.stemSuffix}`
+        : `${flTrans.name} ${t.stemSuffix}`;
       selSub = curFlower.latin;
-      selPrice = formatRp(curFlower.stemPrice || 55000);
+      const stemTotal = (curFlower.stemPrice || 55000) * selectedStemQty;
+      selPrice = formatRp(stemTotal);
       photoSrc = curFlower.photo;
-      photoAlt = `${flTrans.name} — finished stem`;
-      baseIncludes = t.stemIncludes.map(l => l.replace('{flower}', flTrans.name).replace('{size}', flTrans.size));
+      photoAlt = `${flTrans.name} — ${curFlower.latin}`;
+      baseIncludes = t.stemIncludes.map(l =>
+        l.replace('{flower}', flTrans.name)
+         .replace('{size}', flTrans.size)
+         .replace('{qty}', selectedStemQty)
+      );
     }
 
     setText('#summary-title', selTitle);
     updateSummaryLatin(selSub);
     updateSummaryPhoto(photoSrc, photoAlt);
 
-    // Price
+    // Custom illustration photo note
+    const photoNote = document.getElementById('summary-photo-caption-note');
+    if (photoNote) {
+      if (orderMode === 'custom') {
+        photoNote.style.display = 'block';
+        photoNote.textContent = t.customIllustrativeNote || 'Foto ilustrasi buket';
+      } else {
+        photoNote.style.display = 'none';
+      }
+    }
+
+    // Price display
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
       if (siteData.store.showPrices) {
@@ -830,7 +1040,18 @@
       }
     }
 
-    // Internal function to render summary includes list & update sticky bar
+    // Custom minimum warning banner
+    const minWarningEl = document.getElementById('custom-min-warning-banner');
+    if (minWarningEl) {
+      if (orderMode === 'custom' && isCustomInvalid) {
+        minWarningEl.style.display = 'block';
+        setText('#custom-min-warning-text', t.customMinErrorSummary || t.minHint);
+      } else {
+        minWarningEl.style.display = 'none';
+      }
+    }
+
+    // Render includes list
     function renderSummaryIncludes() {
       const includesListEl = document.getElementById('summary-includes-list');
       if (includesListEl) {
@@ -838,86 +1059,119 @@
         const allIncludes = [...baseIncludes];
         allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
         if (orderNote.trim()) {
-          allIncludes.push(`${t.cardLinePrefix}: “${orderNote.trim()}”`);
+          allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
         }
 
         allIncludes.forEach(text => {
           const li = document.createElement('li');
           li.className = 'summary-includes-item';
-          li.innerHTML = `<span class="bullet-dot">·</span><span>${text}</span>`;
+          li.innerHTML = `<span class="bullet-dot" aria-hidden="true">·</span><span>${text}</span>`;
           includesListEl.appendChild(li);
         });
       }
     }
     renderSummaryIncludes();
 
-    // 4. Update Marketplace & WhatsApp Buttons
-    const ch = siteData.store.channels;
-    const btnTokopedia = document.getElementById('btn-tokopedia');
-    const btnShopee = document.getElementById('btn-shopee');
+    // 6. Marketplace (Shopee) & WhatsApp Channel Buttons
     const btnWhatsapp = document.getElementById('btn-whatsapp');
+    const btnShopee = document.getElementById('btn-shopee');
+    const mktNoticeBox = document.getElementById('marketplace-status-box');
 
-    const tokopUrl = siteData.store.tokopediaUrl;
-    const shopUrl = siteData.store.shopeeUrl;
+    if (btnShopee) {
+      if (siteData.store.channels?.showShopee !== false && siteData.store.shopeeUrl) {
+        btnShopee.href = siteData.store.shopeeUrl;
+        btnShopee.style.display = 'flex';
+        btnShopee.removeAttribute('aria-disabled');
+        const shopName = btnShopee.querySelector('.channel-name');
+        if (shopName) shopName.textContent = t.shopeeLabel || 'Shopee';
+        const shopSub = document.getElementById('shopee-channel-sub');
+        if (shopSub) shopSub.textContent = t.shopeeSub || (currentLang === 'en' ? 'Official Store · Direct checkout' : 'Official Store · Belanja praktis');
+        const shopAction = document.getElementById('shopee-channel-action');
+        if (shopAction) shopAction.textContent = t.shopeeAction || (currentLang === 'en' ? 'visit store →' : 'buka toko →');
 
-    if (btnTokopedia) {
-      btnTokopedia.style.display = ch.showTokopedia ? 'flex' : 'none';
-      if (tokopUrl) {
-        btnTokopedia.href = tokopUrl;
-        btnTokopedia.removeAttribute('aria-disabled');
-        btnTokopedia.classList.remove('btn-disabled');
-        btnTokopedia.querySelector('.channel-action').textContent = t.openLabel;
+        if (!btnShopee.dataset.hasShopeeListener) {
+          btnShopee.dataset.hasShopeeListener = 'true';
+          btnShopee.addEventListener('click', () => {
+            const announcer = document.getElementById('order-announcer');
+            if (announcer) {
+              announcer.textContent = currentLang === 'en'
+                ? 'Opening Komorebi official store on Shopee...'
+                : 'Membuka toko resmi Komorebi di Shopee...';
+            }
+          });
+        }
       } else {
-        btnTokopedia.removeAttribute('href');
-        btnTokopedia.setAttribute('aria-disabled', 'true');
-        btnTokopedia.classList.add('btn-disabled');
-        btnTokopedia.querySelector('.channel-action').textContent = t.channelComingSoon || 'segera hadir';
+        btnShopee.style.display = 'none';
       }
     }
 
-    if (btnShopee) {
-      btnShopee.style.display = ch.showShopee ? 'flex' : 'none';
-      if (shopUrl) {
-        btnShopee.href = shopUrl;
-        btnShopee.removeAttribute('aria-disabled');
-        btnShopee.classList.remove('btn-disabled');
-        btnShopee.querySelector('.channel-action').textContent = t.openLabel;
-      } else {
-        btnShopee.removeAttribute('href');
-        btnShopee.setAttribute('aria-disabled', 'true');
-        btnShopee.classList.add('btn-disabled');
-        btnShopee.querySelector('.channel-action').textContent = t.channelComingSoon || 'segera hadir';
-      }
+    if (mktNoticeBox) {
+      setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
+      setText('#marketplace-status-text', t.marketplaceNotice || (currentLang === 'en'
+        ? 'Our official Shopee store is open for convenient checkout. For custom bouquets & consultation, order directly via WhatsApp studio.'
+        : 'Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan langsung via WhatsApp studio.'));
     }
 
     function updateWhatsAppLink() {
       if (!btnWhatsapp) return;
-      btnWhatsapp.style.display = ch.showWhatsapp ? 'flex' : 'none';
+
+      if (orderMode === 'custom' && isCustomInvalid) {
+        btnWhatsapp.removeAttribute('href');
+        btnWhatsapp.setAttribute('aria-disabled', 'true');
+        btnWhatsapp.classList.add('btn-disabled');
+        const channelName = btnWhatsapp.querySelector('.channel-name');
+        if (channelName) channelName.textContent = t.customMinHint || 'Minimal 3 tangkai';
+        const channelAction = btnWhatsapp.querySelector('.channel-action');
+        if (channelAction) channelAction.textContent = 'atur ↑';
+        return;
+      }
+
       btnWhatsapp.classList.remove('btn-disabled');
+      btnWhatsapp.removeAttribute('aria-disabled');
 
       const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
       const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
-      const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: “${orderNote.trim()}”. ` : '';
+      const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
       let waMsg = '';
-      if (currentLang === 'en') {
-        waMsg = `Hello Komorebi! I would like to order ${selTitle} (${selPrice}). ${wrapTxt}${cardTxt}Is it available?`;
+      if (orderMode === 'custom') {
+        const tot = getCustomTotals();
+        const flowerList = customFlowerSummaryList.map(item => `• ${item}`).join('\n');
+        if (currentLang === 'en') {
+          waMsg = `Hello Komorebi! I would like to order a Custom Bouquet (${tot.stems} stems, estimated ${formatRp(tot.total)}, excludes delivery fee):\n${flowerList}\n${wrapTxt}${cardTxt}Can this be arranged?`;
+        } else {
+          waMsg = `Halo Komorebi! Saya ingin memesan Buket Custom (${tot.stems} tangkai, estimasi ${formatRp(tot.total)}, belum termasuk ongkir):\n${flowerList}\n${wrapTxt}${cardTxt}Apakah bisa dibuatkan?`;
+        }
+      } else if (orderMode === 'package') {
+        const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
+        const pkg = siteData.packages[pkgIdx];
+        if (currentLang === 'en') {
+          waMsg = `Hello Komorebi! I would like to order ${selTitle} (${pkg.stems} stems) — ${formatRp(pkg.price)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+        } else {
+          waMsg = `Halo Komorebi! Saya ingin memesan ${selTitle} (${pkg.stems} tangkai) — ${formatRp(pkg.price)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+        }
       } else {
-        waMsg = `Halo Komorebi! Saya ingin memesan ${selTitle} (${selPrice}). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+        // stem mode
+        const key = siteData.flowers[selectedFlower] ? selectedFlower : 'Sunflower';
+        const curFlower = siteData.flowers[key];
+        const flTrans = curFlower[currentLang] || curFlower.en;
+        const stemTotal = (curFlower.stemPrice || 55000) * selectedStemQty;
+        if (currentLang === 'en') {
+          waMsg = `Hello Komorebi! I would like to order ${selectedStemQty} × ${flTrans.name} (${t.stemSuffix}) — Total ${formatRp(stemTotal)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+        } else {
+          waMsg = `Halo Komorebi! Saya ingin memesan ${selectedStemQty} × ${flTrans.name} (${t.stemSuffix}) — Total ${formatRp(stemTotal)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+        }
       }
 
       btnWhatsapp.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`;
-      btnWhatsapp.querySelector('.channel-name').textContent = t.waLabel;
-      btnWhatsapp.querySelector('.channel-action').textContent = t.messageLabel;
+      const channelName = btnWhatsapp.querySelector('.channel-name');
+      if (channelName) channelName.textContent = t.waLabel || 'WhatsApp — Konfirmasi Pesanan';
+      const channelAction = btnWhatsapp.querySelector('.channel-action');
+      if (channelAction) channelAction.textContent = t.messageLabel || 'chat →';
     }
     updateWhatsAppLink();
 
-    // Order Note Notice
-    const hasMarketplaceListing = Boolean(tokopUrl || shopUrl);
-    const orderNoteText = hasMarketplaceListing
-      ? t.orderNote
-      : `${t.channelUnavailableNotice || t.orderNote} ${t.waDraftNotice || ''}`;
-    setText('#order-note', orderNoteText);
+    setText('#order-note', t.orderNote);
 
     // Announcer for screen readers
     const announcer = document.getElementById('order-announcer');
@@ -925,10 +1179,22 @@
       announcer.textContent = `${selTitle} — ${selPrice}.`;
     }
 
-    // Update sticky mobile order bar
-    setText('#sticky-order-title', selTitle);
-    setText('#sticky-order-price', selPrice);
-    setText('#sticky-order-cta', `${t.navOrder || 'Pesan'} →`);
+    // 7. Update sticky mobile order bar
+    if (!hasUserSelected) {
+      setText('#sticky-order-title', 'Komorebi Creations');
+      setText('#sticky-order-price', t.stickyPrompt || 'Pilih bunga');
+      setText('#sticky-order-cta', `${t.ctaBrowse || 'Lihat bunga'} ↓`);
+    } else {
+      if (orderMode === 'custom' && isCustomInvalid) {
+        setText('#sticky-order-title', `${t.customTitleShort} (0)`);
+        setText('#sticky-order-price', 'Min. 3 tangkai');
+        setText('#sticky-order-cta', 'Atur bunga ↑');
+      } else {
+        setText('#sticky-order-title', selTitle);
+        setText('#sticky-order-price', selPrice);
+        setText('#sticky-order-cta', `${t.navOrder || 'Pesan'} →`);
+      }
+    }
   }
 
   /**
@@ -969,8 +1235,19 @@
     setText('#footer-copyright', t.copyright || '© 2026 Komorebi');
 
     setAttr('#footer-link-ig', 'href', siteData.store.instagramUrl || '#');
-    setAttr('#footer-link-tokopedia', 'href', siteData.store.tokopediaUrl || '#');
-    setAttr('#footer-link-shopee', 'href', siteData.store.shopeeUrl || '#');
+
+    const shopLink = document.getElementById('footer-link-shopee');
+    if (shopLink) {
+      if (siteData.store.channels?.showShopee !== false && siteData.store.shopeeUrl) {
+        shopLink.href = siteData.store.shopeeUrl;
+        shopLink.textContent = t.shopeeLabel || 'Shopee';
+        shopLink.removeAttribute('aria-disabled');
+      } else {
+        shopLink.removeAttribute('href');
+        shopLink.setAttribute('aria-disabled', 'true');
+        shopLink.innerHTML = `Shopee <small class="footer-soon-tag">(${t.marketplaceComingSoonBadge || 'segera hadir'})</small>`;
+      }
+    }
   }
 
   /**
@@ -983,9 +1260,9 @@
     renderTrustBar(t);
     renderCollection(t);
     renderBouquetsUI();
+    renderOrderSection();
     renderHowTo(t);
     renderMaterial(t);
-    renderOrderSection();
     renderFaq(t);
     renderFooter(t);
   }
@@ -1030,10 +1307,16 @@
 
     try {
       if (localStorage.getItem(AUTH_KEY) === 'true') {
-        if (lockScreen) lockScreen.classList.add('unlocked');
+        if (lockScreen) {
+          lockScreen.classList.add('unlocked');
+          lockScreen.style.display = 'none';
+        }
         updateLockA11y(false);
       } else {
-        if (lockScreen) lockScreen.classList.remove('unlocked');
+        if (lockScreen) {
+          lockScreen.style.display = 'flex';
+          lockScreen.classList.remove('unlocked');
+        }
         updateLockA11y(true);
         if (passInput) passInput.focus();
       }
@@ -1052,7 +1335,14 @@
             localStorage.setItem(AUTH_KEY, 'true');
           } catch (err) {}
           if (lockError) lockError.textContent = '';
-          if (lockScreen) lockScreen.classList.add('unlocked');
+          if (lockScreen) {
+            lockScreen.classList.add('unlocked');
+            setTimeout(() => {
+              if (lockScreen.classList.contains('unlocked')) {
+                lockScreen.style.display = 'none';
+              }
+            }, 360);
+          }
           updateLockA11y(false);
         } else {
           if (lockError) {
@@ -1073,6 +1363,7 @@
           localStorage.removeItem(AUTH_KEY);
         } catch (err) {}
         if (lockScreen) {
+          lockScreen.style.display = 'flex';
           lockScreen.classList.remove('unlocked');
           updateLockA11y(true);
           if (passInput) {
@@ -1149,7 +1440,13 @@
     if (cta) {
       cta.addEventListener('click', (e) => {
         e.preventDefault();
-        scrollToSection('#order');
+        if (!hasUserSelected) {
+          scrollToSection('#collection');
+        } else if (orderMode === 'custom' && !getCustomTotals().isValid) {
+          scrollToSection('#custom-builder');
+        } else {
+          scrollToSection('#order');
+        }
       });
     }
   }
@@ -1167,10 +1464,13 @@
     // Mobile Navigation Toggle
     const navToggle = document.getElementById('nav-toggle');
     const navMenu = document.getElementById('nav-menu');
+    const navScrim = document.getElementById('nav-scrim');
 
     function openNavMenu() {
       if (!navMenu || !navToggle) return;
       navMenu.classList.add('open');
+      if (navScrim) navScrim.classList.add('visible');
+      document.body.classList.add('nav-open');
       navToggle.setAttribute('aria-expanded', 'true');
       navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Close navigation menu' : 'Tutup menu navigasi');
       const firstLink = navMenu.querySelector('.nav-link');
@@ -1180,6 +1480,8 @@
     function closeNavMenu() {
       if (!navMenu || !navToggle) return;
       navMenu.classList.remove('open');
+      if (navScrim) navScrim.classList.remove('visible');
+      document.body.classList.remove('nav-open');
       navToggle.setAttribute('aria-expanded', 'false');
       navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Open navigation menu' : 'Buka menu navigasi');
     }
@@ -1194,6 +1496,10 @@
       });
     }
 
+    if (navScrim) {
+      navScrim.addEventListener('click', closeNavMenu);
+    }
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && navMenu && navMenu.classList.contains('open')) {
         closeNavMenu();
@@ -1204,7 +1510,7 @@
     document.addEventListener('click', (e) => {
       if (navMenu && navMenu.classList.contains('open')) {
         const header = document.querySelector('.site-header');
-        if (header && !header.contains(e.target)) {
+        if (header && !header.contains(e.target) && (!navScrim || !navScrim.contains(e.target))) {
           closeNavMenu();
         }
       }
@@ -1214,6 +1520,13 @@
       link.addEventListener('click', () => {
         closeNavMenu();
       });
+    });
+
+    // Close on desktop resize
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 769 && navMenu && navMenu.classList.contains('open')) {
+        closeNavMenu();
+      }
     });
 
     const brandLink = document.getElementById('brand-link');
@@ -1247,6 +1560,26 @@
             details.open = false;
             details.classList.remove('is-closing');
           }, 220);
+        }
+      });
+    }
+
+    // Product Image Inspector Modal (P3.11)
+    const imageModal = document.getElementById('image-modal');
+    const imageModalClose = document.getElementById('image-modal-close');
+    if (imageModalClose) {
+      imageModalClose.addEventListener('click', closeImageModal);
+    }
+    if (imageModal) {
+      imageModal.addEventListener('cancel', () => {
+        if (modalReturnElement && typeof modalReturnElement.focus === 'function') {
+          modalReturnElement.focus();
+        }
+        modalReturnElement = null;
+      });
+      imageModal.addEventListener('click', (e) => {
+        if (e.target === imageModal) {
+          closeImageModal();
         }
       });
     }
@@ -1342,7 +1675,7 @@
     renderAll();
     initScrollReveals();
 
-    // Export API for Dev / Testing
+    // Export API for Testing & Verification
     window.KomorebiApp = {
       getData: () => siteData,
       setData: (newData) => {
@@ -1357,9 +1690,22 @@
         renderAll();
       },
       selectStem: selectStemOrder,
+      bumpStemQty: bumpStemQty,
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
-      resetCustom: resetCustomCounts
+      resetCustom: resetCustomCounts,
+      getCustomTotals: getCustomTotals,
+      getState: () => ({
+        currentLang,
+        orderMode,
+        hasUserSelected,
+        selectedFlower,
+        selectedStemQty,
+        selectedPackage,
+        customCounts: { ...customCounts },
+        selectedWrap,
+        orderNote
+      })
     };
   }
 

@@ -4,7 +4,7 @@
  * =============================================================================
  * 
  * PETUNJUK UNTUK NON-DEVELOPER (INDONESIA):
- * Anda bisa mengubah teks, harga, tautan WhatsApp, Tokopedia, Shopee, dan gambar di sini!
+ * Anda bisa mengubah teks, harga, tautan WhatsApp, Shopee, dan gambar di sini!
  * Pastikan tanda kutip ("...") dan koma (,) tetap ada dan tidak terhapus.
  * 
  * INSTRUCTIONS FOR NON-DEVELOPERS (ENGLISH):
@@ -27,8 +27,7 @@ window.KOMOREBI_DATA = {
     logo: "komorebi-logo-96.webp",
     logo2x: "komorebi-logo-192.webp",
     instagramUrl: "https://instagram.com/komorebi",
-    tokopediaUrl: null, // Marketplace listing URLs pending confirmation
-    shopeeUrl: null,
+    shopeeUrl: "https://shopee.co.id",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
     whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {title} ({price}). {wrapInfo}{cardInfo}Apakah masih tersedia?",
@@ -37,7 +36,6 @@ window.KOMOREBI_DATA = {
     whatsappWaitlistEn: "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.",
     // Marketplace & Channel visibility toggles
     channels: {
-      showTokopedia: true,
       showShopee: true,
       showWhatsapp: true
     },
@@ -192,13 +190,15 @@ window.KOMOREBI_DATA = {
         name: "Gerbera",
         size: "40 cm stem",
         detail: "coral, two-tone",
-        blurb: "Two rings of narrow coral petals around a seeded brown centre."
+        blurb: "Two rings of narrow coral petals around a seeded brown centre.",
+        singleNote: "Price is for 1 finished stem (photo shows three stems for color reference)."
       },
       id: {
         name: "Gerbera",
         size: "tangkai 40 cm",
         detail: "koral, dua nada",
-        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji."
+        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
+        singleNote: "Harga untuk 1 tangkai jadi (foto menampilkan 3 tangkai untuk referensi warna)."
       }
     },
     Lavender: {
@@ -215,13 +215,13 @@ window.KOMOREBI_DATA = {
         name: "Lavender",
         size: "32 cm stem",
         detail: "9 spikes",
-        blurb: "Nine slender spikes to a bundle. Kept in bouquet shots."
+        blurb: "Nine slender spikes to a bundle. Featured in bouquet arrangements."
       },
       id: {
         name: "Lavender",
         size: "tangkai 32 cm",
         detail: "9 tangkai",
-        blurb: "Sembilan tangkai ramping per ikat. Tampil dalam foto buket."
+        blurb: "Sembilan tangkai ramping per ikat. Tampil dalam rangkaian buket."
       }
     }
   },
@@ -255,13 +255,13 @@ window.KOMOREBI_DATA = {
       ben3d: "Dipotong, dibentuk, dan dibungkus setelah Anda pesan.",
 
       tr1t: "Dikirim dari Indonesia",
-      tr1d: "Ke seluruh Indonesia lewat marketplace.",
+      tr1d: "Ke seluruh Indonesia dalam kemasan boks protektif.",
       tr2t: "Dibuat 2–3 hari kerja",
-      tr2d: "Buket 9 tangkai ke atas, 3–4 hari.",
+      tr2d: "Buket 9 tangkai ke atas, 3–4 hari kerja.",
       tr3t: "Dikemas agar utuh",
-      tr3d: "Kelopak selalu bisa dibentuk ulang dengan tangan.",
-      tr4t: "Pembayaran terlindungi",
-      tr4d: "Checkout lewat Tokopedia atau Shopee.",
+      tr3d: "Kelopak lentur selalu bisa dirapikan kembali dengan tangan.",
+      tr4t: "Pemesanan langsung",
+      tr4d: "Detail pesanan & pengiriman dikonfirmasi langsung via WhatsApp studio.",
 
       colEyebrow: "Koleksi",
       colTitle: "Dua cara memesan",
@@ -276,40 +276,47 @@ window.KOMOREBI_DATA = {
       orderStemLabel: "Pesan tangkai ini",
       addToBouquetLabel: "Tambah ke buket +",
       perStemPrefix: "per tangkai",
+      stemQtyLabel: "Jumlah tangkai",
+      shippingExcl: "(belum termasuk ongkir)",
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
       pkgBlurbs: [
-        "Tiga tangkai, satu jenis atau campuran. Ukuran meja dan nakas.",
-        "Lima tangkai dengan bagian tengah yang lebih tinggi. Paling sering dipesan.",
-        "Sembilan tangkai, warna campur, penuh dalam pelukan. Sudah harga grosir.",
-        "Lima belas tangkai untuk momen yang memang menuntutnya. Sudah harga grosir."
+        "Tiga tangkai, satu jenis atau campuran bunga pilihan studio. Pas untuk meja dan nakas.",
+        "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik.",
+        "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
+        "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
       ],
       pkgStemLine: "tangkai",
       pkgIncludes: [
         "{n} tangkai jadi, bunga campur",
-        "Dibalut kertas, diikat pita",
-        "Dikemas dalam kotak",
-        "Kartu perawatan disertakan"
+        "Dibalut kertas pembungkus & pita katun",
+        "Dikemas rapi dalam kotak pelindung",
+        "Kartu petunjuk perawatan disertakan"
       ],
       pkgBtn: "Pilih buket ini",
-      pkgBtnActive: "Dipilih",
+      pkgBtnActive: "✓ Dipilih",
+      pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
-      customIntro: "Tambahkan bunga yang Anda mau, estimasi harganya ikut berubah. Minimal tiga tangkai; sembilan tangkai ke atas dapat potongan 10% untuk bunganya.",
+      customIntro: "Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal 3 tangkai; 9 tangkai ke atas otomatis mendapat potongan 10% untuk bunganya.",
       customPickLabel: "Pilih tangkainya",
       resetLabel: "Atur ulang",
-      estimateLabel: "Estimasi",
+      estimateLabel: "Estimasi biaya",
       flowersLabel: "Bunga",
-      discountLabel: "Potongan grosir (9+ tangkai)",
-      wrapFeeLabel: "Bungkus & pita",
+      discountLabel: "Potongan hemat (9+ tangkai, 10%)",
+      wrapFeeLabel: "Bungkus & pita (termasuk dalam total)",
       estTotalLabel: "Estimasi total",
       stemsWord: "tangkai",
       stemWord: "tangkai",
-      minHint: "Tambahkan minimal tiga tangkai untuk memesan buket.",
-      okHint: "Estimasi — total akhirnya kami konfirmasi lewat chat sebelum Anda bayar.",
+      minHint: "Tambahkan minimal 3 tangkai untuk memesan buket custom.",
+      okHint: "Estimasi — total akhir dan ongkir kami konfirmasikan via WhatsApp sebelum pembayaran.",
       useCustomLabel: "Pakai buket ini",
+      emptyCustomMsg: "Belum ada bunga dipilih. Gunakan tombol + di atas untuk menambahkan tangkai.",
+      addedToast: "{flower} ditambahkan ke buket ({count} tangkai)",
+      viewCustomLink: "Lihat buket custom →",
+      customIllustrativeNote: "Foto ilustrasi buket — rangkaian dirakit persis sesuai komposisi bunga pilihan Anda.",
 
       kitSoonEyebrow: "Segera menyusul",
       kitSoonTitle: "Kit DIY-nya masih kami siapkan",
@@ -331,28 +338,35 @@ window.KOMOREBI_DATA = {
       matCaption: "Gbr. 1 — serat chenille pada inti kawat berpuntir",
       matBody: "Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.",
       matPoints: [
-        ["Bisa dibentuk ulang dengan tangan.", "Kalau kelopak tertekan di perjalanan, cukup lengkungkan kembali — tidak ada yang dilem kaku."],
+        ["Bisa dibentuk ulang dengan tangan.", "Kalau kelopak tertekan di perjalanan, cukup lengkungkan kembali mengikuti lentur kawat intinya."],
         ["Ujung kawat dilipat dan dibalut.", "Aman dipegang dan aman diberikan sebagai hadiah."],
         ["Dibuat untuk pajangan dalam ruangan jangka panjang.", "Jauhkan dari lembap dan sinar matahari langsung yang lama."]
       ],
 
       orderEyebrow: "Pesan",
-      orderTitle: "Lengkapi pesanan Anda, lalu lanjut ke checkout",
+      orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
       finishLabel: "Sentuhan akhir",
-      wrapIntro: "Pilih kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga setiap buket.",
+      wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
-      cardPlaceholder: "mis. Selamat lulus, Sagita — dari kami semua",
+      cardPlaceholder: "mis. Selamat wisuda, Sagita — sukses selalu!",
       cardNote: "Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.",
       selectionLabel: "Pilihan Anda",
       includesLabel: "Termasuk",
-      continueLabel: "Lanjut ke",
+      continueLabel: "Lanjut ke pemesanan",
       openLabel: "buka →",
       messageLabel: "chat →",
       channelComingSoon: "segera hadir",
-      channelUnavailableNotice: "Listing marketplace segera dibuka. Saat ini pemesanan dilayani langsung via WhatsApp.",
-      waDraftNotice: "Membuka draft pesan di WhatsApp (tidak terkirim otomatis).",
-      waLabel: "WhatsApp — tanya atau custom",
-      orderNote: "Pembayaran dan pengiriman ditangani marketplace resmi, lengkap dengan perlindungan pembelinya.",
+      channelUnavailableNotice: "Listing Shopee sedang disiapkan. Saat ini seluruh pemesanan dilayani langsung via WhatsApp studio.",
+      shopeeLabel: "Shopee",
+      shopeeSub: "Official Store · Belanja praktis",
+      shopeeAction: "buka toko →",
+      shopeeBadgeTag: "Toko Resmi",
+      marketplaceNotice: "Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan langsung via WhatsApp studio.",
+      waDraftNotice: "Membuka draf pesan di WhatsApp (tidak terkirim otomatis sampai Anda menekan tombol kirim di aplikasi).",
+      waLabel: "WhatsApp — Konfirmasi Pesanan",
+      orderNote: "Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui chat WhatsApp studio sebelum Anda melakukan transfer.",
+      btnEditSelection: "Ubah pilihan ↑",
+      customMinErrorSummary: "Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Pembungkus",
@@ -360,29 +374,32 @@ window.KOMOREBI_DATA = {
       stemSuffix: "— tangkai jadi",
       customTitleShort: "Buket custom",
       stemIncludes: [
-        "{flower} jadi, dirangkai oleh kami",
-        "{size}, siap ditaruh di vas",
-        "Dibalut kertas, dikemas dalam kotak",
-        "Kartu perawatan disertakan"
+        "{flower} jadi ({qty} tangkai), dirangkai oleh studio",
+        "{size}, siap dipajang di vas",
+        "Dibalut kertas pelindung, dikemas dalam boks",
+        "Kartu panduan perawatan disertakan"
       ],
       customIncludesTail: [
-        "Dibungkus, diikat, dan dikotakkan oleh kami",
-        "Dibuat sesuai pesanan — 3–4 hari kerja"
+        "Dibalut kertas pembungkus pilihan & pita katun",
+        "Dikemas rapi dalam kotak pelindung",
+        "Dibuat sesuai pesanan — 3–4 hari kerja",
+        "Kartu panduan perawatan disertakan"
       ],
 
       faqEyebrow: "Pertanyaan",
       faqTitle: "Sebelum Anda memesan",
       faqs: [
-        ["Dikirim dari mana?", "Semuanya dibuat dan dikirim dari Indonesia, ke seluruh nusantara lewat kurir Tokopedia dan Shopee."],
-        ["Berapa lama sebelum dikirim?", "Tangkai satuan dan buket kecil butuh 2–3 hari kerja; buket sembilan tangkai ke atas, 3–4 hari."],
-        ["Apakah bisa rusak di jalan?", "Buket dibungkus dan dikotakkan dengan kepala bunga terlindungi. Kalau ada kelopak yang tertekan, cukup dibentuk ulang dengan tangan."],
-        ["Bisa ganti isi buketnya?", "Bisa — pakai penyusun custom untuk campuran yang tepat, atau chat kami di WhatsApp untuk warna atau ukuran yang belum tercantum."],
-        ["Bagaimana cara merawatnya?", "Tanpa air. Pajang di dalam ruangan, jauh dari lembap dan sinar matahari langsung yang lama; bersihkan debu dengan sikat kering dan bentuk ulang kelopak dengan tangan."],
-        ["Kit DIY-nya masih ada?", "Masih, hanya belum sekarang — panduan dan kemasannya sedang kami rapikan. Chat kami di WhatsApp kalau Anda mau satu, nanti Anda kami dahulukan."]
+        ["Dikirim dari mana?", "Semuanya dibuat dan dikirim dari Indonesia, dikemas aman dalam kotak pelindung ke seluruh nusantara."],
+        ["Berapa lama sebelum dikirim?", "Tangkai satuan dan buket kecil (3–5 tangkai) dibuat dalam 2–3 hari kerja; buket 9 tangkai ke atas membutuhkan 3–4 hari kerja."],
+        ["Apakah bisa rusak di jalan?", "Buket dibungkus dan dikotakkan dengan mahkota bunga terlindungi. Serat chenille dan kawat lentur sehingga bila sedikit tertekan, mudah dibentuk ulang dengan tangan. Jika paket mengalami kendala berat akibat ekspedisi, kirimkan foto pada WhatsApp studio kami untuk bantuan langsung."],
+        ["Bisa ganti isi buketnya?", "Bisa — gunakan penyusun custom di halaman ini untuk kombinasi jumlah yang Anda inginkan, atau chat kami di WhatsApp untuk request warna khusus."],
+        ["Bagaimana cara merawatnya?", "Tanpa air sama sekali. Pajang di dalam ruangan, jauh dari kelembapan dan paparan terik matahari langsung; bersihkan debu halus dengan kuas lembut."],
+        ["Kit DIY-nya masih ada?", "Masih kami siapkan — panduan bergambar dan kemasan sedang kami rapikan. Kirim pesan ke WhatsApp kami jika ingin masuk daftar tunggu prioritas."]
       ],
 
       footerCare: "Pengiriman & perawatan",
-      copyright: "© 2026 Komorebi"
+      copyright: "© 2026 Komorebi",
+      marketplaceComingSoonBadge: "segera hadir"
     },
 
     // ENGLISH
@@ -409,13 +426,13 @@ window.KOMOREBI_DATA = {
       ben3d: "Cut, shaped and wrapped after you order.",
 
       tr1t: "Ships from Indonesia",
-      tr1d: "Nationwide via the marketplaces.",
+      tr1d: "Delivered nationwide in sturdy protective boxes.",
       tr2t: "Made in 2–3 working days",
-      tr2d: "Bouquets of 9+ stems, 3–4 days.",
+      tr2d: "Bouquets of 9+ stems take 3–4 working days.",
       tr3t: "Boxed to arrive intact",
-      tr3d: "Any petal can be reshaped by hand.",
-      tr4t: "Payment protected",
-      tr4d: "Checkout handled by Tokopedia or Shopee.",
+      tr3d: "Pliable petals can always be shaped gently by hand.",
+      tr4t: "Direct studio order",
+      tr4d: "Order details and delivery confirmed directly via studio WhatsApp.",
 
       colEyebrow: "The collection",
       colTitle: "Two ways to order",
@@ -430,40 +447,47 @@ window.KOMOREBI_DATA = {
       orderStemLabel: "Order this stem",
       addToBouquetLabel: "Add to bouquet +",
       perStemPrefix: "per stem",
+      stemQtyLabel: "Stem quantity",
+      shippingExcl: "(excludes delivery fee)",
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
       pkgBlurbs: [
-        "Three stems, one flower or mixed. The desk-and-bedside size.",
-        "Five stems with a little more height at the centre. Our most ordered.",
-        "Nine stems, mixed colours, full in the hand. Bulk price applies.",
-        "Fifteen stems for the occasions that ask for one. Bulk price applies."
+        "Three stems, single flower or studio mix. Ideal for desk and bedside display.",
+        "Five stems arranged with gentle height at the centre. A balanced classic bouquet.",
+        "Nine stems in a harmonious studio mix. 10% volume savings applied.",
+        "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."
       ],
       pkgStemLine: "stems",
       pkgIncludes: [
         "{n} finished stems, mixed flowers",
-        "Wrapped in paper, tied with ribbon",
-        "Boxed for delivery",
-        "Care card included"
+        "Wrapped in protective paper & cotton ribbon",
+        "Securely boxed for delivery",
+        "Care guide card included"
       ],
       pkgBtn: "Choose this bouquet",
-      pkgBtnActive: "Selected",
+      pkgBtnActive: "✓ Selected",
+      pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
-      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum three stems; nine or more takes 10% off the flowers.",
+      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum 3 stems; 9 or more automatically receives 10% off the flowers.",
       customPickLabel: "Choose your stems",
       resetLabel: "Reset",
       estimateLabel: "Estimate",
       flowersLabel: "Flowers",
-      discountLabel: "Bulk discount (9+ stems)",
-      wrapFeeLabel: "Wrapping & ribbon",
+      discountLabel: "Volume discount (9+ stems, 10%)",
+      wrapFeeLabel: "Wrapping & ribbon (included in total)",
       estTotalLabel: "Estimated total",
       stemsWord: "stems",
       stemWord: "stem",
-      minHint: "Add at least three stems to order a bouquet.",
-      okHint: "An estimate — we confirm the final total on chat before you pay.",
+      minHint: "Add at least 3 stems to order a custom bouquet.",
+      okHint: "An estimate — final totals and shipping are confirmed on WhatsApp before payment.",
       useCustomLabel: "Use this bouquet",
+      emptyCustomMsg: "No flowers selected yet. Use the + buttons above to add stems.",
+      addedToast: "{flower} added to bouquet ({count} stems)",
+      viewCustomLink: "View custom bouquet →",
+      customIllustrativeNote: "Bouquet illustration — assembled to match your chosen stem composition.",
 
       kitSoonEyebrow: "Coming later",
       kitSoonTitle: "The DIY kit is still in the workshop",
@@ -485,28 +509,35 @@ window.KOMOREBI_DATA = {
       matCaption: "Fig. 1 — chenille pile on a twisted wire core",
       matBody: "A soft chenille pile over a twisted wire core: it takes a curve the way a petal does, and then it holds it. That is what makes these flowers read as grown rather than folded.",
       matPoints: [
-        ["Reshapes with your fingers.", "If a petal flattens in transit, bend it back — nothing is glued rigid."],
+        ["Reshapes with your fingers.", "If a petal flattens in transit, gently curve it back along its flexible wire core."],
         ["Wire ends folded and wrapped.", "Safe to handle and to hand over as a gift."],
         ["Made for long-lasting indoor display.", "Keep away from moisture and prolonged direct sunlight."]
       ],
 
       orderEyebrow: "Order",
-      orderTitle: "Finish your order, then continue to checkout",
+      orderTitle: "Finish your order, then confirm via chat",
       finishLabel: "Finishing",
-      wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price.",
+      wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
-      cardPlaceholder: "e.g. Happy graduation, Sagita — from all of us",
+      cardPlaceholder: "e.g. Happy graduation, Sagita — from all of us!",
       cardNote: "Leave it blank if you'd rather not have one. Handwritten on a small card, no extra charge.",
       selectionLabel: "Your selection",
       includesLabel: "Includes",
-      continueLabel: "Continue to",
+      continueLabel: "Continue to order",
       openLabel: "open →",
-      messageLabel: "message →",
+      messageLabel: "chat →",
       channelComingSoon: "coming soon",
-      channelUnavailableNotice: "Marketplace listings opening soon. In the meantime, orders are welcomed directly via WhatsApp.",
-      waDraftNotice: "Opens a draft message in WhatsApp (does not send automatically).",
-      waLabel: "WhatsApp — ask or customise",
-      orderNote: "Payment and delivery are handled by the marketplace, with their buyer protection.",
+      channelUnavailableNotice: "Shopee listings opening soon. Orders are currently welcomed directly via studio WhatsApp.",
+      shopeeLabel: "Shopee",
+      shopeeSub: "Official Store · Direct checkout",
+      shopeeAction: "visit store →",
+      shopeeBadgeTag: "Official Store",
+      marketplaceNotice: "Our official Shopee store is open for convenient checkout. For custom bouquets & consultation, order directly via WhatsApp studio.",
+      waDraftNotice: "Opens a draft message in WhatsApp (does not send automatically until you press send in WhatsApp).",
+      waLabel: "WhatsApp — Confirm Order",
+      orderNote: "Total and shipping costs are confirmed directly with our studio via WhatsApp chat before payment.",
+      btnEditSelection: "Edit selection ↑",
+      customMinErrorSummary: "Add at least 3 stems to proceed with a custom bouquet.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Wrap",
@@ -514,29 +545,32 @@ window.KOMOREBI_DATA = {
       stemSuffix: "— finished stem",
       customTitleShort: "Custom bouquet",
       stemIncludes: [
-        "{flower}, assembled by us",
+        "{flower} finished ({qty} stem(s)), assembled by studio",
         "{size}, ready to place in a vase",
         "Wrapped in paper, boxed for delivery",
-        "Care card included"
+        "Care guide card included"
       ],
       customIncludesTail: [
-        "Wrapped, tied and boxed by us",
-        "Made to order — 3–4 working days"
+        "Wrapped in chosen paper & tied with cotton ribbon",
+        "Carefully boxed for secure transit",
+        "Handmade to order — 3–4 working days",
+        "Care guide card included"
       ],
 
       faqEyebrow: "Questions",
       faqTitle: "Before you order",
       faqs: [
-        ["Where do you ship from?", "Everything is made and sent from Indonesia, delivered nationwide through Tokopedia and Shopee couriers."],
-        ["How long before it's sent?", "Single stems and small bouquets take 2–3 working days to make; bouquets of nine stems or more, 3–4 days."],
-        ["Will it arrive crushed?", "Bouquets are sleeved and boxed with the heads protected. If a petal flattens in transit you can simply bend it back by hand."],
-        ["Can I change what's in a bouquet?", "Yes — use the custom builder for the exact mix, or message us on WhatsApp for a palette or a size that isn't listed."],
-        ["How do I care for them?", "No water. Display indoors, away from moisture and prolonged direct sunlight; dust gently with a dry brush and reshape petals by hand."],
-        ["Are the DIY kits still coming?", "They are, just not yet — we're finishing the instruction plates and the packing. Tell us on WhatsApp if you want one and we'll put you first in line."]
+        ["Where do you ship from?", "Everything is made and sent from Indonesia, delivered safely nationwide in protective boxes."],
+        ["How long before it's sent?", "Single stems and small bouquets (3–5 stems) take 2–3 working days; bouquets of nine stems or more take 3–4 working days."],
+        ["Will it arrive crushed?", "Bouquets are sleeved and boxed with flower heads protected. Chenille and wire stems are pliable and can easily be reshaped by hand if slightly pressed. If severe shipping damage occurs, contact our WhatsApp studio with photos for prompt assistance."],
+        ["Can I change what's in a bouquet?", "Yes — use the custom builder on this page for your desired flower combination, or message our WhatsApp for custom color requests."],
+        ["How do I care for them?", "No water needed. Display indoors away from moisture and prolonged direct sunlight; dust gently with a soft brush."],
+        ["Are the DIY kits still coming?", "They are still being prepared — instructions and packaging are being refined. Message our WhatsApp to join the priority waitlist."]
       ],
 
       footerCare: "Shipping & care",
-      copyright: "© 2026 Komorebi"
+      copyright: "© 2026 Komorebi",
+      marketplaceComingSoonBadge: "coming soon"
     }
   }
 };

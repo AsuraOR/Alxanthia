@@ -17,20 +17,29 @@
 
 ## 🌿 About Komorebi
 
-**Komorebi Creations** adalah studio independen yang merancang kit merangkai bunga berbahan kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap kit dipotong rapi sesuai ukuran, dihitung, dan dikemas layaknya pelat botani klasik (*botanical plates*), memungkinkan siapa saja membentuk, merangkai, dan memajang bunga abadi mereka dalam waktu sekitar 20 menit.
+**Komorebi Creations** adalah studio independen yang merangkai bunga abadi berbahan kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap tangkai dan buket dibentuk, dirangkai tangan, dan dibungkus rapi siap pajang langsung dari studio kami untuk pengiriman ke seluruh Indonesia.
 
 ### 🌸 The Botanical Collection & Pricing
-| Spesies | Nama Latin | Kit DIY | Tangkai Jadi | Buket (5–11 tangkai) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Bunga Matahari** | *Helianthus annuus* | Rp 95.000 | Rp 55.000 | Rp 285.000 |
-| **Mawar** | *Rosa centifolia* | Rp 105.000 | Rp 60.000 | Rp 305.000 |
-| **Tulip** | *Tulipa gesneriana* | Rp 95.000 | Rp 55.000 | Rp 285.000 |
-| **Lavender** | *Lavandula angustifolia* | Rp 95.000 | Rp 55.000 | Rp 285.000 |
 
-Format yang tersedia:
-1. **Kit DIY**: Kawat chenille terpotong rapi, kawat tangkai, lem, dan panduan botani bergambar.
-2. **Tangkai Jadi**: Dirangkai tangan satu per satu oleh kami, dibalut kertas kraft.
-3. **Buket**: 5–11 tangkai terangkai harmonis, diikat pita katun, dikemas dalam kotak protektif.
+#### Tangkai Jadi (Single Finished Stems)
+| Spesies | Nama Latin | Harga / Tangkai | Catatan Ketersediaan |
+| :--- | :--- | :--- | :--- |
+| **Bunga Matahari** | *Helianthus annuus* | Rp 55.000 | Tangkai jadi tunggal, siap pajang |
+| **Mawar** | *Rosa centifolia* | Rp 60.000 | Spiral kelopak berlapis lembut |
+| **Tulip** | *Tulipa gesneriana* | Rp 50.000 | Kuncup kelopak satin tegak |
+| **Gerbera** | *Gerbera jamesonii* | Rp 55.000 | Dua lingkar kelopak koral ramping (harga per 1 tangkai) |
+
+*Catatan: Lavender hadir sebagai elemen pengisi estetis dalam foto referensi buket studio, bukan tangkai tunggal yang dijual terpisah.*
+
+#### Pilihan Format Pesanan:
+1. **Tangkai Jadi**: 1 atau lebih tangkai individu pilihan Anda, dibalut kertas pelindung kraft dan instruksi perawatan.
+2. **Paket Buket Floris** (Wrapping & kartu ucapan sudah termasuk):
+   - **Petit (3 Tangkai)**: Rp 195.000 — Komposisi ringkas manis untuk meja kerja atau hadiah kecil.
+   - **Klasik (5 Tangkai)**: Rp 295.000 — Komposisi buket seimbang terfavorit studio.
+   - **Rimbun (9 Tangkai)**: Rp 465.000 — Komposisi mekar penuh untuk wisuda atau momen istimewa.
+   - **Istimewa (15 Tangkai)**: Rp 745.000 — Rangkaian mewah penuh untuk perayaan besar.
+3. **Buket Campuran Custom**: Pilih kombinasi bunga Anda sendiri (minimal 3 tangkai, termasuk wrapping buket Rp 35.000, hemat 10% untuk 9+ tangkai).
+4. **DIY Kit (Coming Later)**: Teaser pra-rilis bagi yang ingin merangkai sendiri di rumah (segera hadir).
 
 ---
 
@@ -40,7 +49,7 @@ Format yang tersedia:
 - **Interactive Order Builder**: Customizer interaktif dengan pembaruan visual instan (thumbnail produk, harga dinamis per format, rincian isi paket, dan kuantitas).
 - **Rute Pemesanan WhatsApp & Marketplace**:
   - Generator pesan WhatsApp otomatis dengan draf pesanan lengkap (spesies bunga, format, kuantitas, total harga, dan nomor referensi).
-  - Integrasi marketplace Tokopedia & Shopee (otomatis menampilkan panduan langsung ke WhatsApp apabila tautan kanal belum aktif).
+  - Integrasi marketplace Shopee (tautan langsung ke toko resmi Shopee serta panduan konfirmasi via WhatsApp).
 - **Dukungan Bilingual Instan**: Pengalih bahasa sekali klik (`ID` Bahasa Indonesia ↔ `EN` English) dengan persistensi preferensi di `localStorage`.
 - **Akses Pratinjau Pengembangan (Private Gatekeeper)**: Layar kunci botani untuk tahap pengembangan privat dengan penyimpanan status verifikasi di browser.
 - **Search & Social Discovery**:
@@ -95,24 +104,37 @@ Buka `site-content.js` pada objek `store`:
 store: {
   brandName: "Komorebi",
   instagramUrl: "https://instagram.com/komorebi",
-  tokopediaUrl: "https://www.tokopedia.com/...",
-  shopeeUrl: "https://shopee.co.id/...",
+  shopeeUrl: "https://shopee.co.id",
   whatsappNumber: "6281234567890", // Ganti dengan nomor WhatsApp aktif
   ...
 }
 ```
 
-### 2. Harga Produk & Spesies
-Ubah harga pada masing-masing spesies:
-```javascript
-Sunflower: {
-  prices: {
-    Kit: "Rp 95.000",
-    Stem: "Rp 55.000",
-    Bouquet: "Rp 285.000"
+### 2. Harga Tangkai & Paket Buket
+- **Harga per Tangkai**: Sunting nilai `stemPrice` (angka dalam Rupiah) pada objek `flowers`:
+  ```javascript
+  flowers: {
+    Sunflower: {
+      stemPrice: 55000,
+      accent: "#C89A3C",
+      ...
+    },
+    Rose: {
+      stemPrice: 60000,
+      ...
+    }
   }
-}
-```
+  ```
+- **Harga Paket Buket Jadi**: Sunting nilai `price` dan `stems` pada larik `packages`:
+  ```javascript
+  packages: [
+    { stems: 3, price: 195000, photoWebp: "img/bouquet-3.webp" },
+    { stems: 5, price: 295000, photoWebp: "img/bouquet-5.webp" },
+    { stems: 9, price: 465000, photoWebp: "img/bouquet-9.webp" },
+    { stems: 15, price: 745000, photoWebp: "img/bouquet-15.webp" }
+  ]
+  ```
+- **Aturan Buket Custom**: Biaya wrapping (`wrapFee: 35000`), batas diskon grosir (`bulkFrom: 9`), dan persentase potongan (`bulkRate: 0.10`).
 
 ### 3. Teks, Cerita, & Panduan
 Ubah salinan teks pada bagian `translations.id` (Bahasa Indonesia) atau `translations.en` (Bahasa Inggris) untuk memperbarui judul, FAQ, instruksi perakitan, atau cerita studio.

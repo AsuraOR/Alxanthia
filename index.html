@@ -294,6 +294,7 @@
       </nav>
     </div>
   </header>
+  <div id="nav-scrim" class="nav-scrim" aria-hidden="true"></div>
 
   <!-- ========================================================================
        MAIN CONTENT LANDMARK
@@ -452,7 +453,119 @@
   </section>
 
   <!-- ========================================================================
-       HOW THEY'RE MADE SECTION (DARK BOTANICAL CONTRAST)
+       ORDER / FINISHING SECTION (POSITIONED DIRECTLY AFTER SELECTION)
+       ======================================================================== -->
+  <section id="order" class="order-section container">
+    <p class="eyebrow" id="order-eyebrow">Pesan</p>
+    <h2 class="section-title" id="order-title">Lengkapi pesanan Anda, lalu konfirmasi via chat</h2>
+
+    <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <div class="order-grid">
+      <!-- Left Column: Finishing Options -->
+      <div class="order-controls-col">
+        <!-- Single Stem Quantity Stepper (Visible in 'stem' mode) -->
+        <div class="stem-qty-card" id="stem-qty-card">
+          <p class="step-label" id="stem-qty-label">Jumlah tangkai</p>
+          <div class="stem-stepper-row">
+            <button type="button" class="btn-stepper btn-stem-dec" id="btn-stem-dec" aria-label="Kurangi jumlah tangkai">−</button>
+            <span class="stepper-count stem-qty-count" id="stem-qty-count" aria-live="polite">1</span>
+            <button type="button" class="btn-stepper btn-stem-inc" id="btn-stem-inc" aria-label="Tambah jumlah tangkai">+</button>
+            <span class="stem-qty-unit" id="stem-qty-unit">tangkai</span>
+          </div>
+        </div>
+
+        <!-- Wrap Colour Chooser -->
+        <p class="step-label" id="finish-label">Sentuhan akhir</p>
+        <p class="wrap-intro" id="wrap-intro">Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.</p>
+        <div class="wrap-chips" id="wrap-chips" role="radiogroup" aria-label="Pilih kertas pembungkus">
+          <!-- Dynamically populated wrap chips -->
+        </div>
+
+        <!-- Handwritten Message Card Textarea -->
+        <p class="step-label" id="card-label">Kartu ucapan</p>
+        <textarea id="card-note-input" class="card-note-textarea" rows="4" placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
+        <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.</p>
+      </div>
+
+      <!-- Right Column: Live Order Summary Box -->
+      <div class="summary-box">
+        <div class="summary-top-row">
+          <p class="step-label" id="selection-label">Pilihan Anda</p>
+          <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan ↑</button>
+        </div>
+
+        <div class="summary-header">
+          <div class="summary-photo-frame" id="summary-photo-frame">
+            <img id="summary-img-prev" class="summary-photo summary-photo-prev" src="img/sunflower-720.webp" alt="" aria-hidden="true" width="76" height="76" />
+            <img id="summary-img" class="summary-photo summary-photo-main" src="img/sunflower-720.webp" alt="Bunga Matahari" width="76" height="76" loading="lazy" />
+          </div>
+          <div class="summary-meta">
+            <h3 class="summary-selection-title" id="summary-title">Bunga Matahari — tangkai jadi</h3>
+            <p class="summary-latin" id="summary-latin">Helianthus annuus</p>
+            <p class="summary-photo-caption-note" id="summary-photo-caption-note" style="display: none;">Foto ilustrasi buket</p>
+          </div>
+        </div>
+
+        <div class="summary-price-container">
+          <p class="summary-price" id="summary-price">Rp 55.000</p>
+          <span class="summary-shipping-note" id="summary-shipping-note">Belum termasuk ongkir</span>
+        </div>
+
+        <p class="step-label" id="includes-label">Termasuk</p>
+        <ul class="summary-includes-list" id="summary-includes-list">
+          <!-- Dynamically populated -->
+        </ul>
+
+        <div class="custom-min-warning-banner" id="custom-min-warning-banner" style="display: none;">
+          <p id="custom-min-warning-text">Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.</p>
+        </div>
+
+        <p class="step-label" id="step3-label">Lanjut ke pemesanan</p>
+        <div class="channel-buttons">
+          <a href="#" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-whatsapp" target="_blank" rel="noopener">
+            <span class="channel-icon" aria-hidden="true">💬</span>
+            <div class="channel-info-text">
+              <span class="channel-name">WhatsApp — Konfirmasi Pesanan</span>
+              <span class="channel-action">chat →</span>
+            </div>
+          </a>
+
+          <!-- Shopee Interactive Channel Button -->
+          <a href="https://shopee.co.id" class="btn-channel btn-shopee" id="btn-shopee" target="_blank" rel="noopener">
+            <span class="channel-icon-wrapper" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <path d="M16 10a4 4 0 0 1-8 0"></path>
+              </svg>
+            </span>
+            <div class="channel-info-text">
+              <span class="channel-name">Shopee</span>
+              <span class="channel-sub" id="shopee-channel-sub">Official Store · Belanja praktis</span>
+            </div>
+            <span class="channel-action" id="shopee-channel-action">buka toko →</span>
+          </a>
+
+          <!-- Marketplace Context Info Box -->
+          <div class="marketplace-status-box" id="marketplace-status-box">
+            <div class="marketplace-badge-group">
+              <span class="mkt-badge">Shopee</span>
+              <span class="mkt-active-tag" id="mkt-soon-tag">Toko Resmi</span>
+            </div>
+            <p class="marketplace-status-text" id="marketplace-status-text">
+              Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan langsung via WhatsApp studio.
+            </p>
+          </div>
+        </div>
+
+        <p class="order-note" id="order-note">Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui chat WhatsApp sebelum Anda melakukan transfer.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       HOW THEY'RE MADE SECTION (CRAFTSMANSHIP EVIDENCE)
        ======================================================================== -->
   <section id="howto" class="how-section dark-section">
     <div class="container">
@@ -486,75 +599,6 @@
   </section>
 
   <!-- ========================================================================
-       ORDER / FINISHING SECTION
-       ======================================================================== -->
-  <section id="order" class="order-section container">
-    <p class="eyebrow" id="order-eyebrow">Pesan</p>
-    <h2 class="section-title" id="order-title">Lengkapi pesanan Anda, lalu lanjut ke checkout</h2>
-
-    <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-
-    <div class="order-grid">
-      <!-- Left Column: Finishing Options -->
-      <div class="order-controls-col">
-        <!-- Wrap Colour Chooser -->
-        <p class="step-label" id="finish-label">Sentuhan akhir</p>
-        <p class="wrap-intro" id="wrap-intro">Pilih kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga setiap buket.</p>
-        <div class="wrap-chips" id="wrap-chips" role="radiogroup" aria-label="Pilih kertas pembungkus">
-          <!-- Dynamically populated wrap chips -->
-        </div>
-
-        <!-- Handwritten Message Card Textarea -->
-        <p class="step-label" id="card-label">Kartu ucapan</p>
-        <textarea id="card-note-input" class="card-note-textarea" rows="4" placeholder="mis. Selamat lulus, Sagita — dari kami semua" aria-label="Pesan kartu ucapan"></textarea>
-        <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.</p>
-      </div>
-
-      <!-- Right Column: Live Order Summary Box -->
-      <div class="summary-box">
-        <p class="step-label" id="selection-label">Pilihan Anda</p>
-        <div class="summary-header">
-          <div class="summary-photo-frame" id="summary-photo-frame">
-            <img id="summary-img-prev" class="summary-photo summary-photo-prev" src="img/sunflower-720.webp" alt="" aria-hidden="true" width="76" height="76" />
-            <img id="summary-img" class="summary-photo summary-photo-main" src="img/sunflower-720.webp" alt="Bunga Matahari" width="76" height="76" loading="lazy" />
-          </div>
-          <div class="summary-meta">
-            <h3 class="summary-selection-title" id="summary-title">Bunga Matahari — tangkai jadi</h3>
-            <p class="summary-latin" id="summary-latin">Helianthus annuus</p>
-          </div>
-        </div>
-
-        <p class="summary-price" id="summary-price">Rp 55.000</p>
-
-        <p class="step-label" id="includes-label">Termasuk</p>
-        <ul class="summary-includes-list" id="summary-includes-list">
-          <!-- Dynamically populated -->
-        </ul>
-
-        <p class="step-label" id="step3-label">Lanjut ke</p>
-        <div class="channel-buttons">
-          <a href="#" class="btn-channel btn-tokopedia" id="btn-tokopedia" target="_blank" rel="noopener">
-            <span class="channel-name">Tokopedia</span>
-            <span class="channel-action">buka →</span>
-          </a>
-
-          <a href="#" class="btn-channel btn-shopee" id="btn-shopee" target="_blank" rel="noopener">
-            <span class="channel-name">Shopee</span>
-            <span class="channel-action">buka →</span>
-          </a>
-
-          <a href="#" class="btn-channel btn-whatsapp" id="btn-whatsapp" target="_blank" rel="noopener">
-            <span class="channel-name">WhatsApp — tanya atau custom</span>
-            <span class="channel-action">chat →</span>
-          </a>
-        </div>
-
-        <p class="order-note" id="order-note">Pembayaran dan pengiriman ditangani marketplace resmi, lengkap dengan perlindungan pembeli.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ========================================================================
        FAQ SECTION (DARK BOTANICAL CONTRAST)
        ======================================================================== -->
   <section id="faq" class="faq-section dark-section">
@@ -582,8 +626,7 @@
 
       <div class="footer-links">
         <a href="#" id="footer-link-ig" target="_blank" rel="noopener">Instagram</a>
-        <a href="#" id="footer-link-tokopedia" target="_blank" rel="noopener">Tokopedia</a>
-        <a href="#" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
+        <a href="https://shopee.co.id" id="footer-link-shopee" target="_blank" rel="noopener">Shopee</a>
         <a href="#faq" id="footer-care">Pengiriman & perawatan</a>
         <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
         <span id="footer-copyright">© 2026 Komorebi</span>
@@ -603,6 +646,20 @@
       <a href="#order" class="btn-sticky-order" id="sticky-order-cta">Pesan →</a>
     </div>
   </div>
+
+  <!-- ========================================================================
+       ACCESSIBLE PRODUCT IMAGE INSPECTOR DIALOG (P3.11)
+       ======================================================================== -->
+  <dialog id="image-modal" class="image-modal" aria-labelledby="image-modal-title" aria-modal="true">
+    <div class="image-modal-content">
+      <button type="button" id="image-modal-close" class="image-modal-close" aria-label="Tutup pembesar gambar / Close image inspector">×</button>
+      <img id="image-modal-img" src="" alt="" class="image-modal-img" />
+      <div class="image-modal-info">
+        <h3 id="image-modal-title" class="image-modal-title"></h3>
+        <p id="image-modal-caption" class="image-modal-caption"></p>
+      </div>
+    </div>
+  </dialog>
 
   <!-- Scripts -->
   <script src="site-content.js"></script>

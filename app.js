@@ -1203,10 +1203,10 @@
     setText('#btn-edit-selection', t.btnEditSelection || 'Ubah pilihan ↑');
     setText('#summary-shipping-note', t.shippingExcl || '(belum termasuk ongkir)');
 
-    // 1. Single stem quantity stepper (visible only in stem mode)
+    // 1. Single stem quantity stepper (visible only once a stem is actually selected)
     const stemQtyCard = document.getElementById('stem-qty-card');
     if (stemQtyCard) {
-      if (orderMode === 'stem') {
+      if (hasUserSelected && orderMode === 'stem') {
         stemQtyCard.style.display = 'block';
         setText('#stem-qty-label', t.stemQtyLabel || 'Jumlah tangkai');
         setText('#stem-qty-count', selectedStemQty);
@@ -1339,13 +1339,9 @@
       selTitle = t.emptySummaryTitle || (currentLang === 'en' ? 'No flower selected yet' : 'Belum ada bunga dipilih');
       selSub = t.emptySummarySub || (currentLang === 'en' ? 'Choose a stem or bouquet above' : 'Pilih bunga satuan atau buket di atas');
       selPrice = t.emptySummaryPrice || '—';
-      photoSrc = siteData.images?.hero || 'img/hero-800.webp';
+      photoSrc = '';
       photoAlt = selTitle;
-      baseIncludes = t.emptySummaryIncludes || [
-        currentLang === 'en'
-          ? 'Select a single stem above, a bouquet package, or assemble your own custom bouquet.'
-          : 'Pilih bunga satuan di atas, paket buket, atau susun buket custom Anda sendiri.'
-      ];
+      baseIncludes = [];
       isCustomInvalid = false;
     } else if (orderMode === 'package') {
       const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
@@ -1399,7 +1395,13 @@
 
     setText('#summary-title', selTitle);
     updateSummaryLatin(selSub);
-    updateSummaryPhoto(photoSrc, photoAlt);
+    if (hasUserSelected) {
+      updateSummaryPhoto(photoSrc, photoAlt);
+    }
+    const summaryPhotoFrame = document.getElementById('summary-photo-frame');
+    if (summaryPhotoFrame) {
+      summaryPhotoFrame.classList.toggle('is-empty', !hasUserSelected);
+    }
 
     // Custom illustration photo note
     const photoNote = document.getElementById('summary-photo-caption-note');
@@ -1423,6 +1425,12 @@
       }
     }
 
+    // Shipping note only makes sense once there's an actual price to qualify
+    const shippingNoteEl = document.getElementById('summary-shipping-note');
+    if (shippingNoteEl) {
+      shippingNoteEl.style.display = (hasUserSelected && siteData.store.showPrices) ? '' : 'none';
+    }
+
     // Custom minimum warning banner (interpolated - A2)
     const minWarningEl = document.getElementById('custom-min-warning-banner');
     if (minWarningEl) {
@@ -1437,6 +1445,10 @@
     // Render includes list (Safe textContent assignment for gift notes & inputs - R02)
     function renderSummaryIncludes() {
       const includesListEl = document.getElementById('summary-includes-list');
+      const includesLabelEl = document.getElementById('includes-label');
+      if (includesLabelEl) {
+        includesLabelEl.style.display = hasUserSelected ? '' : 'none';
+      }
       if (includesListEl) {
         includesListEl.innerHTML = '';
         const allIncludes = [...baseIncludes];

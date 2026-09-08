@@ -638,12 +638,13 @@ body.nav-open {
 }
 
 .flower-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 8;
 }
 
 .flower-photo-wrapper {
+  grid-row: 1;
   border: 1px solid var(--border-light);
   position: relative;
   background: var(--bg-card);
@@ -702,16 +703,14 @@ body.nav-open {
 }
 
 .flower-info {
-  padding-top: 16px;
-  border-top: 1px solid var(--border-light);
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  display: contents;
 }
 
 .flower-name {
-  margin: 0 0 4px;
+  grid-row: 2;
+  margin: 16px 0 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
   font-family: var(--font-serif);
   font-weight: 500;
   font-size: 27px;
@@ -719,6 +718,7 @@ body.nav-open {
 }
 
 .flower-latin {
+  grid-row: 3;
   margin: 0 0 10px;
   font-family: var(--font-serif);
   font-style: italic;
@@ -727,6 +727,7 @@ body.nav-open {
 }
 
 .flower-blurb {
+  grid-row: 4;
   margin: 0 0 14px;
   font-size: 13.5px;
   line-height: 1.6;
@@ -734,14 +735,12 @@ body.nav-open {
 }
 
 .flower-meta-block {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  padding-top: 10px;
+  display: contents;
 }
 
 .flower-spec-line {
-  margin: 0 0 6px;
+  grid-row: 5;
+  margin: 10px 0 6px;
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: var(--fs-label);
@@ -751,6 +750,7 @@ body.nav-open {
 }
 
 .flower-price-line {
+  grid-row: 6;
   margin: 0 0 10px;
   font-family: var(--font-sans);
   font-weight: 600;
@@ -760,6 +760,7 @@ body.nav-open {
 }
 
 .flower-single-note {
+  grid-row: 7;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -782,7 +783,8 @@ body.nav-open {
 }
 
 .flower-actions-row {
-  margin-top: auto;
+  grid-row: 8;
+  align-self: end;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1045,7 +1047,6 @@ body.nav-open {
 .bouquet-meta-row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -1080,18 +1081,6 @@ body.nav-open {
   font-weight: 600;
   z-index: 2;
   pointer-events: none;
-}
-
-.bouquet-dots {
-  display: flex;
-  gap: 5px;
-}
-
-.bouquet-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
 }
 
 .bouquet-title {
@@ -2955,12 +2944,9 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   /* 2x2 Mobile Flower Card Refinements */
-  .flower-info {
+  .flower-name {
     padding-top: 12px;
     margin-top: 12px;
-  }
-
-  .flower-name {
     font-size: clamp(17px, 4.2vw, 21px);
     margin-bottom: 2px;
   }

@@ -638,8 +638,9 @@
             <span>${trans.singleNote}</span>
           </div>`
         : '';
+      const photoStemCount = flower.photoStemCount || 1;
       const photoBadgeHtml = trans.singleNote
-        ? `<span class="flower-photo-pill">${currentLang === 'en' ? 'Photo: 3 colors' : 'Foto: 3 varian'}</span>`
+        ? `<span class="flower-photo-pill">${currentLang === 'en' ? `Photo: ${photoStemCount} stems` : `Foto: ${photoStemCount} tangkai`}</span>`
         : '';
 
       card.innerHTML = `
@@ -828,12 +829,6 @@
         <div class="bouquet-info">
           <div class="bouquet-meta-row">
             <span class="bouquet-stems-label">${pkg.stems} ${t.pkgStemLine}</span>
-            <span class="bouquet-dots" aria-hidden="true">
-              <span class="bouquet-dot" style="background:#C89A3C"></span>
-              <span class="bouquet-dot" style="background:#A8586A"></span>
-              <span class="bouquet-dot" style="background:#C0614E"></span>
-              <span class="bouquet-dot" style="background:#C97A45"></span>
-            </span>
           </div>
           <h4 class="bouquet-title">${name}</h4>
           <p class="bouquet-blurb">${blurb}</p>

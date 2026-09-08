@@ -118,17 +118,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille sunflowers with green leaves",
       stemPrice: 55000,
+      photoStemCount: 3,
       en: {
         name: "Sunflower",
         size: "45 cm stem",
         detail: "12 cm head",
-        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
+        blurb: "Our signature. Layered ochre petals and a dense seeded crown.",
+        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
       },
       id: {
         name: "Bunga Matahari",
         size: "tangkai 45 cm",
         detail: "kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
+        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
       }
     },
     Rose: {
@@ -141,17 +144,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille roses in dusty pink",
       stemPrice: 60000,
+      photoStemCount: 3,
       en: {
         name: "Rose",
         size: "40 cm stem",
         detail: "spiralled head",
-        blurb: "Petals wound one by one into a spiral. The most patient flower we make."
+        blurb: "Petals wound one by one into a spiral. The most patient flower we make.",
+        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
       },
       id: {
         name: "Mawar",
         size: "tangkai 40 cm",
         detail: "kepala melingkar",
-        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran."
+        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
       }
     },
     Tulip: {
@@ -164,17 +170,20 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille tulips with slender leaves",
       stemPrice: 50000,
+      photoStemCount: 4,
       en: {
         name: "Tulip",
         size: "38 cm stem",
         detail: "6 petals",
-        blurb: "Six clean petals and a single leaf. Quiet enough for any room."
+        blurb: "Six clean petals and a single leaf. Quiet enough for any room.",
+        singleNote: "Price per finished stem · Photo shows 4 stems styled together"
       },
       id: {
         name: "Tulip",
         size: "tangkai 38 cm",
         detail: "6 kelopak",
-        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun."
+        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun.",
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 4 tangkai yang ditata bersama"
       }
     },
     Gerbera: {
@@ -187,6 +196,7 @@ window.KOMOREBI_DATA = {
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Three handmade chenille gerbera daisies in coral orange",
       stemPrice: 55000,
+      photoStemCount: 3,
       en: {
         name: "Gerbera",
         size: "40 cm stem",

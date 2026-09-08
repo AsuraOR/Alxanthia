@@ -6,12 +6,10 @@
  * PETUNJUK UNTUK NON-DEVELOPER (INDONESIA):
  * Anda bisa mengubah teks, harga, tautan WhatsApp, Tokopedia, Shopee, dan gambar di sini!
  * Pastikan tanda kutip ("...") dan koma (,) tetap ada dan tidak terhapus.
- * Anda juga bisa mengedit langsung di browser menggunakan tombol "⚙️ Mode Edit" di halaman website!
  * 
  * INSTRUCTIONS FOR NON-DEVELOPERS (ENGLISH):
  * You can edit all texts, prices, links, WhatsApp number, and images here.
  * Make sure quotes ("...") and commas (,) remain intact.
- * You can also use the on-page "⚙️ Edit Mode" button to edit visually!
  * =============================================================================
  */
 
@@ -29,19 +27,22 @@ window.KOMOREBI_DATA = {
     logo: "komorebi-logo-96.webp",
     logo2x: "komorebi-logo-192.webp",
     instagramUrl: "https://instagram.com/komorebi",
-    tokopediaUrl: null, // Marketplace listing URLs pending confirmation in Phase 1
+    tokopediaUrl: null, // Marketplace listing URLs pending confirmation
     shopeeUrl: null,
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
-    whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {flower} — {format} ({quantity}, {price}). Apakah masih tersedia?",
-    whatsappTemplateEn: "Hello Komorebi! I would like to order {flower} — {format} ({quantity}, {price}). Is it available?",
+    whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {title} ({price}). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+    whatsappTemplateEn: "Hello Komorebi! I would like to order {title} ({price}). {wrapInfo}{cardInfo}Is it available?",
+    whatsappWaitlistId: "Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.",
+    whatsappWaitlistEn: "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.",
     // Marketplace & Channel visibility toggles
     channels: {
       showTokopedia: true,
       showShopee: true,
       showWhatsapp: true
     },
-    showPrices: true
+    showPrices: true,
+    showKitTeaser: true
   },
 
   // General Images used on the landing page (WebP derivatives)
@@ -49,19 +50,63 @@ window.KOMOREBI_DATA = {
     hero: "img/hero-800.webp",
     heroSrcset: "img/hero-400.webp 400w, img/hero-800.webp 800w, img/hero-1122.webp 1122w",
     heroSizes: "(max-width: 768px) 90vw, 496px",
-    kit: "img/kit-960.webp",
-    kitSrcset: "img/kit-480.webp 480w, img/kit-960.webp 960w, img/kit-1448.webp 1448w",
-    kitSizes: "(max-width: 768px) 90vw, 540px",
     macro: "img/macro-960.webp",
     macroSrcset: "img/macro-480.webp 480w, img/macro-960.webp 960w, img/macro-1254.webp 1254w",
-    macroSizes: "(max-width: 768px) 90vw, 540px",
-    us: "img/us-960.webp",
-    usSrcset: "img/us-480.webp 480w, img/us-960.webp 960w, img/us-1448.webp 1448w",
-    usSizes: "(max-width: 768px) 90vw, 540px"
+    macroSizes: "(max-width: 768px) 90vw, 540px"
   },
 
+  // Pricing & Builder Rules (editable without modifying app.js)
+  wrapFee: 35000,
+  bulkFrom: 9,
+  bulkRate: 0.10,
+  minStems: 3,
+
+  // Wrapping Paper Options
+  wraps: [
+    { key: "kraft", swatch: "#B79A6E" },
+    { key: "cream", swatch: "#F0E7D6" },
+    { key: "sage",  swatch: "#7E8F7C" },
+    { key: "blush", swatch: "#C9A4A8" }
+  ],
+
+  // Bouquet Packages
+  packages: [
+    {
+      stems: 3,
+      price: 195000,
+      photo: "img/bouquet-3.png",
+      photoWebp: "img/bouquet-3-720.webp",
+      srcset: "img/bouquet-3-360.webp 360w, img/bouquet-3-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px"
+    },
+    {
+      stems: 5,
+      price: 295000,
+      photo: "img/bouquet-5.png",
+      photoWebp: "img/bouquet-5-720.webp",
+      srcset: "img/bouquet-5-360.webp 360w, img/bouquet-5-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px"
+    },
+    {
+      stems: 9,
+      price: 465000,
+      photo: "img/bouquet-9.png",
+      photoWebp: "img/bouquet-9-720.webp",
+      srcset: "img/bouquet-9-360.webp 360w, img/bouquet-9-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px"
+    },
+    {
+      stems: 15,
+      price: 745000,
+      photo: "img/bouquet-15.png",
+      photoWebp: "img/bouquet-15-720.webp",
+      srcset: "img/bouquet-15-360.webp 360w, img/bouquet-15-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px"
+    }
+  ],
+
   // Flower Catalog & Specific Settings
-  flowerOrder: ["Sunflower", "Rose", "Tulip", "Lavender"],
+  flowerOrder: ["Sunflower", "Rose", "Tulip", "Gerbera"],
 
   flowers: {
     Sunflower: {
@@ -73,48 +118,18 @@ window.KOMOREBI_DATA = {
       srcset: "img/sunflower-360.webp 360w, img/sunflower-720.webp 720w",
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille sunflowers with green leaves",
-      prices: {
-        Kit: { amount: 95000, currency: "IDR", display: "Rp 95.000" },
-        Stem: { amount: 55000, currency: "IDR", display: "Rp 55.000" },
-        Bouquet: { amount: 285000, currency: "IDR", display: "Rp 285.000" }
-      },
-      options: {
-        Kit: {
-          yieldEn: "3 flowers",
-          yieldId: "3 bunga",
-          assemblyTimeEn: "~20 min per flower",
-          assemblyTimeId: "±20 menit per bunga",
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Stem: {
-          yieldEn: "1 stem",
-          yieldId: "1 tangkai jadi",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Bouquet: {
-          yieldEn: "5 stems",
-          yieldId: "5 tangkai",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        }
-      },
+      stemPrice: 55000,
       en: {
         name: "Sunflower",
-        makes: "3 flowers",
-        size: "45 cm stem, 12 cm head",
-        blurb: "Our signature design. Layered ochre petals with a textured brown center handcrafted from chenille wire."
+        size: "45 cm stem",
+        detail: "12 cm head",
+        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
       },
       id: {
         name: "Bunga Matahari",
-        makes: "3 bunga",
-        size: "tangkai 45 cm, kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak kuning oker berlapis dengan inti tengah cokelat bertekstur khas kawat bulu."
+        size: "tangkai 45 cm",
+        detail: "kepala 12 cm",
+        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
       }
     },
     Rose: {
@@ -126,48 +141,18 @@ window.KOMOREBI_DATA = {
       srcset: "img/rose-360.webp 360w, img/rose-720.webp 720w",
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille roses in dusty pink",
-      prices: {
-        Kit: { amount: 105000, currency: "IDR", display: "Rp 105.000" },
-        Stem: { amount: 60000, currency: "IDR", display: "Rp 60.000" },
-        Bouquet: { amount: 305000, currency: "IDR", display: "Rp 305.000" }
-      },
-      options: {
-        Kit: {
-          yieldEn: "3 flowers",
-          yieldId: "3 bunga",
-          assemblyTimeEn: "~20 min per flower",
-          assemblyTimeId: "±20 menit per bunga",
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Stem: {
-          yieldEn: "1 stem",
-          yieldId: "1 tangkai jadi",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Bouquet: {
-          yieldEn: "5 stems",
-          yieldId: "5 tangkai",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        }
-      },
+      stemPrice: 60000,
       en: {
         name: "Rose",
-        makes: "3 flowers",
         size: "40 cm stem",
-        blurb: "Layered spiralling petals wound one by one. A stunning bloom for desk display."
+        detail: "spiralled head",
+        blurb: "Petals wound one by one into a spiral. The most patient flower we make."
       },
       id: {
         name: "Mawar",
-        makes: "3 bunga",
         size: "tangkai 40 cm",
-        blurb: "Kelopak melingkar yang dirangkai lapis demi lapis. Paling menawan untuk pajangan meja."
+        detail: "kepala melingkar",
+        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran."
       }
     },
     Tulip: {
@@ -179,48 +164,41 @@ window.KOMOREBI_DATA = {
       srcset: "img/tulip-360.webp 360w, img/tulip-720.webp 720w",
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "Handmade chenille tulips with slender leaves",
-      prices: {
-        Kit: { amount: 85000, currency: "IDR", display: "Rp 85.000" },
-        Stem: { amount: 50000, currency: "IDR", display: "Rp 50.000" },
-        Bouquet: { amount: 265000, currency: "IDR", display: "Rp 265.000" }
-      },
-      options: {
-        Kit: {
-          yieldEn: "4 flowers",
-          yieldId: "4 bunga",
-          assemblyTimeEn: "~20 min per flower",
-          assemblyTimeId: "±20 menit per bunga",
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Stem: {
-          yieldEn: "1 stem",
-          yieldId: "1 tangkai jadi",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Bouquet: {
-          yieldEn: "7 stems",
-          yieldId: "7 tangkai",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        }
-      },
+      stemPrice: 50000,
       en: {
         name: "Tulip",
-        makes: "4 flowers",
         size: "38 cm stem",
-        blurb: "Six clean petals and a slender leaf. Our easiest first bloom for beginners to build."
+        detail: "6 petals",
+        blurb: "Six clean petals and a single leaf. Quiet enough for any room."
       },
       id: {
         name: "Tulip",
-        makes: "4 bunga",
         size: "tangkai 38 cm",
-        blurb: "Enam kelopak ramping dan satu daun segar. Paling ramah untuk pemula yang baru pertama kali merangkai."
+        detail: "6 kelopak",
+        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun."
+      }
+    },
+    Gerbera: {
+      key: "Gerbera",
+      slug: "gerbera",
+      latin: "Gerbera jamesonii",
+      accent: "#C97A45",
+      photo: "img/gerbera-720.webp",
+      srcset: "img/gerbera-360.webp 360w, img/gerbera-720.webp 720w",
+      sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
+      alt: "Three handmade chenille gerbera daisies in coral orange",
+      stemPrice: 55000,
+      en: {
+        name: "Gerbera",
+        size: "40 cm stem",
+        detail: "coral, two-tone",
+        blurb: "Two rings of narrow coral petals around a seeded brown centre."
+      },
+      id: {
+        name: "Gerbera",
+        size: "tangkai 40 cm",
+        detail: "koral, dua nada",
+        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji."
       }
     },
     Lavender: {
@@ -232,335 +210,331 @@ window.KOMOREBI_DATA = {
       srcset: "img/lavender-360.webp 360w, img/lavender-720.webp 720w",
       sizes: "(max-width: 600px) 90vw, (max-width: 1024px) 45vw, 260px",
       alt: "A bundle of handmade chenille lavender spikes",
-      prices: {
-        Kit: { amount: 90000, currency: "IDR", display: "Rp 90.000" },
-        Stem: { amount: 65000, currency: "IDR", display: "Rp 65.000" },
-        Bouquet: { amount: 275000, currency: "IDR", display: "Rp 275.000" }
-      },
-      options: {
-        Kit: {
-          yieldEn: "9 spikes",
-          yieldId: "9 tangkai",
-          assemblyTimeEn: "~20 min per spike",
-          assemblyTimeId: "±20 menit per tangkai",
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Stem: {
-          yieldEn: "1 bundle (9 spikes)",
-          yieldId: "1 ikat (9 tangkai)",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        },
-        Bouquet: {
-          yieldEn: "11 spikes",
-          yieldId: "11 tangkai",
-          assemblyTimeEn: null,
-          assemblyTimeId: null,
-          availability: "available",
-          channels: { tokopediaUrl: null, shopeeUrl: null }
-        }
-      },
+      stemPrice: 55000,
       en: {
         name: "Lavender",
-        makes: "9 spikes",
         size: "32 cm stem",
-        blurb: "Nine slender spikes to a bundle. A timeless arrangement made for narrow vases and desks."
+        detail: "9 spikes",
+        blurb: "Nine slender spikes to a bundle. Kept in bouquet shots."
       },
       id: {
         name: "Lavender",
-        makes: "9 tangkai",
         size: "tangkai 32 cm",
-        blurb: "Sembilan tangkai ramping per ikat. Rangkaian klasik yang pas untuk vas ramping atau meja kerja."
+        detail: "9 tangkai",
+        blurb: "Sembilan tangkai ramping per ikat. Tampil dalam foto buket."
       }
     }
   },
 
   // Formats definition
-  formatKeys: ["Kit", "Stem", "Bouquet"],
+  formatKeys: ["Stem", "Package", "Custom"],
 
   // Bilingual UI Texts
   translations: {
     // BAHASA INDONESIA
     id: {
-      navCollection: "Koleksi",
-      navKit: "Isi kit",
-      navHow: "Cara membuat",
+      navCollection: "Bunga",
+      navBouquets: "Buket",
+      navHow: "Cara dibuat",
       navFaq: "FAQ",
       navOrder: "Pesan",
 
-      heroEyebrow: "Kit bunga DIY · kawat bulu chenille",
-      heroTitle: "Bunga yang tak pernah layu — dirangkai tangan Anda sendiri.",
-      heroSub: "Satu kit lengkap untuk membuat bunga, setiap bagiannya sudah disiapkan. Bentuk, rangkai, lalu simpan bunga buatan Anda — sekitar 20 menit saja.",
+      heroEyebrow: "Bunga jadi & buket · benang chenille",
+      heroTitle: "Bunga yang tak pernah layu — kami rangkai untuk Anda.",
+      heroSub: "Setiap tangkai kami bentuk dan rangkai sendiri, lalu dikemas siap dipajang. Ambil satu tangkai, salah satu paket buket kami, atau susun campuran Anda sendiri.",
       heroPlateCaption: "Helianthus annuus",
       heroPlatePl: "PL. I",
-      ctaBrowse: "Lihat koleksi",
-      ctaInside: "Lihat isi kitnya",
+      ctaBrowse: "Lihat bunganya",
+      ctaBouquet: "Susun buket",
 
-      ben1t: "Semua sudah termasuk",
-      ben1d: "Bahan, tangkai, lem, dan panduan ada di dalam kotak.",
-      ben2t: "Ramah pemula",
-      ben2d: "Bahan sudah dipotong dan ada panduan bertahap.",
-      ben3t: "Dibuat untuk disimpan",
-      ben3d: "Untuk pajangan dalam ruangan yang tahan lama.",
+      ben1t: "Datang sudah jadi",
+      ben1d: "Tidak perlu dirangkai — buka dan letakkan.",
+      ben2t: "Tanpa air",
+      ben2d: "Chenille dan kawat, untuk pajangan dalam ruangan.",
+      ben3t: "Dibuat sesuai pesanan",
+      ben3d: "Dipotong, dibentuk, dan dibungkus setelah Anda pesan.",
 
       tr1t: "Dikirim dari Indonesia",
       tr1d: "Ke seluruh Indonesia lewat marketplace.",
-      tr2t: "Dikemas 2–3 hari kerja",
-      tr2d: "Setiap kit dihitung dengan tangan.",
-      tr3t: "Ada bagian yang kurang?",
-      tr3d: "Kirim fotonya, kami ganti.",
+      tr2t: "Dibuat 2–3 hari kerja",
+      tr2d: "Buket 9 tangkai ke atas, 3–4 hari.",
+      tr3t: "Dikemas agar utuh",
+      tr3d: "Kelopak selalu bisa dibentuk ulang dengan tangan.",
       tr4t: "Pembayaran terlindungi",
       tr4d: "Checkout lewat Tokopedia atau Shopee.",
 
       colEyebrow: "Koleksi",
-      colTitle: "Empat bunga untuk dipilih",
-      colIntro: "Setiap bunga tersedia tiga pilihan — kit untuk dirangkai sendiri, tangkai jadi, atau buket yang kami susun.",
-      makesPrefix: "Membuat",
-      kitPricePrefix: "Kit",
-      buyKitPrefix: "Beli kit",
-      buyKitSuffix: "",
-      stemLabel: "Tangkai jadi",
-      bouquetLabel: "Buket",
+      colTitle: "Dua cara memesan",
+      colIntro: "Tangkai jadi satuan, atau buket — versi kami atau versi Anda.",
+      catOneLabel: "Kategori 01",
+      catOneTitle: "Bunga jadi",
+      catOneNote: "Empat bunga, semuanya kami rangkai dan dijual per tangkai.",
+      catTwoLabel: "Kategori 02",
+      catTwoTitle: "Buket",
+      catTwoNote: "Empat paket siap pesan, atau campuran custom yang Anda hitung sendiri.",
 
-      kitEyebrow: "Isi kit Anda",
-      kitTitle: "Setiap bagian, tertata sebelum Anda mulai",
-      kitIntro: "Satu kit bunga matahari, dibuka. Tidak ada yang perlu dibeli terpisah, tidak ada yang perlu dipotong atau diukur sendiri.",
-      kitContents: [
-        { title: "Benang chenille pra-potong, tersortir warna", desc: "Dikemas per bagian agar Anda selalu tahu bagian berikutnya." },
-        { title: "Tangkai bunga siap pakai", desc: "Sudah dipotong, dibalut, dengan ujung kawat yang dilipat." },
-        { title: "Komponen kelopak dan daun", desc: "Dihitung per bunga, plus dua cadangan masing-masing." },
-        { title: "Lem", desc: "Satu tube, cukup untuk seluruh kit." },
-        { title: "Panduan bergambar", desc: "Langkah bergaya pelat botani, bernomor sesuai kemasannya." },
-        { title: "QR code ke video tutorial", desc: "Ikuti sesuai kecepatan Anda, bisa dijeda kapan saja." }
-      ],
-      specTitle: "Spesifikasi · kit bunga matahari",
-      specs: [
-        { label: "Menghasilkan", value: "3 bunga" },
-        { label: "Ukuran jadi", value: "tangkai 45 cm, kepala 12 cm" },
-        { label: "Waktu", value: "±20 menit per bunga" },
-        { label: "Tingkat", value: "Pemula" }
-      ],
-      specGuidance: "Direkomendasikan untuk usia 12 tahun ke atas. Ujung kawat telah dilipat rapi sebelum dikemas; anak yang lebih kecil disarankan didampingi orang dewasa, terutama saat menggunakan lem.",
+      orderStemLabel: "Pesan tangkai ini",
+      addToBouquetLabel: "Tambah ke buket +",
+      perStemPrefix: "per tangkai",
 
-      howEyebrow: "Cara membuatnya",
-      howTitle: "Empat langkah, sekitar dua puluh menit",
+      pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
+      pkgBlurbs: [
+        "Tiga tangkai, satu jenis atau campuran. Ukuran meja dan nakas.",
+        "Lima tangkai dengan bagian tengah yang lebih tinggi. Paling sering dipesan.",
+        "Sembilan tangkai, warna campur, penuh dalam pelukan. Sudah harga grosir.",
+        "Lima belas tangkai untuk momen yang memang menuntutnya. Sudah harga grosir."
+      ],
+      pkgStemLine: "tangkai",
+      pkgIncludes: [
+        "{n} tangkai jadi, bunga campur",
+        "Dibalut kertas, diikat pita",
+        "Dikemas dalam kotak",
+        "Kartu perawatan disertakan"
+      ],
+      pkgBtn: "Pilih buket ini",
+      pkgBtnActive: "Dipilih",
+      pkgPhotoLabel: "foto buket",
+
+      customEyebrow: "Buket custom",
+      customTitle: "Atau hitung sendiri isinya",
+      customIntro: "Tambahkan bunga yang Anda mau, estimasi harganya ikut berubah. Minimal tiga tangkai; sembilan tangkai ke atas dapat potongan 10% untuk bunganya.",
+      customPickLabel: "Pilih tangkainya",
+      resetLabel: "Atur ulang",
+      estimateLabel: "Estimasi",
+      flowersLabel: "Bunga",
+      discountLabel: "Potongan grosir (9+ tangkai)",
+      wrapFeeLabel: "Bungkus & pita",
+      estTotalLabel: "Estimasi total",
+      stemsWord: "tangkai",
+      stemWord: "tangkai",
+      minHint: "Tambahkan minimal tiga tangkai untuk memesan buket.",
+      okHint: "Estimasi — total akhirnya kami konfirmasi lewat chat sebelum Anda bayar.",
+      useCustomLabel: "Pakai buket ini",
+
+      kitSoonEyebrow: "Segera menyusul",
+      kitSoonTitle: "Kit DIY-nya masih kami siapkan",
+      kitSoonBody: "Kami sedang menggambar panduannya dan menguji kemasannya, supaya pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak yang menunggu, makin cepat kami luncurkan.",
+      kitSoonCta: "Saya mau kitnya →",
+      kitSoonSecondary: "Baca FAQ",
+
+      howEyebrow: "Cara dibuat",
+      howTitle: "Dikerjakan tangan, lalu dikirim ke Anda",
       steps: [
-        { kicker: "01 — Buka", title: "Tata panduannya", desc: "Setiap bagian datang terkemas dan bernomor sesuai panduan bergambar, jadi Anda bisa melihat bentuk utuhnya sebelum mulai." },
-        { kicker: "02 — Bentuk", title: "Lengkungkan kelopak", desc: "Lipat tiap potongan mengikuti tanda lengkung. Cukup dengan tangan — inti kawatnya menahan bentuk yang Anda beri." },
-        { kicker: "03 — Rangkai", title: "Pasang ke tangkai", desc: "Susun kelopak melingkari mahkota, puntir, lalu tambahkan daun. Setetes lem yang disertakan mengunci kepala bunganya." },
-        { kicker: "04 — Pajang", title: "Letakkan di dalam ruangan", desc: "Tidak perlu air. Jauhkan dari lembap dan sinar matahari langsung yang lama, bersihkan debunya sesekali, dan bentuk ulang kelopak kapan saja." }
+        ["01 — Potong", "Kelopak dipotong sesuai pola", "Setiap bunga punya polanya sendiri. Chenille dipotong dan disortir per bagian sebelum dirangkai."],
+        ["02 — Bentuk", "Setiap kelopak dilengkungkan tangan", "Inti kawat di dalam chenille menerima lengkungan lalu menahannya. Itulah yang membuat kelopaknya terasa tumbuh, bukan sekadar dilipat."],
+        ["03 — Rangkai", "Dipasang ke tangkai", "Kelopak disusun melingkari mahkota, dipuntir kencang, lalu daunnya dipasang dan tangkainya dibalut sesuai panjang."],
+        ["04 — Bungkus & kirim", "Dikemas seperti saat meninggalkan kami", "Buket diikat dan dibungkus, tangkai satuan dibalut kertas. Keduanya dikirim dalam kotak, dengan kartu perawatan."]
       ],
 
       matEyebrow: "Bahannya",
-      matTitle: "Lembut di tangan, mudah dibentuk sesuai keinginan",
-      matBody: "Kawat bulu chenille memadukan serat lembut dengan inti kawat yang lentur. Kelopak mudah dilengkungkan dengan jari tanpa alat khusus, dan dapat dibentuk ulang kapan saja hingga hasilnya memuaskan Anda.",
+      matTitle: "Mengapa chenille bergerak seperti kelopak",
+      matCaption: "Gbr. 1 — serat chenille pada inti kawat berpuntir",
+      matBody: "Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.",
       matPoints: [
-        { n: "i", lead: "Mudah dibentuk & dirapikan kembali.", rest: "Cukup lengkungkan dengan jari. Jika kurang pas, bisa diluruskan dan dibentuk ulang." },
-        { n: "ii", lead: "Nyaman dan ramah pemula.", rest: "Kawat sudah dipotong sesuai ukuran dengan ujung yang dilipat rapi." },
-        { n: "iii", lead: "Dibuat untuk pajangan jangka panjang.", rest: "Tanpa air dan tanpa layu, cukup bersihkan debunya sesekali." }
+        ["Bisa dibentuk ulang dengan tangan.", "Kalau kelopak tertekan di perjalanan, cukup lengkungkan kembali — tidak ada yang dilem kaku."],
+        ["Ujung kawat dilipat dan dibalut.", "Aman dipegang dan aman diberikan sebagai hadiah."],
+        ["Dibuat untuk pajangan dalam ruangan jangka panjang.", "Jauhkan dari lembap dan sinar matahari langsung yang lama."]
       ],
 
       orderEyebrow: "Pesan",
-      orderTitle: "Susun pesanan Anda, lalu pilih tempat membeli",
-      step1: "Langkah 1 — pilih bunga",
-      step2: "Langkah 2 — pilih bentuk",
-      step3: "Langkah 3 — pilih tempat membeli",
+      orderTitle: "Lengkapi pesanan Anda, lalu lanjut ke checkout",
+      finishLabel: "Sentuhan akhir",
+      wrapIntro: "Pilih kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga setiap buket.",
+      cardLabel: "Kartu ucapan",
+      cardPlaceholder: "mis. Selamat lulus, Sagita — dari kami semua",
+      cardNote: "Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.",
       selectionLabel: "Pilihan Anda",
       includesLabel: "Termasuk",
+      continueLabel: "Lanjut ke",
       openLabel: "buka →",
       messageLabel: "chat →",
       channelComingSoon: "segera hadir",
       channelUnavailableNotice: "Listing marketplace segera dibuka. Saat ini pemesanan dilayani langsung via WhatsApp.",
       waDraftNotice: "Membuka draft pesan di WhatsApp (tidak terkirim otomatis).",
-      waLabel: "WhatsApp — tanya atau pesan",
-      orderNote: "Pembayaran dan pengiriman ditangani marketplace resmi, lengkap dengan perlindungan pembeli.",
+      waLabel: "WhatsApp — tanya atau custom",
+      orderNote: "Pembayaran dan pengiriman ditangani marketplace resmi, lengkap dengan perlindungan pembelinya.",
 
-      formats: [
-        { key: "Kit", label: "Kit DIY", note: "Anda rangkai sendiri — sekitar 20 menit per bunga" },
-        { key: "Stem", label: "Tangkai jadi", note: "Kami rangkai, dibalut kertas — siap dipajang" },
-        { key: "Bouquet", label: "Buket", note: "Rangkaian bertema bunga pilihan, diikat & dibungkus" }
+      wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
+      wrapLinePrefix: "Pembungkus",
+      cardLinePrefix: "Kartu ucapan",
+      stemSuffix: "— tangkai jadi",
+      customTitleShort: "Buket custom",
+      stemIncludes: [
+        "{flower} jadi, dirangkai oleh kami",
+        "{size}, siap ditaruh di vas",
+        "Dibalut kertas, dikemas dalam kotak",
+        "Kartu perawatan disertakan"
       ],
-
-      includes: {
-        Kit: [
-          "Benang chenille pra-potong, tersortir warna",
-          "Tangkai bunga siap pakai dengan ujung kawat dilipat",
-          "Komponen kelopak dan daun, plus cadangan",
-          "Lem, panduan bergambar, dan QR video"
-        ],
-        Stem: [
-          "{yield} {flower}, dirangkai rapi oleh kami",
-          "{size}, siap ditaruh di vas",
-          "Dibalut kertas kraft, dikemas dalam kotak",
-          "Kartu panduan perawatan disertakan"
-        ],
-        Bouquet: [
-          "{yield} bertema {flower}, disusun oleh kami",
-          "Dibalut kertas kraft & pita, siap dijadikan kado",
-          "Dikemas rapi dalam kotak pengiriman khusus",
-          "Dibuat sesuai pesanan — chat kami untuk request khusus"
-        ]
-      },
+      customIncludesTail: [
+        "Dibungkus, diikat, dan dikotakkan oleh kami",
+        "Dibuat sesuai pesanan — 3–4 hari kerja"
+      ],
 
       faqEyebrow: "Pertanyaan",
       faqTitle: "Sebelum Anda memesan",
       faqs: [
-        { q: "Dikirim dari mana?", a: "Semua kit dikemas dan dikirim dari Indonesia, ke seluruh nusantara lewat kurir Tokopedia dan Shopee." },
-        { q: "Berapa lama sebelum dikirim?", a: "Kit dipotong dan dihitung dengan tangan, jadi beri waktu 2–3 hari kerja untuk pengemasan sebelum kurir menjemput." },
-        { q: "Bagaimana kalau ada bagian yang kurang?", a: "Kirim foto isi paket yang Anda terima dan kami kirimkan bagian yang kurang tanpa biaya. Setiap kit juga berisi kelopak dan daun cadangan." },
-        { q: "Bagaimana kalau paketnya rusak?", a: "Foto paket dan isinya sebelum dibuka lebih jauh, lalu sampaikan ke kami atau ke marketplace — kami ganti komponen yang rusak atau seluruh kitnya." },
-        { q: "Aman untuk anak-anak?", a: "Disarankan untuk usia 12 tahun ke atas. Ujung kawat sudah dilipat sebelum dikemas, tetapi anak yang lebih kecil sebaiknya dibantu orang dewasa, terutama saat memakai lem." },
-        { q: "Bagaimana cara merawatnya?", a: "Tanpa air. Pajang di dalam ruangan, jauh dari lembap dan sinar matahari langsung yang lama; bersihkan debu dengan sikat kering dan bentuk ulang kelopak dengan tangan." }
+        ["Dikirim dari mana?", "Semuanya dibuat dan dikirim dari Indonesia, ke seluruh nusantara lewat kurir Tokopedia dan Shopee."],
+        ["Berapa lama sebelum dikirim?", "Tangkai satuan dan buket kecil butuh 2–3 hari kerja; buket sembilan tangkai ke atas, 3–4 hari."],
+        ["Apakah bisa rusak di jalan?", "Buket dibungkus dan dikotakkan dengan kepala bunga terlindungi. Kalau ada kelopak yang tertekan, cukup dibentuk ulang dengan tangan."],
+        ["Bisa ganti isi buketnya?", "Bisa — pakai penyusun custom untuk campuran yang tepat, atau chat kami di WhatsApp untuk warna atau ukuran yang belum tercantum."],
+        ["Bagaimana cara merawatnya?", "Tanpa air. Pajang di dalam ruangan, jauh dari lembap dan sinar matahari langsung yang lama; bersihkan debu dengan sikat kering dan bentuk ulang kelopak dengan tangan."],
+        ["Kit DIY-nya masih ada?", "Masih, hanya belum sekarang — panduan dan kemasannya sedang kami rapikan. Chat kami di WhatsApp kalau Anda mau satu, nanti Anda kami dahulukan."]
       ],
 
-      aboutEyebrow: "Siapa yang membuat",
-      aboutLede: "Kami mulai memotong kelopak di meja dapur, satu bunga demi satu bunga, sampai potongannya cukup rapi untuk diberikan kepada orang lain.",
-      aboutBody: "Setiap kit masih dipotong, dihitung, dan dikemas oleh kami berdua. Bunga baru ditambahkan setelah kami gambar dan uji — empat sekarang, akan terus bertambah.",
-      aboutIg: "Lihat proses merangkai bunga kami di Instagram",
       footerCare: "Pengiriman & perawatan",
       copyright: "© 2026 Komorebi"
     },
 
     // ENGLISH
     en: {
-      navCollection: "Collection",
-      navKit: "Inside the kit",
-      navHow: "How it works",
+      navCollection: "Flowers",
+      navBouquets: "Bouquets",
+      navHow: "How they're made",
       navFaq: "FAQ",
       navOrder: "Order",
 
-      heroEyebrow: "DIY flower kits · chenille stems",
-      heroTitle: "Flowers that never wilt — built by your own hands.",
-      heroSub: "A complete flower-making kit with every piece prepared for you. Shape, assemble and keep your handmade bloom — all in about 20 minutes.",
+      heroEyebrow: "Finished flowers & bouquets · chenille stems",
+      heroTitle: "Flowers that never wilt — finished by our hands.",
+      heroSub: "Every stem is shaped and assembled here, then boxed ready to display. Take a single flower, one of our bouquet packages, or build your own mix.",
       heroPlateCaption: "Helianthus annuus",
       heroPlatePl: "PL. I",
-      ctaBrowse: "Browse the collection",
-      ctaInside: "See what's inside",
+      ctaBrowse: "See the flowers",
+      ctaBouquet: "Build a bouquet",
 
-      ben1t: "Everything included",
-      ben1d: "Parts, stem, glue and instructions in the box.",
-      ben2t: "Beginner friendly",
-      ben2d: "Pre-cut parts and a step-by-step plate.",
-      ben3t: "Made to keep",
-      ben3d: "For long-lasting indoor display.",
+      ben1t: "Arrives finished",
+      ben1d: "Nothing to assemble — unwrap and place it.",
+      ben2t: "No water, ever",
+      ben2d: "Chenille and wire, made for indoor display.",
+      ben3t: "Made to order",
+      ben3d: "Cut, shaped and wrapped after you order.",
 
       tr1t: "Ships from Indonesia",
       tr1d: "Nationwide via the marketplaces.",
-      tr2t: "Packed in 2–3 working days",
-      tr2d: "Every kit counted by hand.",
-      tr3t: "Missing a piece?",
-      tr3d: "Send a photo and we replace it.",
+      tr2t: "Made in 2–3 working days",
+      tr2d: "Bouquets of 9+ stems, 3–4 days.",
+      tr3t: "Boxed to arrive intact",
+      tr3d: "Any petal can be reshaped by hand.",
       tr4t: "Payment protected",
       tr4d: "Checkout handled by Tokopedia or Shopee.",
 
       colEyebrow: "The collection",
-      colTitle: "Four flowers to choose from",
-      colIntro: "Each one comes three ways — a kit you build, a finished stem, or a bouquet we arrange.",
-      makesPrefix: "Makes",
-      kitPricePrefix: "Kit",
-      buyKitPrefix: "Buy",
-      buyKitSuffix: "kit",
-      stemLabel: "Finished stem",
-      bouquetLabel: "Bouquet",
+      colTitle: "Two ways to order",
+      colIntro: "Single finished stems, or a bouquet — ours or yours.",
+      catOneLabel: "Category 01",
+      catOneTitle: "Finished flowers",
+      catOneNote: "Four flowers, each assembled by us and sold by the stem.",
+      catTwoLabel: "Category 02",
+      catTwoTitle: "Bouquets",
+      catTwoNote: "Four ready packages, or a custom mix you count out yourself.",
 
-      kitEyebrow: "Inside your kit",
-      kitTitle: "Every piece, laid out before you begin",
-      kitIntro: "One sunflower kit, unpacked. Nothing to buy separately, nothing to cut or measure yourself.",
-      kitContents: [
-        { title: "Pre-cut chenille stems, sorted by colour", desc: "Bagged by part so you always know which piece is next." },
-        { title: "Prepared flower stem", desc: "Cut to length, wrapped, with folded wire ends." },
-        { title: "Petal and leaf components", desc: "Counted per flower, plus two spares of each." },
-        { title: "Glue", desc: "One tube, enough for the whole kit." },
-        { title: "Illustrated instruction plate", desc: "Printed botanical-plate steps, numbered to match the bags." },
-        { title: "QR code to the video tutorial", desc: "Follow along at your own pace, pause anywhere." }
-      ],
-      specTitle: "Specification · sunflower kit",
-      specs: [
-        { label: "Makes", value: "3 flowers" },
-        { label: "Finished size", value: "45 cm stem, 12 cm head" },
-        { label: "Time", value: "~20 min per flower" },
-        { label: "Difficulty", value: "Beginner" }
-      ],
-      specGuidance: "Recommended for ages 12 and up. Wire ends are neatly folded before packing; younger makers should be assisted by an adult, especially when using glue.",
+      orderStemLabel: "Order this stem",
+      addToBouquetLabel: "Add to bouquet +",
+      perStemPrefix: "per stem",
 
-      howEyebrow: "How it works",
-      howTitle: "Four steps, about twenty minutes",
+      pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
+      pkgBlurbs: [
+        "Three stems, one flower or mixed. The desk-and-bedside size.",
+        "Five stems with a little more height at the centre. Our most ordered.",
+        "Nine stems, mixed colours, full in the hand. Bulk price applies.",
+        "Fifteen stems for the occasions that ask for one. Bulk price applies."
+      ],
+      pkgStemLine: "stems",
+      pkgIncludes: [
+        "{n} finished stems, mixed flowers",
+        "Wrapped in paper, tied with ribbon",
+        "Boxed for delivery",
+        "Care card included"
+      ],
+      pkgBtn: "Choose this bouquet",
+      pkgBtnActive: "Selected",
+      pkgPhotoLabel: "bouquet photo",
+
+      customEyebrow: "Custom bouquet",
+      customTitle: "Or count out your own",
+      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum three stems; nine or more takes 10% off the flowers.",
+      customPickLabel: "Choose your stems",
+      resetLabel: "Reset",
+      estimateLabel: "Estimate",
+      flowersLabel: "Flowers",
+      discountLabel: "Bulk discount (9+ stems)",
+      wrapFeeLabel: "Wrapping & ribbon",
+      estTotalLabel: "Estimated total",
+      stemsWord: "stems",
+      stemWord: "stem",
+      minHint: "Add at least three stems to order a bouquet.",
+      okHint: "An estimate — we confirm the final total on chat before you pay.",
+      useCustomLabel: "Use this bouquet",
+
+      kitSoonEyebrow: "Coming later",
+      kitSoonTitle: "The DIY kit is still in the workshop",
+      kitSoonBody: "We're drawing the plates and testing the packs so a beginner can build a flower in twenty minutes. If that's what you came for, tell us — the more people waiting, the sooner we launch it.",
+      kitSoonCta: "I want the kit →",
+      kitSoonSecondary: "Read the FAQ",
+
+      howEyebrow: "How they're made",
+      howTitle: "Made by hand, then sent to you",
       steps: [
-        { kicker: "01 — Unpack", title: "Lay out the plate", desc: "Parts come bagged and numbered against the illustrated plate, so you can see the whole flower before you start." },
-        { kicker: "02 — Shape", title: "Bend the petals", desc: "Fold each pre-cut length along the marked curve. Hands are enough — the wire core holds the shape you give it." },
-        { kicker: "03 — Assemble", title: "Wind onto the stem", desc: "Layer petals around the crown, twist, then add leaves. A drop of the included glue sets the head in place." },
-        { kicker: "04 — Display", title: "Place it indoors", desc: "No water needed. Keep away from moisture and prolonged direct sunlight, dust it now and then, reshape a petal whenever you like." }
+        ["01 — Cut", "Petals cut to pattern", "Each flower has its own drawn pattern. Chenille is cut and sorted by part before anything is assembled."],
+        ["02 — Shape", "Every petal curved by hand", "The wire core inside the chenille takes a curve and holds it. That is what makes a petal read as grown rather than folded."],
+        ["03 — Assemble", "Wound onto the stem", "Petals are layered around the crown, twisted tight, then the leaves go on and the stem is wrapped to length."],
+        ["04 — Wrap & send", "Boxed the way it left us", "Bouquets are tied and sleeved, single stems wrapped in paper. Both go out boxed, with a care card."]
       ],
 
       matEyebrow: "The material",
-      matTitle: "Soft in hand, effortless to shape and reshape",
-      matBody: "Chenille stems combine plush, velvety fibers over a pliable wire core. Petals curve naturally under your fingertips without special tools, and can be reshaped at any time until you love the result.",
+      matTitle: "Why chenille behaves like a petal",
+      matCaption: "Fig. 1 — chenille pile on a twisted wire core",
+      matBody: "A soft chenille pile over a twisted wire core: it takes a curve the way a petal does, and then it holds it. That is what makes these flowers read as grown rather than folded.",
       matPoints: [
-        { n: "i", lead: "Forgiving and reshapeable.", rest: "Bend petals gently with your fingers. If a curve isn't right, simply reshape it." },
-        { n: "ii", lead: "Gentle and beginner friendly.", rest: "Wire stems are cut to length with folded ends for comfortable handling." },
-        { n: "iii", lead: "Made for long-lasting indoor display.", rest: "No water needed—simply dust occasionally to keep your blooms vibrant." }
+        ["Reshapes with your fingers.", "If a petal flattens in transit, bend it back — nothing is glued rigid."],
+        ["Wire ends folded and wrapped.", "Safe to handle and to hand over as a gift."],
+        ["Made for long-lasting indoor display.", "Keep away from moisture and prolonged direct sunlight."]
       ],
 
       orderEyebrow: "Order",
-      orderTitle: "Build your order, then choose where to buy",
-      step1: "Step 1 — choose a flower",
-      step2: "Step 2 — choose a format",
-      step3: "Step 3 — choose where to buy",
+      orderTitle: "Finish your order, then continue to checkout",
+      finishLabel: "Finishing",
+      wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price.",
+      cardLabel: "Message card",
+      cardPlaceholder: "e.g. Happy graduation, Sagita — from all of us",
+      cardNote: "Leave it blank if you'd rather not have one. Handwritten on a small card, no extra charge.",
       selectionLabel: "Your selection",
       includesLabel: "Includes",
+      continueLabel: "Continue to",
       openLabel: "open →",
       messageLabel: "message →",
       channelComingSoon: "coming soon",
       channelUnavailableNotice: "Marketplace listings opening soon. In the meantime, orders are welcomed directly via WhatsApp.",
       waDraftNotice: "Opens a draft message in WhatsApp (does not send automatically).",
-      waLabel: "WhatsApp — ask or order",
-      orderNote: "Payment and delivery are handled by official marketplaces with buyer protection.",
+      waLabel: "WhatsApp — ask or customise",
+      orderNote: "Payment and delivery are handled by the marketplace, with their buyer protection.",
 
-      formats: [
-        { key: "Kit", label: "DIY kit", note: "You build it — about 20 min per flower" },
-        { key: "Stem", label: "Finished stem", note: "Assembled by us, wrapped in paper — ready to display" },
-        { key: "Bouquet", label: "Bouquet", note: "Arranged with your chosen bloom, tied & boxed" }
+      wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
+      wrapLinePrefix: "Wrap",
+      cardLinePrefix: "Message card",
+      stemSuffix: "— finished stem",
+      customTitleShort: "Custom bouquet",
+      stemIncludes: [
+        "{flower}, assembled by us",
+        "{size}, ready to place in a vase",
+        "Wrapped in paper, boxed for delivery",
+        "Care card included"
       ],
-
-      includes: {
-        Kit: [
-          "Pre-cut chenille stems, sorted by colour",
-          "Prepared flower stem with folded wire ends",
-          "Petal and leaf components, plus spares",
-          "Glue, illustrated plate and video QR code"
-        ],
-        Stem: [
-          "{yield} {flower}, neatly assembled by us",
-          "{size}, ready to place in a vase",
-          "Wrapped in kraft paper, boxed for delivery",
-          "Care guide card included"
-        ],
-        Bouquet: [
-          "{yield} themed with {flower}, arranged by us",
-          "Wrapped in kraft paper & ribbon, gift-ready",
-          "Safely packaged in a dedicated presentation box",
-          "Made to order — message us for custom requests"
-        ]
-      },
+      customIncludesTail: [
+        "Wrapped, tied and boxed by us",
+        "Made to order — 3–4 working days"
+      ],
 
       faqEyebrow: "Questions",
       faqTitle: "Before you order",
       faqs: [
-        { q: "Where do you ship from?", a: "All kits are packed and sent from Indonesia, delivered nationwide through Tokopedia and Shopee couriers." },
-        { q: "How long before it's sent?", a: "Kits are cut and counted by hand, so allow 2–3 working days for packing before the courier collects." },
-        { q: "What if a piece is missing?", a: "Send us a photo of what arrived and we send the missing part at no cost. Every kit also ships with spare petals and leaves." },
-        { q: "What if it arrives damaged?", a: "Photograph the parcel and contents before unpacking further and raise it with us or the marketplace — we replace damaged components or the whole kit." },
-        { q: "Is it suitable for children?", a: "Recommended for ages 12 and up. Wire ends are folded before packing, but younger makers should work with an adult, especially with the glue." },
-        { q: "How do I care for the flowers?", a: "No water. Display indoors, away from moisture and prolonged direct sunlight; dust gently with a dry brush and reshape petals by hand." }
+        ["Where do you ship from?", "Everything is made and sent from Indonesia, delivered nationwide through Tokopedia and Shopee couriers."],
+        ["How long before it's sent?", "Single stems and small bouquets take 2–3 working days to make; bouquets of nine stems or more, 3–4 days."],
+        ["Will it arrive crushed?", "Bouquets are sleeved and boxed with the heads protected. If a petal flattens in transit you can simply bend it back by hand."],
+        ["Can I change what's in a bouquet?", "Yes — use the custom builder for the exact mix, or message us on WhatsApp for a palette or a size that isn't listed."],
+        ["How do I care for them?", "No water. Display indoors, away from moisture and prolonged direct sunlight; dust gently with a dry brush and reshape petals by hand."],
+        ["Are the DIY kits still coming?", "They are, just not yet — we're finishing the instruction plates and the packing. Tell us on WhatsApp if you want one and we'll put you first in line."]
       ],
 
-      aboutEyebrow: "Who makes these",
-      aboutLede: "We started cutting petals at a kitchen table, one flower at a time, until the pieces fit together well enough to hand to a stranger.",
-      aboutBody: "Every kit is still cut, counted and packed by the two of us. New flowers are added as we draw and test them — four today, more on the way.",
-      aboutIg: "See our flower-making process on Instagram",
       footerCare: "Shipping & care",
       copyright: "© 2026 Komorebi"
     }

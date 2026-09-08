@@ -2,6 +2,7 @@
  * =============================================================================
  * KOMOREBI CREATIONS — APPLICATION CONTROLLER (app.js)
  * =============================================================================
+ * Product Pivot: Finished Flowers & Bouquets
  */
 
 (function () {
@@ -13,12 +14,23 @@
 
   // State
   let currentLang = 'id';
+  let orderMode = 'stem'; // 'stem' | 'package' | 'custom'
   let selectedFlower = 'Sunflower';
-  let selectedFormat = 'Kit';
+  let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
+  let customCounts = { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 };
+  let selectedWrap = 'kraft';
+  let orderNote = '';
   let siteData = null;
   let activePreviewToken = 0;
   let currentLoadedSrc = '';
   let currentLatinText = '';
+
+  /**
+   * Currency formatter helper (Indonesian Rupiah standard)
+   */
+  function formatRp(n) {
+    return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+  }
 
   /**
    * Load data directly from site-content.js (window.KOMOREBI_DATA)
@@ -58,33 +70,37 @@
   }
 
   /**
-   * Helper: Get formatted price display string
+   * Calculate custom bouquet totals
    */
-  function getPriceDisplay(flower, format) {
-    if (!flower || !flower.prices || !flower.prices[format]) return 'Rp 0';
-    const p = flower.prices[format];
-    return typeof p === 'object' ? p.display : p;
-  }
+  function getCustomTotals() {
+    let stems = 0;
+    let flowersSubtotal = 0;
+    const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
 
-  /**
-   * Helper: Get option metadata (yield, time, availability, channel URLs)
-   */
-  function getOptionMeta(flower, format) {
-    const isEn = currentLang === 'en';
-    if (!flower || !flower.options || !flower.options[format]) {
-      return {
-        yield: isEn ? '1 stem' : '1 tangkai',
-        assemblyTime: null,
-        availability: 'available',
-        channels: { tokopediaUrl: null, shopeeUrl: null }
-      };
-    }
-    const opt = flower.options[format];
+    order.forEach(key => {
+      const qty = customCounts[key] || 0;
+      const flower = siteData.flowers[key];
+      const price = flower ? (flower.stemPrice || 55000) : 55000;
+      stems += qty;
+      flowersSubtotal += qty * price;
+    });
+
+    const bulkFrom = siteData.bulkFrom ?? 9;
+    const bulkRate = siteData.bulkRate ?? 0.10;
+    const wrapFee = siteData.wrapFee ?? 35000;
+    const minStems = siteData.minStems ?? 3;
+
+    const discount = stems >= bulkFrom ? Math.round(flowersSubtotal * bulkRate) : 0;
+    const total = flowersSubtotal - discount + wrapFee;
+    const isValid = stems >= minStems;
+
     return {
-      yield: isEn ? opt.yieldEn : opt.yieldId,
-      assemblyTime: isEn ? opt.assemblyTimeEn : opt.assemblyTimeId,
-      availability: opt.availability || 'available',
-      channels: opt.channels || { tokopediaUrl: null, shopeeUrl: null }
+      stems,
+      flowersSubtotal,
+      discount,
+      wrapFee,
+      total,
+      isValid
     };
   }
 
@@ -105,45 +121,89 @@
   }
 
   /**
-   * Atomic Order Selection: updates flower and/or format in a single pass
+   * Order action: Choose a single finished stem
    */
-  function setOrderSelection(flowerKey, formatKey, scroll = false) {
-    let changed = false;
-    if (flowerKey && siteData.flowers[flowerKey] && selectedFlower !== flowerKey) {
+  function selectStemOrder(flowerKey, scroll = true) {
+    orderMode = 'stem';
+    if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
-      changed = true;
     }
-    if (formatKey && siteData.formatKeys.includes(formatKey) && selectedFormat !== formatKey) {
-      selectedFormat = formatKey;
-      changed = true;
-    }
-    if (changed) {
-      renderOrderSection();
-    }
+    renderBouquetsUI();
+    renderOrderSection();
     if (scroll) {
       scrollToSection('#order');
     }
   }
 
   /**
-   * Select a flower species
+   * Order action: Add flower to custom bouquet
    */
-  function selectFlower(flowerKey) {
-    setOrderSelection(flowerKey, null, false);
+  function addFlowerToBouquet(flowerKey) {
+    if (!customCounts[flowerKey]) customCounts[flowerKey] = 0;
+    customCounts[flowerKey] += 1;
+    orderMode = 'custom';
+    renderCustomBuilder();
+    renderBouquetsUI();
+    renderOrderSection();
   }
 
   /**
-   * Select a format (Kit, Stem, Bouquet)
+   * Order action: Select a bouquet package
    */
-  function selectFormat(formatKey) {
-    setOrderSelection(null, formatKey, false);
+  function selectPackageOrder(pkgIndex, scroll = false) {
+    orderMode = 'package';
+    selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
+    renderBouquetsUI();
+    renderOrderSection();
+    if (scroll) {
+      scrollToSection('#order');
+    }
   }
 
   /**
-   * Quick order handler from collection card buttons
+   * Order action: Apply custom bouquet and scroll to order
    */
-  function quickOrder(flowerKey, formatKey) {
-    setOrderSelection(flowerKey, formatKey, true);
+  function useCustomBouquet() {
+    const tot = getCustomTotals();
+    if (tot.isValid) {
+      orderMode = 'custom';
+      renderBouquetsUI();
+      renderOrderSection();
+      scrollToSection('#order');
+    }
+  }
+
+  /**
+   * Order action: Bump custom flower count
+   */
+  function bumpCustomCount(flowerKey, delta) {
+    const cur = customCounts[flowerKey] || 0;
+    customCounts[flowerKey] = Math.max(0, cur + delta);
+    renderCustomBuilder();
+    if (orderMode === 'custom') {
+      renderOrderSection();
+    }
+  }
+
+  /**
+   * Order action: Reset custom bouquet
+   */
+  function resetCustomCounts() {
+    (siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera']).forEach(k => {
+      customCounts[k] = 0;
+    });
+    renderCustomBuilder();
+    if (orderMode === 'custom') {
+      renderOrderSection();
+    }
+  }
+
+  /**
+   * Order action: Select wrapping paper colour
+   */
+  function selectWrap(wrapKey) {
+    selectedWrap = wrapKey;
+    renderOrderSection();
   }
 
   /**
@@ -173,7 +233,7 @@
    */
   function renderHeader(t) {
     setText('#nav-collection', t.navCollection);
-    setText('#nav-kit', t.navKit);
+    setText('#nav-bouquets', t.navBouquets);
     setText('#nav-how', t.navHow);
     setText('#nav-faq', t.navFaq);
     setText('#nav-order', t.navOrder);
@@ -221,7 +281,7 @@
     setText('#hero-title', t.heroTitle);
     setText('#hero-sub', t.heroSub);
     setText('#cta-browse', t.ctaBrowse);
-    setText('#cta-inside', t.ctaInside);
+    setText('#cta-bouquets', t.ctaBouquet);
 
     setText('#ben1-t', t.ben1t);
     setText('#ben1-d', t.ben1d);
@@ -258,23 +318,27 @@
   }
 
   /**
-   * Render Collection Cards Grid
+   * Render Category 01 — Finished Flowers Collection
    */
   function renderCollection(t) {
     setText('#col-eyebrow', t.colEyebrow);
     setText('#col-title', t.colTitle);
     setText('#col-intro', t.colIntro);
 
+    setText('#cat1-label', t.catOneLabel);
+    setText('#cat1-title', t.catOneTitle);
+    setText('#cat1-note', t.catOneNote);
+
     const grid = document.getElementById('collection-grid');
     if (!grid) return;
-
     grid.innerHTML = '';
 
-    siteData.flowerOrder.forEach(key => {
+    const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+    order.forEach(key => {
       const flower = siteData.flowers[key];
       if (!flower) return;
       const trans = flower[currentLang] || flower.en;
-      const priceKit = getPriceDisplay(flower, 'Kit');
+      const priceStr = formatRp(flower.stemPrice || 55000);
       const flowerAlt = currentLang === 'en'
         ? (flower.alt || `${trans.name} handcrafted from chenille stems`)
         : `${trans.name} buatan tangan dari benang chenille`;
@@ -282,72 +346,55 @@
       const card = document.createElement('article');
       card.className = 'flower-card';
       card.innerHTML = `
-        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name} — ${t.buyKitPrefix || 'Pesan'}">
+        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name} — ${t.orderStemLabel}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
         </div>
         <div class="flower-info">
-          <h3 class="flower-name" tabindex="0" role="button" aria-label="${trans.name} — ${t.buyKitPrefix || 'Pesan'}">${trans.name}</h3>
+          <h4 class="flower-name">${trans.name}</h4>
+          <p class="flower-latin">${flower.latin}</p>
           <p class="flower-blurb">${trans.blurb}</p>
-          <p class="flower-makes">${t.makesPrefix} ${trans.makes} · ${trans.size}</p>
-          ${siteData.store.showPrices ? `<p class="flower-price">${t.kitPricePrefix} ${priceKit}</p>` : ''}
-          <a href="#order" class="btn-buy-kit" data-flower="${key}" data-format="Kit">
-            ${t.buyKitPrefix} ${trans.name} ${t.buyKitSuffix || ''}
+          <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
+          ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} ${t.perStemPrefix}</p>` : ''}
+          <a href="#order" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
+            ${t.orderStemLabel}
           </a>
-          <div class="flower-quick-links">
-            <a href="#order" class="quick-link" data-flower="${key}" data-format="Stem">${t.stemLabel}</a>
-            <a href="#order" class="quick-link" data-flower="${key}" data-format="Bouquet">${t.bouquetLabel}</a>
-          </div>
+          <button type="button" class="btn-add-bouquet" data-flower="${key}">
+            ${t.addToBouquetLabel}
+          </button>
         </div>
       `;
 
-      // Photo and Title activate product selection smoothly
+      // Click card photo to trigger order
       const photoWrap = card.querySelector('.flower-photo-wrapper');
-      const nameHeading = card.querySelector('.flower-name');
-      const handleCardSelect = (e) => {
-        e.preventDefault();
-        quickOrder(key, 'Kit');
-      };
-
       if (photoWrap) {
-        photoWrap.addEventListener('click', handleCardSelect);
+        photoWrap.addEventListener('click', (e) => {
+          e.preventDefault();
+          selectStemOrder(key, true);
+        });
         photoWrap.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            handleCardSelect(e);
+            e.preventDefault();
+            selectStemOrder(key, true);
           }
         });
       }
 
-      if (nameHeading) {
-        nameHeading.addEventListener('click', handleCardSelect);
-        nameHeading.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            handleCardSelect(e);
-          }
+      // Button: Order this stem
+      const orderBtn = card.querySelector('.btn-order-stem');
+      if (orderBtn) {
+        orderBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          selectStemOrder(key, true);
         });
       }
 
-      const buyBtn = card.querySelector('.btn-buy-kit');
-      if (buyBtn) {
-        buyBtn.addEventListener('click', (e) => {
+      // Button: Add to bouquet +
+      const addBtn = card.querySelector('.btn-add-bouquet');
+      if (addBtn) {
+        addBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          quickOrder(key, 'Kit');
-        });
-      }
-
-      const stemLink = card.querySelector('[data-format="Stem"]');
-      if (stemLink) {
-        stemLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          quickOrder(key, 'Stem');
-        });
-      }
-
-      const bouquetLink = card.querySelector('[data-format="Bouquet"]');
-      if (bouquetLink) {
-        bouquetLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          quickOrder(key, 'Bouquet');
+          addFlowerToBouquet(key);
         });
       }
 
@@ -356,59 +403,190 @@
   }
 
   /**
-   * Render Kit Details & Specs
+   * Render Category 02 — Bouquets Section UI
    */
-  function renderKit(t) {
-    setText('#kit-eyebrow', t.kitEyebrow);
-    setText('#kit-title', t.kitTitle);
-    setText('#kit-intro', t.kitIntro);
-    setAttr('#kit-image', 'src', siteData.images.kit);
-    setAttr('#kit-image', 'alt', currentLang === 'en'
-      ? 'Overhead view of one sunflower DIY kit with components neatly arranged'
-      : 'Tampilan atas satu kit DIY bunga matahari dengan seluruh komponen tertata rapi');
-    if (siteData.images.kitSrcset) {
-      setAttr('#kit-image', 'srcset', siteData.images.kitSrcset);
-      setAttr('#kit-image', 'sizes', siteData.images.kitSizes || '(max-width: 768px) 90vw, 540px');
-    }
+  function renderBouquetsUI() {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
 
-    // List of kit contents
-    const listEl = document.getElementById('kit-list');
-    if (listEl && t.kitContents) {
-      listEl.innerHTML = '';
-      t.kitContents.forEach((item, index) => {
-        const num = String(index + 1).padStart(2, '0');
-        const li = document.createElement('li');
-        li.className = 'kit-list-item';
-        li.innerHTML = `
-          <span class="kit-list-num">${num}</span>
-          <p class="kit-list-text"><strong>${item.title}</strong><br />${item.desc}</p>
-        `;
-        listEl.appendChild(li);
-      });
-    }
+    setText('#cat2-label', t.catTwoLabel);
+    setText('#cat2-title', t.catTwoTitle);
+    setText('#cat2-note', t.catTwoNote);
 
-    // Specifications Metrics
-    setText('#specs-title', t.specTitle);
-    const specsEl = document.getElementById('specs-grid');
-    if (specsEl && t.specs) {
-      specsEl.innerHTML = '';
-      t.specs.forEach(spec => {
-        const div = document.createElement('div');
-        div.className = 'spec-item';
-        div.innerHTML = `
-          <dt>${spec.label}</dt>
-          <dd>${spec.value}</dd>
-        `;
-        specsEl.appendChild(div);
-      });
-    }
+    const grid = document.getElementById('packages-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
 
-    // Safety & Guidance Note
-    setText('#specs-guidance', t.specGuidance || '');
+    (siteData.packages || []).forEach((pkg, index) => {
+      const active = orderMode === 'package' && index === selectedPackage;
+      const name = t.pkgNames[index] || `Package ${index + 1}`;
+      const blurb = t.pkgBlurbs[index] || '';
+      const priceStr = formatRp(pkg.price);
+      const card = document.createElement('article');
+      card.className = `bouquet-card ${active ? 'active' : ''}`;
+      card.innerHTML = `
+        <div class="bouquet-photo-wrapper">
+          <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
+        </div>
+        <div class="bouquet-info">
+          <div class="bouquet-meta-row">
+            <span class="bouquet-stems-label">${pkg.stems} ${t.pkgStemLine}</span>
+            <span class="bouquet-dots">
+              <span class="bouquet-dot" style="background:#C89A3C"></span>
+              <span class="bouquet-dot" style="background:#A8586A"></span>
+              <span class="bouquet-dot" style="background:#C0614E"></span>
+              <span class="bouquet-dot" style="background:#C97A45"></span>
+            </span>
+          </div>
+          <h4 class="bouquet-title">${name}</h4>
+          <p class="bouquet-blurb">${blurb}</p>
+          ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
+          <button type="button" class="btn-choose-bouquet" data-index="${index}">
+            ${active ? t.pkgBtnActive : t.pkgBtn}
+          </button>
+        </div>
+      `;
+
+      const chooseBtn = card.querySelector('.btn-choose-bouquet');
+      if (chooseBtn) {
+        chooseBtn.addEventListener('click', () => {
+          selectPackageOrder(index, false);
+        });
+      }
+
+      grid.appendChild(card);
+    });
+
+    renderCustomBuilder();
+    renderKitTeaser();
   }
 
   /**
-   * Render How-It-Works Steps
+   * Render Custom Bouquet Builder Panel
+   */
+  function renderCustomBuilder() {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const tot = getCustomTotals();
+
+    setText('#custom-eyebrow', t.customEyebrow);
+    setText('#custom-title', t.customTitle);
+    setText('#custom-intro', t.customIntro);
+    setText('#custom-pick-label', t.customPickLabel);
+    setText('#custom-reset-btn', t.resetLabel);
+
+    // List of flower rows
+    const rowsList = document.getElementById('custom-rows-list');
+    if (rowsList) {
+      rowsList.innerHTML = '';
+      const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+
+      order.forEach(key => {
+        const flower = siteData.flowers[key];
+        if (!flower) return;
+        const trans = flower[currentLang] || flower.en;
+        const count = customCounts[key] || 0;
+        const priceStr = `${formatRp(flower.stemPrice || 55000)} / ${t.stemWord}`;
+
+        const li = document.createElement('li');
+        li.className = 'custom-row-item';
+        li.innerHTML = `
+          <div class="custom-flower-meta">
+            <span class="custom-flower-dot" style="background:${flower.accent}"></span>
+            <div>
+              <p class="custom-flower-name">${trans.name}</p>
+              <p class="custom-flower-price">${priceStr}</p>
+            </div>
+          </div>
+          <div class="stepper-controls">
+            <button type="button" class="btn-stepper btn-dec" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+            <span class="stepper-count" aria-live="polite">${count}</span>
+            <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+          </div>
+        `;
+
+        li.querySelector('.btn-dec').addEventListener('click', () => bumpCustomCount(key, -1));
+        li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
+        rowsList.appendChild(li);
+      });
+    }
+
+    // Stem count line & reset button
+    setText('#custom-stem-count', `${tot.stems} ${t.stemsWord}`);
+    const resetBtn = document.getElementById('custom-reset-btn');
+    if (resetBtn) {
+      resetBtn.onclick = resetCustomCounts;
+    }
+
+    // Live Estimate Breakdown
+    setText('#custom-est-label', t.estimateLabel);
+    setText('#est-flowers-label', `${t.flowersLabel} (${tot.stems})`);
+    setText('#est-flowers-val', formatRp(tot.flowersSubtotal));
+
+    const discountRow = document.getElementById('est-discount-row');
+    if (discountRow) {
+      if (tot.discount > 0) {
+        discountRow.style.display = 'flex';
+        setText('#est-discount-label', t.discountLabel);
+        setText('#est-discount-val', `− ${formatRp(tot.discount)}`);
+      } else {
+        discountRow.style.display = 'none';
+      }
+    }
+
+    setText('#est-wrap-label', t.wrapFeeLabel);
+    setText('#est-wrap-val', formatRp(tot.wrapFee));
+
+    setText('#est-total-label', t.estTotalLabel);
+    setText('#est-total-val', tot.isValid ? formatRp(tot.total) : '—');
+
+    // Status hint & CTA button
+    const hintEl = document.getElementById('custom-hint');
+    const useBtn = document.getElementById('btn-use-custom');
+
+    if (hintEl) {
+      hintEl.textContent = tot.isValid ? t.okHint : t.minHint;
+      hintEl.classList.toggle('has-warning', !tot.isValid);
+    }
+
+    if (useBtn) {
+      useBtn.textContent = t.useCustomLabel;
+      useBtn.disabled = !tot.isValid;
+      useBtn.onclick = useCustomBouquet;
+    }
+  }
+
+  /**
+   * Render DIY Kit Teaser Band (Coming Later)
+   */
+  function renderKitTeaser() {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const band = document.getElementById('kit-teaser-band');
+    if (!band) return;
+
+    if (!siteData.store.showKitTeaser) {
+      band.style.display = 'none';
+      return;
+    }
+
+    band.style.display = 'grid';
+    setText('#kit-soon-eyebrow', t.kitSoonEyebrow);
+    setText('#kit-soon-title', t.kitSoonTitle);
+    setText('#kit-soon-body', t.kitSoonBody);
+    setText('#kit-soon-cta', t.kitSoonCta);
+    setText('#kit-soon-secondary', t.kitSoonSecondary);
+
+    const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
+    const waWaitlistMsg = currentLang === 'en'
+      ? (siteData.store.whatsappWaitlistEn || "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.")
+      : (siteData.store.whatsappWaitlistId || 'Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.');
+
+    const ctaLink = document.getElementById('kit-soon-cta');
+    if (ctaLink) {
+      ctaLink.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waWaitlistMsg)}`;
+    }
+  }
+
+  /**
+   * Render How They're Made Section
    */
   function renderHowTo(t) {
     setText('#how-eyebrow', t.howEyebrow);
@@ -421,9 +599,9 @@
         const div = document.createElement('div');
         div.className = 'step-card';
         div.innerHTML = `
-          <p class="step-kicker">${step.kicker}</p>
-          <h3 class="step-title">${step.title}</h3>
-          <p class="step-desc">${step.desc}</p>
+          <p class="step-kicker">${step[0]}</p>
+          <h3 class="step-title">${step[1]}</h3>
+          <p class="step-desc">${step[2]}</p>
         `;
         stepsEl.appendChild(div);
       });
@@ -437,10 +615,11 @@
     setText('#mat-eyebrow', t.matEyebrow);
     setText('#mat-title', t.matTitle);
     setText('#mat-body', t.matBody);
+    setText('#mat-caption', t.matCaption);
     setAttr('#material-image', 'src', siteData.images.macro);
     setAttr('#material-image', 'alt', currentLang === 'en'
-      ? 'Close-up texture of soft chenille wire stems'
-      : 'Tekstur dekat kawat bulu chenille yang lembut');
+      ? 'Close-up of chenille stems showing the soft pile over a twisted wire core'
+      : 'Tekstur dekat kawat bulu chenille memperlihatkan serat lembut pada inti kawat');
     if (siteData.images.macroSrcset) {
       setAttr('#material-image', 'srcset', siteData.images.macroSrcset);
       setAttr('#material-image', 'sizes', siteData.images.macroSizes || '(max-width: 768px) 90vw, 540px');
@@ -449,12 +628,13 @@
     const pointsEl = document.getElementById('material-points');
     if (pointsEl && t.matPoints) {
       pointsEl.innerHTML = '';
-      t.matPoints.forEach(pt => {
+      const roman = ['i', 'ii', 'iii', 'iv'];
+      t.matPoints.forEach((pt, index) => {
         const li = document.createElement('li');
         li.className = 'material-point-item';
         li.innerHTML = `
-          <span class="material-point-num">${pt.n}</span>
-          <p class="material-point-text"><strong>${pt.lead}</strong> ${pt.rest}</p>
+          <span class="material-point-num">${roman[index] || (index + 1)}</span>
+          <p class="material-point-text"><strong>${pt[0]}</strong> ${pt[1]}</p>
         `;
         pointsEl.appendChild(li);
       });
@@ -462,8 +642,7 @@
   }
 
   /**
-   * Product Preview Crossfade (Phase B)
-   * Fixed-size container, race-condition safe token, neutral fallback, 200ms ease-in-out
+   * Product Preview Crossfade
    */
   function updateSummaryPhoto(targetSrc, targetAlt) {
     const frame = document.getElementById('summary-photo-frame');
@@ -472,7 +651,6 @@
 
     if (!mainImg || !targetSrc) return;
 
-    // Same image already loaded? Update alt text only
     if (currentLoadedSrc === targetSrc) {
       mainImg.alt = targetAlt;
       if (frame) frame.classList.remove('has-error', 'is-loading');
@@ -480,7 +658,6 @@
     }
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     if (prefersReducedMotion) {
       if (frame) frame.classList.remove('is-loading', 'has-error');
       mainImg.src = targetSrc;
@@ -498,24 +675,15 @@
 
     const preloader = new Image();
     preloader.onload = () => {
-      if (requestToken !== activePreviewToken) return; // Discard obsolete load from rapid clicks
+      if (requestToken !== activePreviewToken) return;
       if (frame) frame.classList.remove('is-loading');
-
       if (prevImg && currentLoadedSrc) {
         prevImg.src = currentLoadedSrc;
       }
-
-      if (frame) frame.classList.add('is-crossfading');
       mainImg.src = targetSrc;
       mainImg.alt = targetAlt;
-
-      // Trigger reflow for transition
-      void mainImg.offsetWidth;
-
-      if (frame) frame.classList.remove('is-crossfading');
       currentLoadedSrc = targetSrc;
     };
-
     preloader.onerror = () => {
       if (requestToken !== activePreviewToken) return;
       if (frame) {
@@ -523,19 +691,16 @@
         frame.classList.add('has-error');
       }
     };
-
     preloader.src = targetSrc;
   }
 
   /**
-   * Botanical Name Caption Crossfade (Phase B Optional Detail)
-   * 180ms ease-in-out only when latin name changes
+   * Botanical Name Caption Crossfade
    */
   function updateSummaryLatin(newLatin) {
     const latinEl = document.getElementById('summary-latin');
     if (!latinEl) return;
-
-    if (currentLatinText === newLatin) return; // Keep static if unchanged (e.g. format switch)
+    if (currentLatinText === newLatin) return;
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion || !currentLatinText) {
@@ -553,174 +718,147 @@
   }
 
   /**
-   * Render Order Builder & Summary Box
+   * Render Order / Finishing Section
    */
   function renderOrderSection() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
 
     setText('#order-eyebrow', t.orderEyebrow);
     setText('#order-title', t.orderTitle);
-    setText('#step1-label', t.step1);
-    setText('#step2-label', t.step2);
-    setText('#step3-label', t.step3);
+    setText('#finish-label', t.finishLabel);
+    setText('#wrap-intro', t.wrapIntro);
+    setText('#card-label', t.cardLabel);
+    setText('#card-note-hint', t.cardNote);
     setText('#selection-label', t.selectionLabel);
     setText('#includes-label', t.includesLabel);
+    setText('#step3-label', t.continueLabel);
 
-    // Step 1: Flower chips with radiogroup semantics (preserves keyboard focus)
-    const flowerChipsEl = document.getElementById('flower-chips');
-    if (flowerChipsEl) {
-      flowerChipsEl.setAttribute('role', 'radiogroup');
-      flowerChipsEl.setAttribute('aria-label', t.step1);
-
-      const checkSvg = '<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4.5 8 10.5 2"></polyline></svg>';
-
-      const existingChips = flowerChipsEl.querySelectorAll('.chip-flower');
-      if (existingChips.length === siteData.flowerOrder.length) {
-        existingChips.forEach((btn, index) => {
-          const key = siteData.flowerOrder[index];
-          const fl = siteData.flowers[key];
-          const flTrans = fl ? (fl[currentLang] || fl.en) : null;
-          const isActive = key === selectedFlower;
-          btn.classList.toggle('active', isActive);
-          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-          if (flTrans) {
-            btn.setAttribute('aria-label', flTrans.name);
-            const nameSpan = btn.querySelector('.chip-name');
-            if (nameSpan) nameSpan.textContent = flTrans.name;
-          }
-        });
-      } else {
-        flowerChipsEl.innerHTML = '';
-        siteData.flowerOrder.forEach(key => {
-          const fl = siteData.flowers[key];
-          if (!fl) return;
-          const flTrans = fl[currentLang] || fl.en;
-          const isActive = key === selectedFlower;
-
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = `chip-flower ${isActive ? 'active' : ''}`;
-          btn.setAttribute('role', 'radio');
-          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-          btn.setAttribute('aria-label', flTrans.name);
-          btn.innerHTML = `
-            <span class="chip-dot" style="background:${fl.accent}"></span>
-            <span class="chip-name">${flTrans.name}</span>
-            <span class="chip-check" aria-hidden="true">${checkSvg}</span>
-          `;
-          btn.addEventListener('click', () => selectFlower(key));
-          flowerChipsEl.appendChild(btn);
-        });
-      }
+    // 1. Wrap colour selection chips
+    const wrapChipsEl = document.getElementById('wrap-chips');
+    if (wrapChipsEl) {
+      wrapChipsEl.innerHTML = '';
+      (siteData.wraps || []).forEach(w => {
+        const active = selectedWrap === w.key;
+        const name = t.wrapNames[w.key] || w.key;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `chip-wrap ${active ? 'active' : ''}`;
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        btn.innerHTML = `
+          <span class="wrap-swatch" style="background:${w.swatch}"></span>
+          <span>${name}</span>
+        `;
+        btn.addEventListener('click', () => selectWrap(w.key));
+        wrapChipsEl.appendChild(btn);
+      });
     }
 
-    const curFlower = siteData.flowers[selectedFlower] || siteData.flowers.Sunflower;
-    const curFlowerTrans = curFlower[currentLang] || curFlower.en;
-    const curFormatObj = t.formats.find(f => f.key === selectedFormat) || t.formats[0];
-    const optMeta = getOptionMeta(curFlower, selectedFormat);
-    const curPrice = getPriceDisplay(curFlower, selectedFormat);
-
-    // Step 2: Formats with radiogroup semantics & live transparent pricing
-    const formatCardsEl = document.getElementById('format-cards');
-    if (formatCardsEl) {
-      formatCardsEl.setAttribute('role', 'radiogroup');
-      formatCardsEl.setAttribute('aria-label', t.step2);
-
-      const checkSvg = '<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5 5 4.5 8 10.5 2"></polyline></svg>';
-
-      const existingCards = formatCardsEl.querySelectorAll('.format-card');
-      if (existingCards.length === t.formats.length) {
-        existingCards.forEach((btn, index) => {
-          const f = t.formats[index];
-          const isActive = f.key === selectedFormat;
-          btn.classList.toggle('active', isActive);
-          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-          const fPrice = getPriceDisplay(curFlower, f.key);
-          btn.setAttribute('aria-label', `${f.label} (${fPrice}): ${f.note}`);
-
-          const labelSpan = btn.querySelector('.format-label');
-          if (labelSpan) labelSpan.textContent = f.label;
-
-          const priceSpan = btn.querySelector('.format-price');
-          if (priceSpan) priceSpan.textContent = fPrice;
-
-          const noteSpan = btn.querySelector('.format-note');
-          if (noteSpan) noteSpan.textContent = f.note;
-        });
-      } else {
-        formatCardsEl.innerHTML = '';
-        t.formats.forEach(f => {
-          const isActive = f.key === selectedFormat;
-          const fPrice = getPriceDisplay(curFlower, f.key);
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = `format-card ${isActive ? 'active' : ''}`;
-          btn.setAttribute('role', 'radio');
-          btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-          btn.setAttribute('aria-label', `${f.label} (${fPrice}): ${f.note}`);
-          btn.innerHTML = `
-            <span class="format-header-line">
-              <span class="format-label">${f.label}</span>
-              <span class="format-check" aria-hidden="true">${checkSvg}</span>
-            </span>
-            <span class="format-price">${fPrice}</span>
-            <span class="format-note">${f.note}</span>
-          `;
-          btn.addEventListener('click', () => selectFormat(f.key));
-          formatCardsEl.appendChild(btn);
-        });
+    // 2. Message card textarea
+    const noteInput = document.getElementById('card-note-input');
+    if (noteInput) {
+      noteInput.placeholder = t.cardPlaceholder;
+      if (noteInput.value !== orderNote) {
+        noteInput.value = orderNote;
       }
+      noteInput.oninput = (e) => {
+        orderNote = e.target.value;
+        renderSummaryIncludes();
+        updateWhatsAppLink();
+      };
     }
 
-    // Summary Box: Photo preview with crossfade, Title, Latin caption with transition
-    updateSummaryPhoto(curFlower.photo, `${curFlowerTrans.name} — ${curFormatObj.label}`);
-    setText('#summary-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
-    updateSummaryLatin(curFlower.latin);
+    // 3. Prepare summary title, subtitle, price, photo, includes according to mode
+    let selTitle = '';
+    let selSub = '';
+    let selPrice = '';
+    let photoSrc = '';
+    let photoAlt = '';
+    let baseIncludes = [];
+
+    const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
+
+    if (orderMode === 'package') {
+      const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
+      const pkg = siteData.packages[pkgIdx];
+      selTitle = t.pkgNames[pkgIdx];
+      selSub = `${pkg.stems} ${t.stemsWord}`;
+      selPrice = formatRp(pkg.price);
+      photoSrc = pkg.photoWebp || pkg.photo;
+      photoAlt = `${selTitle} — ${pkg.stems} ${t.pkgStemLine}`;
+      baseIncludes = t.pkgIncludes.map(l => l.replace('{n}', pkg.stems));
+    } else if (orderMode === 'custom') {
+      const tot = getCustomTotals();
+      selTitle = t.customTitleShort;
+      selSub = `${tot.stems} ${t.stemsWord}`;
+      selPrice = tot.isValid ? formatRp(tot.total) : '—';
+      photoSrc = siteData.packages[1].photoWebp || siteData.packages[1].photo;
+      photoAlt = `${t.customTitleShort} — ${tot.stems} ${t.stemsWord}`;
+
+      const flowerLines = (siteData.flowerOrder || []).filter(k => (customCounts[k] || 0) > 0)
+        .map(k => {
+          const fl = siteData.flowers[k];
+          const name = fl ? (fl[currentLang] || fl.en).name : k;
+          return `${customCounts[k]} × ${name}`;
+        });
+      baseIncludes = flowerLines.concat(t.customIncludesTail);
+    } else {
+      // Default: 'stem' mode
+      const key = siteData.flowers[selectedFlower] ? selectedFlower : 'Sunflower';
+      const curFlower = siteData.flowers[key];
+      const flTrans = curFlower[currentLang] || curFlower.en;
+      selTitle = `${flTrans.name} ${t.stemSuffix}`;
+      selSub = curFlower.latin;
+      selPrice = formatRp(curFlower.stemPrice || 55000);
+      photoSrc = curFlower.photo;
+      photoAlt = `${flTrans.name} — finished stem`;
+      baseIncludes = t.stemIncludes.map(l => l.replace('{flower}', flTrans.name).replace('{size}', flTrans.size));
+    }
+
+    setText('#summary-title', selTitle);
+    updateSummaryLatin(selSub);
+    updateSummaryPhoto(photoSrc, photoAlt);
 
     // Price
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
       if (siteData.store.showPrices) {
         priceEl.style.display = 'block';
-        priceEl.textContent = curPrice;
+        priceEl.textContent = selPrice;
       } else {
         priceEl.style.display = 'none';
       }
     }
 
-    // Includes lines
-    const includesListEl = document.getElementById('summary-includes-list');
-    if (includesListEl) {
-      includesListEl.innerHTML = '';
-      const templateLines = t.includes[selectedFormat] || [];
-      const computedLines = templateLines.map(line =>
-        line.replace('{flower}', curFlowerTrans.name)
-            .replace('{size}', curFlowerTrans.size)
-            .replace('{yield}', optMeta.yield)
-      );
+    // Internal function to render summary includes list & update sticky bar
+    function renderSummaryIncludes() {
+      const includesListEl = document.getElementById('summary-includes-list');
+      if (includesListEl) {
+        includesListEl.innerHTML = '';
+        const allIncludes = [...baseIncludes];
+        allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
+        if (orderNote.trim()) {
+          allIncludes.push(`${t.cardLinePrefix}: “${orderNote.trim()}”`);
+        }
 
-      // If kit, also show yield and assembly time clearly
-      if (selectedFormat === 'Kit') {
-        const timeNote = optMeta.assemblyTime ? ` · ${optMeta.assemblyTime}` : '';
-        computedLines.push(`${t.makesPrefix} ${optMeta.yield}${timeNote} · ${curFlowerTrans.size}`);
+        allIncludes.forEach(text => {
+          const li = document.createElement('li');
+          li.className = 'summary-includes-item';
+          li.innerHTML = `<span class="bullet-dot">·</span><span>${text}</span>`;
+          includesListEl.appendChild(li);
+        });
       }
-
-      computedLines.forEach(line => {
-        const li = document.createElement('li');
-        li.className = 'summary-includes-item';
-        li.innerHTML = `<span class="bullet-dot">·</span><span>${line}</span>`;
-        includesListEl.appendChild(li);
-      });
     }
+    renderSummaryIncludes();
 
-    // Step 3: Marketplace & WhatsApp Links
+    // 4. Update Marketplace & WhatsApp Buttons
     const ch = siteData.store.channels;
     const btnTokopedia = document.getElementById('btn-tokopedia');
     const btnShopee = document.getElementById('btn-shopee');
     const btnWhatsapp = document.getElementById('btn-whatsapp');
 
-    const tokopUrl = optMeta.channels?.tokopediaUrl || siteData.store.tokopediaUrl;
-    const shopUrl = optMeta.channels?.shopeeUrl || siteData.store.shopeeUrl;
+    const tokopUrl = siteData.store.tokopediaUrl;
+    const shopUrl = siteData.store.shopeeUrl;
 
     if (btnTokopedia) {
       btnTokopedia.style.display = ch.showTokopedia ? 'flex' : 'none';
@@ -752,49 +890,49 @@
       }
     }
 
-    if (btnWhatsapp) {
+    function updateWhatsAppLink() {
+      if (!btnWhatsapp) return;
       btnWhatsapp.style.display = ch.showWhatsapp ? 'flex' : 'none';
       btnWhatsapp.classList.remove('btn-disabled');
-      const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
-      const waTpl = currentLang === 'en'
-        ? (siteData.store.whatsappTemplateEn || 'Hello! I want to order {flower} — {format} ({quantity}, {price})')
-        : (siteData.store.whatsappTemplateId || 'Halo! Saya ingin memesan {flower} — {format} ({quantity}, {price})');
 
-      const waMsg = waTpl
-        .replace('{flower}', curFlowerTrans.name)
-        .replace('{format}', curFormatObj.label)
-        .replace('{quantity}', optMeta.yield)
-        .replace('{price}', curPrice);
+      const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
+      const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
+      const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: “${orderNote.trim()}”. ` : '';
+
+      let waMsg = '';
+      if (currentLang === 'en') {
+        waMsg = `Hello Komorebi! I would like to order ${selTitle} (${selPrice}). ${wrapTxt}${cardTxt}Is it available?`;
+      } else {
+        waMsg = `Halo Komorebi! Saya ingin memesan ${selTitle} (${selPrice}). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+      }
 
       btnWhatsapp.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`;
       btnWhatsapp.querySelector('.channel-name').textContent = t.waLabel;
       btnWhatsapp.querySelector('.channel-action').textContent = t.messageLabel;
     }
+    updateWhatsAppLink();
 
-    // Dynamic order note: honest marketplace status & WhatsApp notice
+    // Order Note Notice
     const hasMarketplaceListing = Boolean(tokopUrl || shopUrl);
     const orderNoteText = hasMarketplaceListing
       ? t.orderNote
       : `${t.channelUnavailableNotice || t.orderNote} ${t.waDraftNotice || ''}`;
     setText('#order-note', orderNoteText);
 
-    // Polite live region announcement
+    // Announcer for screen readers
     const announcer = document.getElementById('order-announcer');
     if (announcer) {
-      const announceText = currentLang === 'en'
-        ? `${curFlowerTrans.name} — ${curFormatObj.label} selected. Price ${curPrice}.`
-        : `${curFlowerTrans.name} — ${curFormatObj.label} dipilih. Harga ${curPrice}.`;
-      announcer.textContent = announceText;
+      announcer.textContent = `${selTitle} — ${selPrice}.`;
     }
 
     // Update sticky mobile order bar
-    setText('#sticky-order-title', `${curFlowerTrans.name} — ${curFormatObj.label}`);
-    setText('#sticky-order-price', curPrice);
+    setText('#sticky-order-title', selTitle);
+    setText('#sticky-order-price', selPrice);
     setText('#sticky-order-cta', `${t.navOrder || 'Pesan'} →`);
   }
 
   /**
-   * Render FAQ Section (Accessible Accordion / Disclosure)
+   * Render FAQ Section (Accessible Accordion)
    */
   function renderFaq(t) {
     setText('#faq-eyebrow', t.faqEyebrow);
@@ -806,40 +944,20 @@
       t.faqs.forEach((item, index) => {
         const details = document.createElement('details');
         details.className = 'faq-item';
-        // Open the first FAQ by default for immediate context
         if (index === 0) details.open = true;
         details.innerHTML = `
           <summary class="faq-summary">
-            <h3 class="faq-question">${item.q}</h3>
+            <h3 class="faq-question">${item[0]}</h3>
             <span class="faq-icon" aria-hidden="true"></span>
           </summary>
           <div class="faq-answer-wrapper">
             <div class="faq-answer">
-              <p>${item.a}</p>
+              <p>${item[1]}</p>
             </div>
           </div>
         `;
         faqAccordion.appendChild(details);
       });
-    }
-  }
-
-  /**
-   * Render About Section
-   */
-  function renderAbout(t) {
-    setText('#about-eyebrow', t.aboutEyebrow);
-    setText('#about-lede', t.aboutLede);
-    setText('#about-body', t.aboutBody);
-    setText('#about-ig', t.aboutIg);
-    setAttr('#about-ig', 'href', siteData.store.instagramUrl || '#');
-    setAttr('#about-image', 'src', siteData.images.us);
-    setAttr('#about-image', 'alt', currentLang === 'en'
-      ? 'Handcrafting flower stems and packing kits at the workshop table'
-      : 'Proses pembuatan tangkai bunga dan pengemasan kit di meja workshop');
-    if (siteData.images.usSrcset) {
-      setAttr('#about-image', 'srcset', siteData.images.usSrcset);
-      setAttr('#about-image', 'sizes', siteData.images.usSizes || '(max-width: 768px) 90vw, 540px');
     }
   }
 
@@ -864,15 +982,13 @@
     renderHero(t);
     renderTrustBar(t);
     renderCollection(t);
-    renderKit(t);
+    renderBouquetsUI();
     renderHowTo(t);
     renderMaterial(t);
     renderOrderSection();
     renderFaq(t);
-    renderAbout(t);
     renderFooter(t);
   }
-
 
   function updateLockA11y(isLocked) {
     const mainContent = document.getElementById('main-content');
@@ -905,7 +1021,6 @@
 
     const authConfig = siteData.auth || { enabled: true, passcode: '22062024' };
 
-    // If disabled in site-content.js, unlock automatically
     if (!authConfig.enabled) {
       if (lockScreen) lockScreen.classList.add('unlocked');
       if (relockBtn) relockBtn.style.display = 'none';
@@ -913,7 +1028,6 @@
       return;
     }
 
-    // Check if previously unlocked
     try {
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) lockScreen.classList.add('unlocked');
@@ -927,7 +1041,6 @@
       updateLockA11y(false);
     }
 
-    // Form submission
     if (lockForm) {
       lockForm.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -953,7 +1066,6 @@
       });
     }
 
-    // Relock button in footer
     if (relockBtn) {
       relockBtn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -1038,10 +1150,6 @@
       cta.addEventListener('click', (e) => {
         e.preventDefault();
         scrollToSection('#order');
-        setTimeout(() => {
-          const activeChip = document.querySelector('.chip-flower.active') || document.querySelector('.chip-flower');
-          if (activeChip) activeChip.focus();
-        }, 350);
       });
     }
   }
@@ -1086,7 +1194,6 @@
       });
     }
 
-    // Escape closes mobile nav and restores focus
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && navMenu && navMenu.classList.contains('open')) {
         closeNavMenu();
@@ -1094,7 +1201,6 @@
       }
     });
 
-    // Close when clicking outside header
     document.addEventListener('click', (e) => {
       if (navMenu && navMenu.classList.contains('open')) {
         const header = document.querySelector('.site-header');
@@ -1104,14 +1210,12 @@
       }
     });
 
-    // Close when clicking nav links
     document.querySelectorAll('.nav-link, .nav-cta, .nav-cta-mobile').forEach(link => {
       link.addEventListener('click', () => {
         closeNavMenu();
       });
     });
 
-    // Brand link scroll to top
     const brandLink = document.getElementById('brand-link');
     if (brandLink) {
       brandLink.addEventListener('click', (e) => {
@@ -1125,7 +1229,6 @@
       });
     }
 
-    // FAQ Accordion smooth collapse handling
     const faqAccordion = document.getElementById('faq-accordion');
     if (faqAccordion) {
       faqAccordion.addEventListener('click', (e) => {
@@ -1135,7 +1238,7 @@
         if (!details || details.tagName !== 'DETAILS') return;
 
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (prefersReducedMotion) return; // Allow native instant behavior
+        if (prefersReducedMotion) return;
 
         if (details.open && !details.classList.contains('is-closing')) {
           e.preventDefault();
@@ -1148,13 +1251,11 @@
       });
     }
 
-    // Initialize Sticky Order Bar
     initStickyOrderBar();
   }
 
   /**
-   * Dynamic Reduced-Motion Listener (Komorebi Animation Brief)
-   * Instantly cancels active motion and reveals content if preference toggles mid-session
+   * Reduced-Motion Listener
    */
   function setupReducedMotionListener() {
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1173,10 +1274,7 @@
   }
 
   /**
-   * Section & Hero Entrances (Phase D)
-   * Elements are visible by default. .reveal-item is attached dynamically.
-   * Single observer unobserves each element once revealed.
-   * Replaced immediately on focus or anchor navigation.
+   * Section Entrances with IntersectionObserver
    */
   function initScrollReveals() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1184,7 +1282,7 @@
     if (!('IntersectionObserver' in window)) return;
 
     const targets = document.querySelectorAll(
-      '.hero-title, .hero-sub, .hero-actions, .section-header-flex, .kit-grid, .specs-card, .steps-grid, .material-figure, .material-text-col, .summary-box, .about-figure, .about-text-col, .faq-accordion, .flower-card'
+      '.hero-title, .hero-sub, .hero-actions, .section-header-flex, .category-header-row, .steps-grid, .material-figure, .material-text-col, .summary-box, .faq-accordion, .flower-card, .bouquet-card, .custom-builder-panel, .kit-teaser-band'
     );
 
     const revealObserver = new IntersectionObserver((entries) => {
@@ -1205,7 +1303,6 @@
       }
     });
 
-    // Instant reveal on keyboard focus
     document.addEventListener('focusin', (e) => {
       const parentReveal = e.target.closest('.reveal-item');
       if (parentReveal) {
@@ -1214,7 +1311,6 @@
       }
     });
 
-    // Instant reveal on anchor navigation / deep link
     function revealTargetAnchor() {
       if (window.location.hash) {
         const target = document.querySelector(window.location.hash);
@@ -1246,7 +1342,7 @@
     renderAll();
     initScrollReveals();
 
-    // Export API for Visual Editor
+    // Export API for Dev / Testing
     window.KomorebiApp = {
       getData: () => siteData,
       setData: (newData) => {
@@ -1259,11 +1355,14 @@
       reloadOriginal: () => {
         siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
         renderAll();
-      }
+      },
+      selectStem: selectStemOrder,
+      selectPackage: selectPackageOrder,
+      bumpCustom: bumpCustomCount,
+      resetCustom: resetCustomCounts
     };
   }
 
-  // Run on DOMContentLoaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

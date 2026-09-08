@@ -568,9 +568,77 @@ assert(!waBtn.classList.contains('btn-disabled'));
 const waHref = waBtn.getAttribute('href');
 assert(waHref && waHref.startsWith('https://wa.me/6281234567890?text='), 'WhatsApp link must be populated');
 const decodedWa = decodeURIComponent(waHref);
-assert(decodedWa.includes('1 × Tulip (— tangkai jadi)'), 'WhatsApp text must contain stem quantity and flower name');
+assert(decodedWa.includes('1 × Tulip — tangkai jadi'), 'WhatsApp text must contain stem quantity and flower name');
 assert(decodedWa.includes('Total Rp 50.000'), 'WhatsApp text must contain formatted total');
 assert(decodedWa.includes('belum termasuk ongkir'), 'WhatsApp text must specify shipping excluded');
+// P1-01 / P1-02: exercise production message assembly for every mode and language.
+const originalMessageData = JSON.parse(JSON.stringify(app.getData()));
+const messageCases = [
+  ['id', 'stem', 'Halo Komorebi! Saya ingin memesan 1 × Mawar — tangkai jadi — Total Rp 60.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 60.000'],
+  ['en', 'stem', 'Hello Komorebi! I would like to order 1 × Rose — finished stem — Total Rp 60.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 60.000'],
+  ['id', 'package', 'Halo Komorebi! Saya ingin memesan Buket Mini (3 tangkai) — Rp 195.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 195.000'],
+  ['en', 'package', 'Hello Komorebi! I would like to order The Posy (3 stems) — Rp 195.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 195.000'],
+  ['id', 'custom', 'Halo Komorebi! Saya ingin memesan Buket Custom (3 tangkai, estimasi Rp 205.000, belum termasuk ongkir):\n• 2 × Bunga Matahari\n• 1 × Mawar\nPembungkus: Kraft. Apakah bisa dibuatkan?', 'Rp 205.000'],
+  ['en', 'custom', 'Hello Komorebi! I would like to order a Custom Bouquet (3 stems, estimated Rp 205.000, excludes delivery fee):\n• 2 × Sunflower\n• 1 × Rose\nWrap: Kraft. Can this be arranged?', 'Rp 205.000']
+];
+const readWaMessage = () => new URL(waBtn.getAttribute('href')).searchParams.get('text');
+for (const [lang, mode, expected, total] of messageCases) {
+  app.setData(originalMessageData);
+  app.resetToInitial();
+  app.setLanguage(lang);
+  if (mode === 'stem') app.selectStem('Rose', false);
+  else if (mode === 'package') app.selectPackage(0, false);
+  else {
+    app.bumpCustom('Sunflower', 2);
+    app.bumpCustom('Rose', 1);
+    app.useCustom();
+  }
+  app.setOrderNote('');
+  assert.strictEqual(readWaMessage(), expected, `${lang}/${mode}: preserve exact message wording`);
+  assert(!/[{}]/.test(readWaMessage()), `${lang}/${mode}: empty note must leave no braces`);
+  if (mode === 'stem') {
+    assert(!/\(\s*—/.test(readWaMessage()), `${lang}: stem suffix must not be parenthesized`);
+    assert.strictEqual(summaryTitle.textContent, lang === 'id' ? 'Mawar — tangkai jadi' : 'Rose — finished stem');
+  }
+  app.setOrderNote('Untuk {Alam}');
+  assert(readWaMessage().includes('"Untuk {Alam}"'), `${lang}/${mode}: preserve greeting braces verbatim`);
+  app.setOrderNote('{total}');
+  assert(readWaMessage().includes('"{total}"'), `${lang}/${mode}: never expand greeting placeholders`);
+  assert.strictEqual(readWaMessage().split(total).length - 1, 1, `${lang}/${mode}: total appears only once`);
+
+  // Missing configuration must retain the same fallback, including literal note text.
+  const withLiteralNote = readWaMessage();
+  for (const missing of ['object', 'language', 'mode']) {
+    const fallbackData = JSON.parse(JSON.stringify(originalMessageData));
+    if (missing === 'object') delete fallbackData.store.whatsappTemplates;
+    else if (missing === 'language') delete fallbackData.store.whatsappTemplates[lang];
+    else delete fallbackData.store.whatsappTemplates[lang][mode];
+    app.setData(fallbackData);
+    assert.strictEqual(readWaMessage(), withLiteralNote, `${lang}/${mode}: missing ${missing} uses fallback`);
+  }
+}
+
+app.setData(originalMessageData);
+app.resetToInitial();
+app.setLanguage('id');
+const editedMessageData = JSON.parse(JSON.stringify(originalMessageData));
+editedMessageData.store.whatsappTemplates.id.stem = 'TESTMARKER {total}';
+app.setData(editedMessageData);
+app.selectStem('Rose', false);
+assert.strictEqual(readWaMessage(), 'TESTMARKER Rp 60.000', 'Owner template must control the produced message');
+editedMessageData.store.whatsappTemplates.id.stem = 'TESTMARKER {unknown} {total} {total} {cardInfo}';
+app.setData(editedMessageData);
+assert.strictEqual(readWaMessage(), 'TESTMARKER  Rp 60.000 Rp 60.000 ', 'Unknown keys become empty and repeated keys are filled');
+assert(!/[{}]/.test(readWaMessage()), 'Empty note leaves no template braces');
+app.setOrderNote('{total}');
+assert.strictEqual(readWaMessage(), 'TESTMARKER  Rp 60.000 Rp 60.000 Kartu ucapan: "{total}". ', 'Inserted card text is never re-scanned');
+
+// Restore the original suite's selection and note for the quantity-stepper checks.
+app.setData(originalMessageData);
+app.resetToInitial();
+app.setLanguage('id');
+app.selectStem('Tulip', false);
+app.setOrderNote(maliciousNote);
 console.log('✔ Suite 3 Passed: Tulip stem selected and correctly formatted in summary and WhatsApp URL');
 
 // ---------------------------------------------------------------------------
@@ -583,7 +651,7 @@ assert.strictEqual(summaryTitle.textContent, '3 × Tulip — tangkai jadi');
 assert.strictEqual(summaryPrice.textContent, 'Rp 150.000');
 
 const decodedWaQty = decodeURIComponent(waBtn.getAttribute('href'));
-assert(decodedWaQty.includes('3 × Tulip (— tangkai jadi) — Total Rp 150.000'));
+assert(decodedWaQty.includes('3 × Tulip — tangkai jadi — Total Rp 150.000'));
 console.log('✔ Suite 4 Passed: 3x Tulip calculated exactly to Rp 150.000 in summary and message');
 
 // ---------------------------------------------------------------------------

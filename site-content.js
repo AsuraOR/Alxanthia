@@ -37,8 +37,18 @@ window.KOMOREBI_DATA = {
     address: "",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
-    whatsappTemplateId: "Halo Komorebi! Saya ingin memesan {title} ({price}). {wrapInfo}{cardInfo}Apakah masih tersedia?",
-    whatsappTemplateEn: "Hello Komorebi! I would like to order {title} ({price}). {wrapInfo}{cardInfo}Is it available?",
+    whatsappTemplates: {
+      id: {
+        stem:    "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+        package: "Halo Komorebi! Saya ingin memesan {items} — {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+        custom:  "Halo Komorebi! Saya ingin memesan Buket Custom ({stems} tangkai, estimasi {total}, belum termasuk ongkir):\n{itemList}\n{wrapInfo}{cardInfo}Apakah bisa dibuatkan?"
+      },
+      en: {
+        stem:    "Hello Komorebi! I would like to order {items} — Total {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
+        package: "Hello Komorebi! I would like to order {items} — {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
+        custom:  "Hello Komorebi! I would like to order a Custom Bouquet ({stems} stems, estimated {total}, excludes delivery fee):\n{itemList}\n{wrapInfo}{cardInfo}Can this be arranged?"
+      }
+    },
     whatsappWaitlistId: "Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.",
     whatsappWaitlistEn: "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.",
     // Marketplace & Channel visibility toggles

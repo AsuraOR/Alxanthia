@@ -228,13 +228,23 @@ current three modes are byte-identical to today's output, except for the P1-01 f
       output, except the P1-01 dash fix.
 - [ ] Editing `whatsappTemplates.id.stem` in `site-content.js` changes the produced message with
       no `app.js` edit.
-- [ ] No decoded message contains a literal `{` or `}`.
+- [ ] With `orderNote` **empty**, no decoded message contains a literal `{` or `}`. (This catches a
+      malformed placeholder in a template — `fillTemplate`'s `\{(\w+)\}` pattern does not match
+      `{ total }` with spaces, so such a typo leaks verbatim into a customer message.)
+- [ ] With `orderNote` set to text containing braces (e.g. `Untuk {Alam}`), those braces are
+      **preserved verbatim** in the decoded message. User text is data, not template syntax.
+- [ ] Greeting-card text is never re-scanned for placeholders: with `orderNote` set to `{total}`,
+      the decoded message contains the literal string `{total}` and not the order total.
 - [ ] 15/15 suites still pass.
 
 **Required tests.** Integration, via `window.KomorebiApp`. (a) For each mode × language assert the
 decoded href contains the expected substrings. (b) Call `setData()` with a clone whose
 `whatsappTemplates.id.stem` is `"TESTMARKER {total}"`, select a stem, assert the href contains
-`TESTMARKER Rp` — this proves the config is actually read. (c) Assert no href contains `{`. Do not
+`TESTMARKER Rp` — this proves the config is actually read. (c) With `setOrderNote('')`, assert no
+href contains `{` — this catches a malformed placeholder in a template. (d) With
+`setOrderNote('Untuk {Alam}')`, assert the href contains the literal `Untuk {Alam}`. (e) With
+`setOrderNote('{total}')`, assert the href contains the literal `{total}` and does **not** contain
+the order total twice — greeting-card text must never be re-scanned as template syntax. Do not
 reimplement `fillTemplate` in the test.
 
 **Manual verification.** 1) Edit `whatsappTemplates.id.stem`, prepend `HALO TEST `. 2) Reload,

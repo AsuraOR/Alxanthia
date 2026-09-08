@@ -2,6 +2,14 @@
 
 **Audited:** 2026-09-08 · **Repo state:** branch `claude/website-ui-ux-audit-9o3uso`, base `main@1f6a9ba`
 **Implementation model:** any capable coding model (spec is model-agnostic) · **Author:** senior audit pass
+> **Status as of `main@26be1d6` (2026-09-08).** PR #2 implemented Tier 1 and Tier 2 of the
+> companion brief *before* this document was written; this document was authored on a branch based
+> on the older `main` and therefore restated several already-fixed items as open work. Tasks
+> re-measured against current `main` carry an **audit-correction** note — P1-11 and P2-01 are done;
+> P1-09 and P1-10 are rescoped to what actually still fails. P1-01 and P1-02 shipped in PR #4.
+> Phase 1's cart tasks (P1-03…P1-08) were never implemented and stand as written.
+> **Re-measure before starting any task; do not trust this document's line numbers.**
+
 **Companion doc:** `revisions/ui-ux-audit-2026-09.md` (UI/UX findings, Tier 1–3). This document
 supersedes it for implementation purposes and restates every task in executable form.
 
@@ -636,87 +644,116 @@ order-level.
 
 ## 6. Phase 2 — Core UX and accessibility
 
-### P1-09 · WCAG AA contrast failures
+### P1-09 · WCAG AA contrast failures — RESCOPED against main@26be1d6
 
-**Problem and evidence.** Measured against each element's resolved background:
+> **Audit correction.** The four selectors originally listed here were fixed by PR #2 before this
+> document was written. Re-measured against `main@26be1d6` on 2026-09-08: three now pass and are
+> **out of scope**. Two failures remain, one of them not in the original table.
 
-| Selector | Location | Measured | Required |
+**Already fixed — do not touch:** `.btn-use-custom:disabled` 5.27:1 · `.btn-channel .channel-name`
+5.62:1 · `.mkt-active-tag` 5.40:1.
+
+**Problem and evidence.** Two text nodes still fail, measured at 1440px **after scrolling the order
+section into view**. The section-reveal animation starts ancestors at `opacity: 0`, so measuring
+before reveal yields a meaningless result — scroll first, then measure.
+
+| Selector | Colour ratio | Effective ratio | Cause |
 |---|---|---|---|
-| `.btn-use-custom:disabled` | `styles.css:1551` | **2.46:1** | 4.5 |
-| `.btn-channel .channel-name` | `styles.css:2101` | 4.45:1 | 4.5 |
-| `.btn-channel .channel-action` | `styles.css:2119` | 4.23:1 | 4.5 |
-| `.mkt-active-tag` | `styles.css:2301` | 4.13:1 | 4.5 |
+| `.btn-channel .channel-action` | 5.62:1 | **4.09:1** | carries `opacity: 0.85`, compositing the text toward its background |
+| `.btn-channel .channel-sub` | 4.45:1 | **4.45:1** | foreground marginally too light; omitted from the original table |
 
-The disabled button is `#FAF6EE` on `#A79E8C` **compounded by `opacity: 0.8`** — that opacity is
-what drives it to 2.46. It is the first thing a visitor sees on the custom builder's primary CTA.
+`.channel-action` is the same failure mode as the original disabled button: a colour that passes on
+paper, undermined by an `opacity` applied over it. Fixing the colour alone did not fix the rendered
+result.
 
-**Required behavior.** Every text node meets 4.5:1 (3:1 for ≥24px, or ≥18.66px bold).
+**Required behavior.** Both selectors meet 4.5:1 **as rendered**, with element and ancestor opacity
+composited in.
 
 **Files to change.** `styles.css` only.
 
 **Implementation instructions.**
-1. `.btn-use-custom:disabled` (`:1551`): remove `opacity: 0.8`; change `background` to `#6E6656`
-   (the existing `--text-muted` value), keeping `color: var(--bg-main)`. That pair measures
-   ≈5.3:1. Keep `cursor: not-allowed`.
-2. For the three 4.1–4.5 rows, darken the **foreground** only. Do not introduce new hex values —
-   use `var(--text-dark)` for `.channel-name`, and darken `--accent-ochre` usages by switching
-   those two rules to a new token `--accent-ochre-strong: #7A5220` added to `:root`
-   (`styles.css:5`).
-3. Do not alter existing `:root` palette values — they already pass (see §3).
+1. `.btn-channel .channel-action`: remove the `opacity` declaration. If a muted appearance is
+   wanted, express it with a lighter colour that still measures ≥4.5:1 composited — never with
+   `opacity` over an already-marginal pair.
+2. `.btn-channel .channel-sub`: darken the foreground one step. Reuse an existing `:root` token
+   that measures ≥4.5:1 on the channel-card background rather than introducing a new hex value.
+3. Do not alter `:root` palette values, and do not touch the three selectors listed as already
+   fixed.
 
 **Acceptance criteria.**
-- [ ] All four selectors measure ≥4.5:1 against their rendered background.
-- [ ] No `opacity` remains on `.btn-use-custom:disabled`.
-- [ ] Existing `:root` token values are unchanged except the one added token.
-- [ ] The disabled button remains visually distinguishable from its enabled state.
-- [ ] 15/15 suites still pass.
+- [ ] `.channel-action` and `.channel-sub` each measure ≥4.5:1 **with opacity composited**.
+- [ ] No `opacity` declaration remains on `.btn-channel .channel-action`.
+- [ ] The three already-passing selectors are unchanged and still ≥4.5:1.
+- [ ] A full-page sweep at 1440px, taken **after** scrolling every section into view, reports zero
+      text nodes below their required ratio.
+- [ ] Suite still passes at its current count.
 
-**Required tests.** Browser/manual — automated contrast assertions are out of scope for this
-harness. Use the DOM sweep in §2 to re-measure.
+**Required tests.** Browser/manual. The sweep must composite opacity — multiply each element's
+opacity up its ancestor chain and blend the foreground toward the background before computing the
+ratio, or the `.channel-action` class of failure stays invisible.
 
-**Manual verification.** 1) Load with an empty custom builder. 2) Confirm "Lanjut ke sentuhan
-akhir" is legible. 3) Add 3 stems; confirm the enabled state still reads as clearly enabled.
+**Manual verification.** 1) Serve, unlock, scroll to the order section. 2) Confirm the WhatsApp and
+Shopee button sub-labels are legible. 3) Confirm the Shopee disabled state still reads as disabled.
 
-**Do not change.** `:root` palette values; the disabled-state *logic*.
+**Do not change.** `:root` palette values; the three already-fixed selectors; disabled-state logic.
 
 **Dependencies.** None.
 
 ---
 
-### P1-10 · Tap targets below 44px
+### P1-10 · Tap targets below 44px — RESCOPED against main@26be1d6
 
-**Problem and evidence.** Measured at 390px: `.btn-edit-selection` (`styles.css:1894`) is
-127×**32** — it sets `min-height: 32px` explicitly. `.btn-toggle-custom` (`styles.css:1270`,
-mobile override `:3135`) is 212×**38**. Every other interactive element measured ≥44px.
+> **Audit correction.** Both originally-named controls were fixed by PR #2 and now measure ≥44px.
+> PR #2's footer rebuild (commit `8f8a0e9`) introduced **five new links at 16px height**. This task
+> is now about those.
 
-**Required behavior.** No interactive element is below 44×44 CSS px at 390px.
+**Already fixed — do not touch:** `.btn-edit-selection`, `.btn-toggle-custom`.
+
+**Problem and evidence.** Bounding-box sweep at 390px on `main@26be1d6` returns five failures, all
+footer links, all 16px tall: "WhatsApp" (65×16), "Instagram" (62×16), "Pengiriman & perawatan"
+(153×16), "Cara pesan" (72×16), "Shopee (segera hadir)" (139×16).
+
+These did not exist at the time of the original audit — the footer then was a single 105px line
+with a different link set. This is a regression introduced alongside a genuine improvement.
+
+**Required behavior.** Every footer link presents a tap target at least 44px tall at 390px.
 
 **Files to change.** `styles.css` only.
 
 **Implementation instructions.**
-1. `.btn-edit-selection`: change `min-height: 32px` → `44px`; adjust `padding` to `8px 12px` so the
-   label stays vertically centred.
-2. `.btn-toggle-custom`: the base rule already declares `min-height: 48px`; the mobile override at
-   `:3135` lets padding collapse it. Add `min-height: 48px` to the override.
-3. Do not scale the font size here — that is P3-01.
+1. Give the footer link elements `display: inline-flex; align-items: center; min-height: 44px;`.
+   Do **not** add vertical padding to a still-inline element — padding on an inline box does not
+   grow its hit area.
+2. Adjust the footer row `gap` so the taller targets do not visually double the footer's height at
+   390px. Reducing the gap is preferred over shrinking the target.
+3. Do not change the footer's link set, order, wording, or colours — that structure is PR #2's
+   deliberate work (T2-15).
 
 **Acceptance criteria.**
-- [ ] A bounding-box sweep at 390px reports no interactive element with width or height < 44.
-- [ ] Neither button's label wraps to a second line at 320px.
-- [ ] 15/15 suites still pass.
+- [ ] A bounding-box sweep at 390px reports **zero** interactive elements below 44px in either
+      dimension.
+- [ ] The two previously-fixed controls remain ≥44px.
+- [ ] No footer link label wraps to a second line at 320px.
+- [ ] Footer link text, order and colours are unchanged.
+- [ ] Suite still passes at its current count.
 
-**Required tests.** Browser/manual sweep (script in §2).
+**Required tests.** Browser/manual sweep at 320px and 390px.
 
-**Manual verification.** At 390px, confirm both controls are comfortably tappable and their labels
-are not clipped.
+**Manual verification.** At 390px, tap each footer link and confirm it is comfortably hittable, and
+that the footer has not grown disproportionately tall.
 
-**Do not change.** Button colours or typography.
+**Do not change.** Footer content, link order, or colours; the desktop footer layout at 1440px.
 
 **Dependencies.** None.
 
 ---
 
-### P2-01 · Heading order violation
+### P2-01 · Heading order violation — ALREADY SATISFIED on main@26be1d6
+
+> **Audit correction.** Fixed by PR #2. The curtain wordmark is already `<p class="lock-brand">`,
+> and a DOM sweep on `main@26be1d6` returns `H1: Bunga yang tak pernah layu…` as the first heading
+> in document order. **No work remains. Do not re-implement this task.** Retained below for the
+> record.
 
 **Problem and evidence.** `index.html:337` is `<h2 class="lock-brand">Komorebi</h2>` inside the
 staging curtain. It precedes the page `<h1>` at `index.html:412`, so the first heading a screen
@@ -784,7 +821,13 @@ sensible announcement each time.
 
 ## 7. Phase 3 — Responsive behavior and presentation
 
-### P1-11 · Horizontal overflow at 320px
+### P1-11 · Horizontal overflow at 320px — ALREADY SATISFIED on main@26be1d6
+
+> **Audit correction.** Fixed by PR #2. Measured on `main@26be1d6`: overflow delta is **0** at 320,
+> 360 and 390px, and `.nav-toggle`'s right edge is 306px inside a 320px viewport. The narrow-screen
+> wordmark is 17px where this task prescribed 18px — that is implementation detail, 17px is strictly
+> safer, and the acceptance criteria are met. **No work remains. Do not re-implement, and do not
+> change 17px to 18px.** Retained below for the record.
 
 **Problem and evidence.** At a 320px viewport `document.documentElement.scrollWidth` is **325** vs
 `clientWidth` **320**. `.header-actions-mobile` and `.nav-toggle` both report `right: 325`. The
@@ -1090,7 +1133,7 @@ Each batch leaves the site in a working, shippable state.
 | Batch | Tasks | Rationale |
 |---|---|---|
 | **A** | P1-01, P1-02 | Isolated ordering-correctness fixes. Must precede cart work — the cart changes the message shape. |
-| **B** | P1-09, P1-10, P1-11, P2-01 | Pure CSS/HTML. Zero interaction with Phase 1 logic; safe to land any time. |
+| **B** | P1-09, P1-10 (**rescoped**) | Pure CSS. P1-11 and P2-01 are already satisfied on `main@26be1d6` — skip them. P1-09 and P1-10 now target different selectors than originally written; read their audit-correction notes first. |
 | **C** | P1-03 | Cart model + pricing under test. **No visible change.** |
 | **D** | P1-04, P1-05 | Route selections through the cart; unify commit behaviour. Still one line max. |
 | **E** | P1-06, P2-05 | Multi-item cart + test coverage. **Land together** — new DOM breaks the stub otherwise. |

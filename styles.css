@@ -195,6 +195,8 @@ button {
   text-decoration: none;
   color: var(--text-dark);
   min-height: 44px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .brand-logo {
@@ -210,6 +212,10 @@ button {
   font-weight: 500;
   text-transform: uppercase;
   color: var(--text-dark);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand-est {
@@ -223,6 +229,7 @@ button {
 /* Mobile Fast Actions (Hidden on Desktop) */
 .header-actions-mobile {
   display: none;
+  flex-shrink: 0;
 }
 
 .nav-cta-mobile {
@@ -1306,7 +1313,7 @@ body.nav-open {
   color: var(--text-muted);
   border: 1px solid var(--border-medium);
   box-shadow: none;
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 16px;
   margin-top: 14px;
   font-size: 11px;
@@ -1549,9 +1556,8 @@ body.nav-open {
 }
 
 .btn-use-custom:disabled {
-  background: #A79E8C;
+  background: var(--text-muted);
   cursor: not-allowed;
-  opacity: 0.8;
 }
 
 /* ==========================================================================
@@ -1892,6 +1898,9 @@ body.nav-open {
 }
 
 .btn-edit-selection {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -1902,7 +1911,7 @@ body.nav-open {
   border-radius: 0;
   padding: 4px 10px;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 44px;
   transition: background-color var(--motion-duration-btn) ease, color var(--motion-duration-btn) ease;
 }
 
@@ -2303,7 +2312,7 @@ body.nav-open {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #D34324;
+  color: #B23A1E;
   background: #FDF1ED;
   padding: 2px 7px;
   border-radius: 0;
@@ -2318,10 +2327,10 @@ body.nav-open {
 }
 
 .btn-channel.btn-disabled .channel-name {
-  color: #6E6656;
+  color: var(--text-body);
 }
 .btn-channel.btn-disabled .channel-action {
-  color: var(--accent-ochre);
+  color: var(--text-body);
   font-weight: 600;
 }
 .btn-channel.btn-disabled:hover {
@@ -2557,8 +2566,10 @@ details.is-closing > .faq-answer-wrapper {
 
 .footer-links .btn-relock {
   background: transparent;
-  border-bottom: 1px solid var(--border-medium);
-  padding: 0 0 1px;
+  border-bottom: 1px dashed var(--border-medium);
+  border-left: 1px solid var(--border-light);
+  padding: 0 0 1px 16px;
+  margin-left: 4px;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
@@ -3270,6 +3281,15 @@ details.is-closing > .faq-answer-wrapper {
 
 /* Breakpoint: Narrow Screens (<= 360px) Single Column Fallback */
 @media (max-width: 360px) {
+  .header-inner {
+    padding: 0 14px;
+  }
+
+  .brand-name {
+    font-size: 17px;
+    letter-spacing: 0.12em;
+  }
+
   .collection-grid,
   .packages-grid {
     grid-template-columns: 1fr !important;

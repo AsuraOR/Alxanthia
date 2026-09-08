@@ -282,7 +282,7 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
       pkgBlurbs: [
-        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio (draf). Pas untuk meja dan nakas.",
+        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio. Pas untuk meja dan nakas.",
         "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik studio.",
         "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
         "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
@@ -477,7 +477,7 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
       pkgBlurbs: [
-        "Three stems — choice of single flower variety or studio mix (draft). Ideal for desk and bedside display.",
+        "Three stems — choice of single flower variety or studio mix. Ideal for desk and bedside display.",
         "Five stems arranged with gentle height at the centre. A balanced classic studio bouquet.",
         "Nine stems in a harmonious studio mix. 10% volume savings applied.",
         "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."

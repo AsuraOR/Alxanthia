@@ -44,18 +44,100 @@
   }
 
   /**
+   * Channel readiness helpers (centralized source of truth - A1)
+   */
+  function isWhatsAppReady() {
+    if (!siteData || !siteData.store) return false;
+    const isShown = siteData.store.channels?.showWhatsapp !== false;
+    const rawNum = String(siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
+    return isShown && rawNum.length >= 7;
+  }
+
+  function isShopeeReady() {
+    if (!siteData || !siteData.store) return false;
+    const isShown = siteData.store.channels?.showShopee !== false;
+    const url = String(siteData.store.shopeeUrl || '').trim();
+    return isShown && !!url && url !== '#' && url !== 'https://shopee.co.id';
+  }
+
+  /**
+   * Dynamic rule interpolation helper (A2)
+   */
+  function interpolateRules(template) {
+    if (!template || typeof template !== 'string') return template;
+    const minStems = siteData?.minStems ?? 3;
+    const bulkFrom = siteData?.bulkFrom ?? 9;
+    const bulkPercent = Math.round((siteData?.bulkRate ?? 0.10) * 100);
+    const wrapFeeFormatted = formatRp(siteData?.wrapFee ?? 35000);
+    return template
+      .replace(/\{minStems\}/g, minStems)
+      .replace(/\{bulkFrom\}/g, bulkFrom)
+      .replace(/\{bulkPercent\}/g, bulkPercent)
+      .replace(/\{wrapFee\}/g, wrapFeeFormatted);
+  }
+
+  /**
+   * Apply language metadata to document (title, description, lang attribute - A4)
+   */
+  function applyLanguageMetadata(lang) {
+    try {
+      if (document.documentElement) {
+        document.documentElement.lang = lang;
+      }
+    } catch (e) {}
+
+    const isEn = lang === 'en';
+    const title = isEn
+      ? 'Komorebi — Finished Chenille Stem Flowers & Handcrafted Bouquets'
+      : 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets';
+    const desc = isEn
+      ? 'Chenille stem botanical flowers that never wilt: Sunflower, Rose, Tulip, and Gerbera. Handcrafted ready-to-display stems and bouquets.'
+      : 'Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang.';
+    const ogTitle = isEn
+      ? 'Komorebi — Handcrafted Chenille Stem Flowers & Bouquets'
+      : 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille';
+    const ogDesc = isEn
+      ? 'Flowers that never wilt — handcrafted by us for you. Sunflower, Rose, Tulip, and Gerbera.'
+      : 'Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera.';
+
+    document.title = title;
+
+    const setMetaContent = (sel, val) => {
+      const el = document.querySelector(sel);
+      if (el) el.setAttribute('content', val);
+    };
+
+    setMetaContent('meta[name="description"]', desc);
+    setMetaContent('meta[property="og:title"]', ogTitle);
+    setMetaContent('meta[property="og:description"]', ogDesc);
+    setMetaContent('meta[name="twitter:title"]', ogTitle);
+    setMetaContent('meta[name="twitter:description"]', ogDesc);
+  }
+
+  /**
    * Initialize language from localStorage or default to 'id'
    */
   function initLang() {
     try {
-      const saved = localStorage.getItem(LANG_KEY);
-      if (saved === 'id' || saved === 'en') {
-        currentLang = saved;
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLang = urlParams.get('lang');
+        if (urlLang === 'id' || urlLang === 'en') {
+          currentLang = urlLang;
+        } else {
+          const saved = localStorage.getItem(LANG_KEY);
+          if (saved === 'id' || saved === 'en') {
+            currentLang = saved;
+          }
+        }
+      } else {
+        const saved = localStorage.getItem(LANG_KEY);
+        if (saved === 'id' || saved === 'en') {
+          currentLang = saved;
+        }
       }
     } catch (e) {}
-    try {
-      document.documentElement.lang = currentLang;
-    } catch (e) {}
+    applyLanguageMetadata(currentLang);
   }
 
   /**
@@ -65,25 +147,10 @@
     if (lang !== 'id' && lang !== 'en') return;
     currentLang = lang;
     try {
-      document.documentElement.lang = lang;
       localStorage.setItem(LANG_KEY, lang);
     } catch (e) {}
 
-    // Update document title and meta description
-    if (lang === 'en') {
-      document.title = 'Komorebi — Finished Chenille Stem Flowers & Handcrafted Bouquets';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'Chenille stem botanical flowers that never wilt: Sunflower, Rose, Tulip, and Gerbera. Handcrafted ready-to-display stems and bouquets.');
-      }
-    } else {
-      document.title = 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang.');
-      }
-    }
-
+    applyLanguageMetadata(lang);
     renderAll();
   }
 
@@ -125,7 +192,7 @@
   /**
    * Smoothly scroll to in-page section with sticky header offset compensation
    */
-  function scrollToSection(selector) {
+  function scrollToSection(selector, highlightTargetSelector = null) {
     const target = typeof selector === 'string' ? document.querySelector(selector) : selector;
     if (!target) return;
     const header = document.querySelector('.site-header');
@@ -136,6 +203,22 @@
       top: Math.max(0, targetY),
       behavior: prefersReducedMotion ? 'auto' : 'smooth'
     });
+
+    if (highlightTargetSelector) {
+      const hlTarget = typeof highlightTargetSelector === 'string'
+        ? document.querySelector(highlightTargetSelector)
+        : highlightTargetSelector;
+      if (hlTarget) {
+        hlTarget.classList.remove('section-highlight');
+        if (typeof hlTarget.offsetWidth === 'number') {
+          void hlTarget.offsetWidth;
+        }
+        hlTarget.classList.add('section-highlight');
+        setTimeout(() => {
+          hlTarget.classList.remove('section-highlight');
+        }, 1400);
+      }
+    }
   }
 
   /**
@@ -150,7 +233,19 @@
     renderBouquetsUI();
     renderOrderSection();
     if (scroll) {
-      scrollToSection('#order');
+      scrollToSection('#order', '.order-controls-col');
+      const finishLabel = document.getElementById('finish-label');
+      if (finishLabel) {
+        finishLabel.focus({ preventScroll: true });
+        finishLabel.classList.remove('finish-label-pulse');
+        if (typeof finishLabel.offsetWidth === 'number') {
+          void finishLabel.offsetWidth;
+        }
+        finishLabel.classList.add('finish-label-pulse');
+        setTimeout(() => {
+          finishLabel.classList.remove('finish-label-pulse');
+        }, 1200);
+      }
     }
   }
 
@@ -193,14 +288,30 @@
   /**
    * Order action: Select a bouquet package
    */
-  function selectPackageOrder(pkgIndex, scroll = false) {
+  function selectPackageOrder(pkgIndex, scroll = false, restoreFocus = true) {
     orderMode = 'package';
     hasUserSelected = true;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
     renderBouquetsUI();
     renderOrderSection();
+    if (restoreFocus) {
+      const activeBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
+      if (activeBtn) activeBtn.focus({ preventScroll: true });
+    }
     if (scroll) {
-      scrollToSection('#order');
+      scrollToSection('#order', '.order-controls-col');
+      const finishLabel = document.getElementById('finish-label');
+      if (finishLabel) {
+        finishLabel.focus({ preventScroll: true });
+        finishLabel.classList.remove('finish-label-pulse');
+        if (typeof finishLabel.offsetWidth === 'number') {
+          void finishLabel.offsetWidth;
+        }
+        finishLabel.classList.add('finish-label-pulse');
+        setTimeout(() => {
+          finishLabel.classList.remove('finish-label-pulse');
+        }, 1200);
+      }
     }
   }
 
@@ -214,9 +325,19 @@
       hasUserSelected = true;
       renderBouquetsUI();
       renderOrderSection();
-      scrollToSection('#order');
+      scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
-      if (finishLabel) finishLabel.focus();
+      if (finishLabel) {
+        finishLabel.focus({ preventScroll: true });
+        finishLabel.classList.remove('finish-label-pulse');
+        if (typeof finishLabel.offsetWidth === 'number') {
+          void finishLabel.offsetWidth;
+        }
+        finishLabel.classList.add('finish-label-pulse');
+        setTimeout(() => {
+          finishLabel.classList.remove('finish-label-pulse');
+        }, 1200);
+      }
     }
   }
 
@@ -374,6 +495,70 @@
   }
 
   /**
+   * Category Navigation Filter
+   */
+  let activeCategory = 'all'; // 'all' | 'stems' | 'bouquets' | 'custom'
+
+  function setCategory(cat, shouldScroll = true) {
+    activeCategory = cat || 'all';
+    const tabs = document.querySelectorAll('.category-tab');
+    tabs.forEach(tab => {
+      const isCur = tab.getAttribute('data-category') === activeCategory;
+      tab.classList.toggle('active', isCur);
+      tab.setAttribute('aria-pressed', isCur ? 'true' : 'false');
+    });
+
+    const colEl = document.getElementById('collection');
+    const bouqEl = document.getElementById('bouquets');
+    const customEl = document.getElementById('custom-builder');
+    const pkgsGrid = document.getElementById('packages-grid');
+    const catTwoHeader = document.querySelector('#bouquets .category-header-row');
+
+    if (activeCategory === 'stems') {
+      if (colEl) colEl.style.display = '';
+      if (bouqEl) bouqEl.style.display = 'none';
+    } else if (activeCategory === 'bouquets') {
+      if (colEl) colEl.style.display = 'none';
+      if (bouqEl) bouqEl.style.display = '';
+      if (catTwoHeader) catTwoHeader.style.display = '';
+      if (pkgsGrid) pkgsGrid.style.display = '';
+      if (customEl) customEl.style.display = 'none';
+    } else if (activeCategory === 'custom') {
+      if (colEl) colEl.style.display = 'none';
+      if (bouqEl) bouqEl.style.display = '';
+      if (catTwoHeader) catTwoHeader.style.display = 'none';
+      if (pkgsGrid) pkgsGrid.style.display = 'none';
+      if (customEl) customEl.style.display = '';
+    } else {
+      // 'all'
+      if (colEl) colEl.style.display = '';
+      if (bouqEl) bouqEl.style.display = '';
+      if (catTwoHeader) catTwoHeader.style.display = '';
+      if (pkgsGrid) pkgsGrid.style.display = '';
+      if (customEl) customEl.style.display = '';
+    }
+
+    if (shouldScroll && typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      const navEl = document.getElementById('category-filter-bar') || document.getElementById('category-nav');
+      if (navEl && typeof navEl.getBoundingClientRect === 'function') {
+        const header = document.querySelector('.site-header');
+        const headerHeight = (header && typeof header.getBoundingClientRect === 'function') ? header.getBoundingClientRect().height : 68;
+        const rect = navEl.getBoundingClientRect();
+        if (rect.top < 0 || rect.top > headerHeight + 120) {
+          scrollToSection(navEl);
+        }
+      }
+    }
+  }
+
+  function renderCategoryNav(t) {
+    setText('#cat-tab-all', t.categoryAll || (currentLang === 'en' ? 'All' : 'Semua'));
+    setText('#cat-tab-stems', t.categoryStems || (currentLang === 'en' ? 'Finished Stems' : 'Bunga Jadi'));
+    setText('#cat-tab-bouquets', t.categoryBouquets || (currentLang === 'en' ? 'Bouquets' : 'Paket Buket'));
+    setText('#cat-tab-custom', t.categoryCustom || (currentLang === 'en' ? 'Custom Mix' : 'Buket Custom'));
+  }
+
+  /**
    * Render Hero Section
    */
   function renderHero(t) {
@@ -446,21 +631,32 @@
       const card = document.createElement('article');
       card.className = 'flower-card';
       const singleNoteHtml = trans.singleNote
-        ? `<p class="flower-single-note">${trans.singleNote}</p>`
+        ? `<div class="flower-single-note">
+            <svg class="note-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.3A5.7 5.7 0 1 1 2.3 8 5.7 5.7 0 0 1 8 2.3zm0 2.7a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8zm-1 3.2h2v4.8H7V8.2z"/>
+            </svg>
+            <span>${trans.singleNote}</span>
+          </div>`
+        : '';
+      const photoBadgeHtml = trans.singleNote
+        ? `<span class="flower-photo-pill">${currentLang === 'en' ? 'Photo: 3 colors' : 'Foto: 3 varian'}</span>`
         : '';
 
       card.innerHTML = `
         <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
+          ${photoBadgeHtml}
         </div>
         <div class="flower-info">
           <h4 class="flower-name">${trans.name}</h4>
           <p class="flower-latin">${flower.latin}</p>
           <p class="flower-blurb">${trans.blurb}</p>
-          <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
-          ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
-          ${singleNoteHtml}
+          <div class="flower-meta-block">
+            <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
+            ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
+            ${singleNoteHtml}
+          </div>
           <div class="flower-actions-row">
             <button type="button" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
               ${t.orderStemLabel}
@@ -531,17 +727,102 @@
 
     const grid = document.getElementById('packages-grid');
     if (!grid) return;
+
+    // If cards already exist for current language, perform smooth in-place update with animations!
+    const existingCards = grid.querySelectorAll('.bouquet-card');
+    const expectedCount = (siteData.packages || []).length;
+    if (existingCards.length === expectedCount && existingCards[0].getAttribute('data-lang') === currentLang) {
+      existingCards.forEach((card, index) => {
+        const active = orderMode === 'package' && index === selectedPackage;
+        const wasActive = card.classList.contains('active');
+
+        if (active) {
+          card.classList.add('active');
+          if (!wasActive) {
+            card.classList.remove('bouquet-card-selected-pop');
+            if (typeof card.offsetWidth === 'number') {
+              void card.offsetWidth;
+            }
+            card.classList.add('bouquet-card-selected-pop');
+            setTimeout(() => {
+              card.classList.remove('bouquet-card-selected-pop');
+            }, 500);
+          }
+        } else {
+          card.classList.remove('active');
+          card.classList.remove('bouquet-card-selected-pop');
+        }
+
+        const chooseBtn = card.querySelector('.btn-choose-bouquet');
+        if (chooseBtn) {
+          chooseBtn.textContent = active ? t.pkgBtnActive : t.pkgBtn;
+          chooseBtn.classList.toggle('is-active', active);
+          if (active && !wasActive) {
+            chooseBtn.classList.remove('is-active-pop');
+            if (typeof chooseBtn.offsetWidth === 'number') {
+              void chooseBtn.offsetWidth;
+            }
+            chooseBtn.classList.add('is-active-pop');
+            setTimeout(() => {
+              chooseBtn.classList.remove('is-active-pop');
+            }, 500);
+          } else if (!active) {
+            chooseBtn.classList.remove('is-active-pop');
+          }
+        }
+
+        const actionsCol = card.querySelector('.pkg-actions-col');
+        let contBtn = card.querySelector('.btn-pkg-continue');
+        if (active) {
+          if (!contBtn && actionsCol) {
+            contBtn = document.createElement('button');
+            contBtn.type = 'button';
+            contBtn.className = 'btn-pkg-continue';
+            contBtn.setAttribute('data-index', String(index));
+            contBtn.textContent = t.pkgContinueBtn || 'Lanjut ke sentuhan akhir ↓';
+            contBtn.addEventListener('click', () => {
+              scrollToSection('#order', '.order-controls-col');
+              const finishLabel = document.getElementById('finish-label');
+              if (finishLabel) {
+                finishLabel.focus({ preventScroll: true });
+                finishLabel.classList.remove('finish-label-pulse');
+                if (typeof finishLabel.offsetWidth === 'number') {
+                  void finishLabel.offsetWidth;
+                }
+                finishLabel.classList.add('finish-label-pulse');
+                setTimeout(() => {
+                  finishLabel.classList.remove('finish-label-pulse');
+                }, 1200);
+              }
+            });
+            actionsCol.appendChild(contBtn);
+          }
+        } else {
+          if (contBtn) {
+            contBtn.remove();
+          }
+        }
+      });
+
+      renderCustomBuilder();
+      renderKitTeaser();
+      return;
+    }
+
     grid.innerHTML = '';
 
     (siteData.packages || []).forEach((pkg, index) => {
       const active = orderMode === 'package' && index === selectedPackage;
+      const isPopular = index === 1; // Handful / 5-stem package is classic studio favorite
       const name = t.pkgNames[index] || `Package ${index + 1}`;
       const blurb = t.pkgBlurbs[index] || '';
       const priceStr = formatRp(pkg.price);
       const card = document.createElement('article');
-      card.className = `bouquet-card ${active ? 'active' : ''}`;
+      card.setAttribute('data-lang', currentLang);
+      card.className = `bouquet-card ${active ? 'active' : ''} ${isPopular ? 'popular-card' : ''}`;
       card.innerHTML = `
         <div class="bouquet-photo-wrapper">
+          ${isPopular ? `<span class="pkg-popular-badge">${t.pkgFavoriteTag || 'Favorit Studio'}</span>` : ''}
           <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
         </div>
         <div class="bouquet-info">
@@ -569,16 +850,26 @@
       const chooseBtn = card.querySelector('.btn-choose-bouquet');
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => {
-          selectPackageOrder(index, false);
+          selectPackageOrder(index, false, true);
         });
       }
 
       const contBtn = card.querySelector('.btn-pkg-continue');
       if (contBtn) {
         contBtn.addEventListener('click', () => {
-          scrollToSection('#order');
+          scrollToSection('#order', '.order-controls-col');
           const finishLabel = document.getElementById('finish-label');
-          if (finishLabel) finishLabel.focus();
+          if (finishLabel) {
+            finishLabel.focus({ preventScroll: true });
+            finishLabel.classList.remove('finish-label-pulse');
+            if (typeof finishLabel.offsetWidth === 'number') {
+              void finishLabel.offsetWidth;
+            }
+            finishLabel.classList.add('finish-label-pulse');
+            setTimeout(() => {
+              finishLabel.classList.remove('finish-label-pulse');
+            }, 1200);
+          }
         });
       }
 
@@ -598,9 +889,18 @@
 
     setText('#custom-eyebrow', t.customEyebrow);
     setText('#custom-title', t.customTitle);
-    setText('#custom-intro', t.customIntro);
+    setText('#custom-intro', interpolateRules(t.customIntro));
     setText('#custom-pick-label', t.customPickLabel);
     setText('#custom-reset-btn', t.resetLabel);
+
+    const toggleBtn = document.getElementById('btn-toggle-custom');
+    const toggleText = document.getElementById('custom-toggle-text');
+    if (toggleBtn && toggleText) {
+      const isExpanded = toggleBtn.getAttribute('aria-expanded') !== 'false';
+      toggleText.textContent = isExpanded
+        ? (t.customBuilderToggleClose || 'Tutup penyusun custom ↑')
+        : (t.customBuilderToggleOpen || 'Susun buket custom sendiri ↓');
+    }
 
     // List of flower rows
     const rowsList = document.getElementById('custom-rows-list');
@@ -673,7 +973,7 @@
     if (discountRow) {
       if (tot.discount > 0) {
         discountRow.style.display = 'flex';
-        setText('#est-discount-label', t.discountLabel);
+        setText('#est-discount-label', interpolateRules(t.discountLabel));
         setText('#est-discount-val', `− ${formatRp(tot.discount)}`);
       } else {
         discountRow.style.display = 'none';
@@ -691,7 +991,7 @@
     const useBtn = document.getElementById('btn-use-custom');
 
     if (hintEl) {
-      hintEl.textContent = tot.isValid ? t.okHint : t.minHint;
+      hintEl.textContent = tot.isValid ? t.okHint : interpolateRules(t.minHint);
       hintEl.classList.toggle('has-warning', !tot.isValid);
     }
 
@@ -719,17 +1019,25 @@
     setText('#kit-soon-eyebrow', t.kitSoonEyebrow);
     setText('#kit-soon-title', t.kitSoonTitle);
     setText('#kit-soon-body', t.kitSoonBody);
-    setText('#kit-soon-cta', t.kitSoonCta);
     setText('#kit-soon-secondary', t.kitSoonSecondary);
-
-    const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
-    const waWaitlistMsg = currentLang === 'en'
-      ? (siteData.store.whatsappWaitlistEn || "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.")
-      : (siteData.store.whatsappWaitlistId || 'Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.');
 
     const ctaLink = document.getElementById('kit-soon-cta');
     if (ctaLink) {
-      ctaLink.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waWaitlistMsg)}`;
+      if (isWhatsAppReady()) {
+        const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
+        const waWaitlistMsg = currentLang === 'en'
+          ? (siteData.store.whatsappWaitlistEn || "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.")
+          : (siteData.store.whatsappWaitlistId || 'Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.');
+        ctaLink.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waWaitlistMsg)}`;
+        ctaLink.classList.remove('btn-disabled');
+        ctaLink.removeAttribute('aria-disabled');
+        ctaLink.textContent = t.kitSoonCta;
+      } else {
+        ctaLink.removeAttribute('href');
+        ctaLink.classList.add('btn-disabled');
+        ctaLink.setAttribute('aria-disabled', 'true');
+        ctaLink.textContent = t.kitSoonCtaDisabled || (currentLang === 'en' ? 'Coming soon' : 'Segera hadir');
+      }
     }
   }
 
@@ -906,11 +1214,12 @@
       }
     }
 
-    // 2. Wrap colour selection chips
+    // 2. Wrap colour selection chips (WAI-ARIA Radio Group pattern - A3)
     const wrapChipsEl = document.getElementById('wrap-chips');
     if (wrapChipsEl) {
       wrapChipsEl.innerHTML = '';
-      (siteData.wraps || []).forEach(w => {
+      const wraps = siteData.wraps || [];
+      wraps.forEach((w, wIdx) => {
         const active = selectedWrap === w.key;
         const name = t.wrapNames[w.key] || w.key;
         const btn = document.createElement('button');
@@ -918,6 +1227,9 @@
         btn.className = `chip-wrap ${active ? 'active' : ''}`;
         btn.setAttribute('role', 'radio');
         btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        btn.setAttribute('tabindex', active ? '0' : '-1');
+        btn.setAttribute('data-wrap-key', w.key);
+        btn.setAttribute('data-wrap-index', wIdx);
         btn.setAttribute('aria-label', `${name} wrap paper`);
         btn.innerHTML = `
           <span class="wrap-swatch" style="background:${w.swatch}"></span>
@@ -928,6 +1240,21 @@
           selectWrap(w.key);
           const activeChip = wrapChipsEl.querySelector('.chip-wrap.active');
           if (activeChip) activeChip.focus();
+        });
+        btn.addEventListener('keydown', (e) => {
+          let targetIdx = -1;
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            targetIdx = (wIdx + 1) % wraps.length;
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            targetIdx = (wIdx - 1 + wraps.length) % wraps.length;
+          }
+          if (targetIdx >= 0) {
+            selectWrap(wraps[targetIdx].key);
+            const nextChip = wrapChipsEl.querySelector(`[data-wrap-index="${targetIdx}"]`);
+            if (nextChip) nextChip.focus();
+          }
         });
         wrapChipsEl.appendChild(btn);
       });
@@ -947,16 +1274,39 @@
       };
     }
 
-    // 4. Edit selection button route
+    // 4. Edit selection button route (with clear focus destinations - A3)
     const editBtn = document.getElementById('btn-edit-selection');
     if (editBtn) {
       editBtn.onclick = () => {
         if (orderMode === 'custom') {
-          scrollToSection('#custom-builder');
+          const customBody = document.getElementById('custom-builder-body');
+          const toggleCustomBtn = document.getElementById('btn-toggle-custom');
+          const customPanel = document.getElementById('custom-builder');
+          if (customBody && customBody.classList.contains('collapsed')) {
+            customBody.classList.remove('collapsed');
+            if (toggleCustomBtn) {
+              toggleCustomBtn.setAttribute('aria-expanded', 'true');
+              const toggleText = document.getElementById('custom-toggle-text');
+              if (toggleText) {
+                const t = siteData.translations[currentLang] || siteData.translations.id;
+                toggleText.textContent = t.customBuilderToggleClose || 'Tutup penyusun custom ↑';
+              }
+            }
+            if (customPanel) {
+              customPanel.classList.remove('is-collapsed');
+            }
+          }
+          scrollToSection('#custom-builder', '#custom-builder');
+          const firstStepper = document.querySelector('#custom-rows-list .btn-inc');
+          if (firstStepper) firstStepper.focus({ preventScroll: true });
         } else if (orderMode === 'package') {
-          scrollToSection('#bouquets');
+          scrollToSection('#bouquets', `.bouquet-card[data-index="${selectedPackage}"]`);
+          const activePkgBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
+          if (activePkgBtn) activePkgBtn.focus({ preventScroll: true });
         } else {
-          scrollToSection('#collection');
+          scrollToSection('#collection', `.flower-card[data-flower="${selectedFlower}"]`);
+          const activeStemBtn = document.querySelector(`.btn-order-stem[data-flower="${selectedFlower}"]`);
+          if (activeStemBtn) activeStemBtn.focus({ preventScroll: true });
         }
       };
     }
@@ -999,7 +1349,7 @@
       selTitle = `${t.customTitleShort} (${tot.stems} ${t.stemsWord})`;
       selSub = `${tot.stems} ${t.stemsWord}`;
       isCustomInvalid = !tot.isValid;
-      selPrice = tot.isValid ? formatRp(tot.total) : `— (${t.minHint})`;
+      selPrice = tot.isValid ? formatRp(tot.total) : `— (${interpolateRules(t.minHint)})`;
       photoSrc = siteData.packages[1].photoWebp || siteData.packages[1].photo;
       photoAlt = `${t.customTitleShort} — ${tot.stems} ${t.stemsWord}`;
 
@@ -1061,12 +1411,12 @@
       }
     }
 
-    // Custom minimum warning banner
+    // Custom minimum warning banner (interpolated - A2)
     const minWarningEl = document.getElementById('custom-min-warning-banner');
     if (minWarningEl) {
       if (hasUserSelected && orderMode === 'custom' && isCustomInvalid) {
         minWarningEl.style.display = 'block';
-        setText('#custom-min-warning-text', t.customMinErrorSummary || t.minHint);
+        setText('#custom-min-warning-text', interpolateRules(t.customMinErrorSummary || t.minHint));
       } else {
         minWarningEl.style.display = 'none';
       }
@@ -1102,21 +1452,31 @@
     }
     renderSummaryIncludes();
 
-    // 6. Marketplace (Shopee) & WhatsApp Channel Buttons (R01 & R03)
+    // 6. Marketplace (Shopee) & WhatsApp Channel Buttons (R01, R03 & A1)
     const btnWhatsapp = document.getElementById('btn-whatsapp');
     const btnShopee = document.getElementById('btn-shopee');
     const mktNoticeBox = document.getElementById('marketplace-status-box');
+    const offlineNoticeBox = document.getElementById('channels-disabled-box');
 
-    const isShopeeActive = siteData.store.channels?.showShopee !== false &&
-      !!siteData.store.shopeeUrl &&
-      siteData.store.shopeeUrl.trim() !== '' &&
-      siteData.store.shopeeUrl !== 'https://shopee.co.id' &&
-      siteData.store.shopeeUrl !== '#';
+    const waReady = isWhatsAppReady();
+    const shopeeActive = isShopeeReady();
+
+    // Show neutral notice if all channels are paused/offline
+    if (offlineNoticeBox) {
+      if (!waReady && !shopeeActive) {
+        offlineNoticeBox.style.display = 'block';
+        offlineNoticeBox.textContent = t.channelsAllDisabledNotice || (currentLang === 'en'
+          ? 'Online ordering is temporarily paused. Contact us via Instagram for availability inquiries.'
+          : 'Pemesanan online saat ini sedang dijeda. Hubungi kami via Instagram untuk pertanyaan ketersediaan.');
+      } else {
+        offlineNoticeBox.style.display = 'none';
+      }
+    }
 
     if (btnShopee) {
       if (siteData.store.channels?.showShopee === false) {
         btnShopee.style.display = 'none';
-      } else if (!isShopeeActive) {
+      } else if (!shopeeActive) {
         btnShopee.style.display = 'flex';
         btnShopee.removeAttribute('href');
         btnShopee.setAttribute('aria-disabled', 'true');
@@ -1154,16 +1514,19 @@
     }
 
     if (mktNoticeBox) {
-      if (isShopeeActive) {
-        setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
-        setText('#marketplace-status-text', t.marketplaceNoticeActive || t.marketplaceNotice || (currentLang === 'en'
-          ? 'Our official Shopee store is open for standard checkouts. Note: custom bouquets and personalized message cards require direct order via WhatsApp studio.'
-          : 'Toko Shopee resmi kami siap melayani pesanan standar. Catatan: buket kustom dan kartu ucapan khusus memerlukan konfirmasi via WhatsApp studio.'));
+      if (siteData.store.channels?.showShopee === false && !waReady) {
+        mktNoticeBox.style.display = 'none';
       } else {
-        setText('#mkt-soon-tag', t.channelComingSoon || (currentLang === 'en' ? 'Coming Soon' : 'Segera Hadir'));
-        setText('#marketplace-status-text', t.marketplaceNoticeComingSoon || t.channelUnavailableNotice || (currentLang === 'en'
-          ? 'Shopee official listing is currently in preparation. All orders, custom arrangements, and handwritten message cards are currently serviced directly via studio WhatsApp.'
-          : 'Listing Shopee sedang disiapkan. Seluruh pesanan, buket custom, dan kartu ucapan saat ini dilayani langsung via WhatsApp studio.'));
+        mktNoticeBox.style.display = '';
+        if (shopeeActive) {
+          setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
+          setText('#marketplace-status-text', waReady ? (t.marketplaceNoticeActive || t.marketplaceNotice) : (currentLang === 'en'
+            ? 'Our official Shopee store is open for standard checkouts.'
+            : 'Toko Shopee resmi kami siap melayani pesanan standar.'));
+        } else {
+          setText('#mkt-soon-tag', t.channelComingSoon || (currentLang === 'en' ? 'Coming Soon' : 'Segera Hadir'));
+          setText('#marketplace-status-text', waReady ? (t.marketplaceNoticeComingSoon || t.channelUnavailableNotice) : (t.channelsAllDisabledNotice || 'Listing Shopee sedang disiapkan.'));
+        }
       }
     }
 
@@ -1175,6 +1538,17 @@
         return;
       }
       btnWhatsapp.style.display = 'flex';
+
+      if (!waReady) {
+        btnWhatsapp.removeAttribute('href');
+        btnWhatsapp.setAttribute('aria-disabled', 'true');
+        btnWhatsapp.classList.add('btn-disabled');
+        const channelName = btnWhatsapp.querySelector('.channel-name');
+        if (channelName) channelName.textContent = t.waLabel || 'WhatsApp';
+        const channelAction = btnWhatsapp.querySelector('.channel-action');
+        if (channelAction) channelAction.textContent = t.channelComingSoon || (currentLang === 'en' ? 'coming soon' : 'segera hadir');
+        return;
+      }
 
       if (!hasUserSelected) {
         btnWhatsapp.removeAttribute('href');
@@ -1342,6 +1716,7 @@
   function renderAll() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
     renderHeader(t);
+    renderCategoryNav(t);
     renderHero(t);
     renderTrustBar(t);
     renderCollection(t);
@@ -1392,6 +1767,14 @@
     }
 
     try {
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const expected = String(authConfig.passcode || '22062024').trim();
+        if (urlParams.get('unlock') === expected) {
+          localStorage.setItem(AUTH_KEY, 'true');
+        }
+      }
+
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) {
           lockScreen.classList.add('unlocked');
@@ -1547,6 +1930,36 @@
     if (btnId) btnId.addEventListener('click', () => setLanguage('id'));
     if (btnEn) btnEn.addEventListener('click', () => setLanguage('en'));
 
+    // Category Tabs Filter Navigation
+    document.querySelectorAll('.category-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const cat = tab.getAttribute('data-category');
+        setCategory(cat);
+      });
+    });
+
+    // Custom Builder Mobile Collapsible Toggle
+    const toggleCustomBtn = document.getElementById('btn-toggle-custom');
+    const customBody = document.getElementById('custom-builder-body');
+    const customPanel = document.getElementById('custom-builder');
+    if (toggleCustomBtn && customBody) {
+      toggleCustomBtn.addEventListener('click', () => {
+        const isExpanded = toggleCustomBtn.getAttribute('aria-expanded') !== 'false';
+        toggleCustomBtn.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+        customBody.classList.toggle('collapsed', isExpanded);
+        if (customPanel) {
+          customPanel.classList.toggle('is-collapsed', isExpanded);
+        }
+        const toggleText = document.getElementById('custom-toggle-text');
+        if (toggleText) {
+          const t = siteData.translations[currentLang] || siteData.translations.id;
+          toggleText.textContent = isExpanded
+            ? (t.customBuilderToggleOpen || 'Susun buket custom sendiri ↓')
+            : (t.customBuilderToggleClose || 'Tutup penyusun custom ↑');
+        }
+      });
+    }
+
     // Mobile Navigation Toggle
     const navToggle = document.getElementById('nav-toggle');
     const navMenu = document.getElementById('nav-menu');
@@ -1603,10 +2016,46 @@
     });
 
     document.querySelectorAll('.nav-link, .nav-cta, .nav-cta-mobile').forEach(link => {
-      link.addEventListener('click', () => {
+      link.addEventListener('click', (e) => {
         closeNavMenu();
+        const href = link.getAttribute('href');
+        if (href === '#collection') {
+          e.preventDefault();
+          if (activeCategory === 'bouquets' || activeCategory === 'custom') {
+            setCategory('stems', false);
+          }
+          scrollToSection('#collection-overview');
+        } else if (href === '#bouquets') {
+          e.preventDefault();
+          if (activeCategory === 'stems') {
+            setCategory('bouquets', false);
+          }
+          scrollToSection('#bouquets');
+        }
       });
     });
+
+    const ctaBrowse = document.getElementById('cta-browse');
+    if (ctaBrowse) {
+      ctaBrowse.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (activeCategory === 'bouquets' || activeCategory === 'custom') {
+          setCategory('stems', false);
+        }
+        scrollToSection('#collection-overview');
+      });
+    }
+
+    const ctaBouquets = document.getElementById('cta-bouquets');
+    if (ctaBouquets) {
+      ctaBouquets.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (activeCategory === 'stems') {
+          setCategory('bouquets', false);
+        }
+        scrollToSection('#bouquets');
+      });
+    }
 
     // Close on desktop resize
     window.addEventListener('resize', () => {
@@ -1771,6 +2220,27 @@
     renderAll();
     initScrollReveals();
 
+    try {
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectStemKey = urlParams.get('selectStem');
+        if (selectStemKey) {
+          selectStemOrder(selectStemKey, false);
+        }
+        const selectPkgIdx = urlParams.get('selectPkg');
+        if (selectPkgIdx !== null) {
+          selectPackageOrder(parseInt(selectPkgIdx, 10), false);
+        }
+        const scrollTarget = urlParams.get('scroll');
+        if (scrollTarget) {
+          document.querySelectorAll('.reveal-item').forEach(el => el.classList.add('revealed'));
+          const id = scrollTarget.replace(/^#/, '');
+          const el = document.getElementById(id) || document.querySelector(scrollTarget);
+          if (el) el.scrollIntoView({ behavior: 'instant' });
+        }
+      }
+    } catch (e) {}
+
     // Export API for Testing & Verification
     window.KomorebiApp = {
       getData: () => siteData,
@@ -1780,6 +2250,7 @@
       },
       getCurrentLang: () => currentLang,
       setLanguage: setLanguage,
+      applyLanguageMetadata: applyLanguageMetadata,
       renderAll: renderAll,
       reloadOriginal: () => {
         siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
@@ -1805,9 +2276,14 @@
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
         selectedWrap = 'kraft';
         orderNote = '';
+        activeCategory = 'all';
         renderAll();
       },
       getCustomTotals: getCustomTotals,
+      isWhatsAppReady: isWhatsAppReady,
+      isShopeeReady: isShopeeReady,
+      setCategory: setCategory,
+      interpolateRules: interpolateRules,
       getState: () => ({
         currentLang,
         orderMode,
@@ -1817,7 +2293,8 @@
         selectedPackage,
         customCounts: { ...customCounts },
         selectedWrap,
-        orderNote
+        orderNote,
+        activeCategory
       })
     };
   }

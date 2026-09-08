@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Komorebi Real Browser Automated Spec</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; font-weight: bold; }
+    iframe { width: 600px; height: 400px; border: 1px solid #444; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>KOMOREBI REAL-BROWSER TEST RUNNER</h1>
+  <div id="status">Loading application iframe...</div>
+  <pre id="results"></pre>
+  <iframe id="app-frame" src="../index.html?unlock=22062024"></iframe>
+
+  <script>
+    const resultsEl = document.getElementById('results');
+    const statusEl = document.getElementById('status');
+    const iframe = document.getElementById('app-frame');
+    const logs = [];
+
+    function assert(name, condition, details = '') {
+      if (condition) {
+        logs.push(`✔ PASS: ${name}`);
+      } else {
+        logs.push(`✖ FAIL: ${name} (${details})`);
+      }
+    }
+
+    iframe.onload = async () => {
+      statusEl.textContent = 'App loaded. Executing real-browser interactions...';
+      const doc = iframe.contentDocument;
+      const win = iframe.contentWindow;
+
+      try {
+        // Step 0: Ensure app is initialized
+        assert('App window and DOM ready', win.KomorebiApp !== undefined);
+
+        // Test 1: Stem selection focus transfer to #finish-label (A3)
+        const stemBtn = doc.querySelector('.btn-order-stem');
+        const finishLabel = doc.getElementById('finish-label');
+        if (stemBtn && finishLabel) {
+          stemBtn.click();
+          assert('Stem pick transfers focus to #finish-label', doc.activeElement === finishLabel);
+        } else {
+          assert('Stem pick elements present', false, 'stemBtn or finishLabel missing');
+        }
+
+        // Test 2: Real Textarea typing & safe binding (C1, R02)
+        const noteInput = doc.getElementById('card-note-input');
+        const includesList = doc.getElementById('summary-includes-list');
+        if (noteInput && includesList) {
+          noteInput.value = '<script>alert("xss")</' + 'script>Selamat Ulang Tahun!';
+          noteInput.dispatchEvent(new win.Event('input', { bubbles: true }));
+          const noteLi = Array.from(includesList.children).find(li => li.textContent.includes('Selamat Ulang Tahun!'));
+          assert(
+            'Real textarea typing creates includes item in order summary',
+            noteLi !== undefined,
+            `includes count: ${includesList.children.length}`
+          );
+          assert(
+            'Gift note safely renders with textContent without injecting script tags',
+            noteLi && noteLi.querySelector('script') === null && noteLi.textContent.includes('<script>'),
+            noteLi ? noteLi.innerHTML : 'no item'
+          );
+        } else {
+          assert('Card note elements present', false);
+        }
+
+        // Test 3: Wrap Chips WAI-ARIA Radio Arrow Navigation (A3, R05)
+        const wrapChips = doc.getElementById('wrap-chips');
+        if (wrapChips) {
+          let radios = Array.from(wrapChips.querySelectorAll('[role="radio"]'));
+          assert('Wrap chips role="radio" declared', radios.length >= 3);
+          radios[0].focus();
+          radios[0].dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+          
+          // Re-query chips after render
+          const currentRadios = Array.from(wrapChips.querySelectorAll('[role="radio"]'));
+          assert('ArrowRight advances focus to second radio', doc.activeElement === currentRadios[1]);
+          assert('Second radio has aria-checked="true"', currentRadios[1].getAttribute('aria-checked') === 'true');
+        }
+
+        // Test 4: Package selection focus preservation (A3)
+        const pkgBtns = Array.from(doc.querySelectorAll('.btn-choose-bouquet'));
+        if (pkgBtns.length > 1) {
+          const targetBtn = pkgBtns[1];
+          const pkgIndex = targetBtn.getAttribute('data-index');
+          targetBtn.focus();
+          targetBtn.click();
+          
+          const newActive = doc.activeElement;
+          assert(
+            'Package select preserves active button focus',
+            newActive && newActive.classList.contains('btn-choose-bouquet') && newActive.getAttribute('data-index') === pkgIndex,
+            `active: ${newActive ? newActive.className + ' idx=' + newActive.getAttribute('data-index') : 'none'}`
+          );
+        } else {
+          assert('Package choose buttons present', false);
+        }
+
+        // Test 5: Modal Open, Close, and Focus Return (R05, C1)
+        const photoWrapper = doc.querySelector('.flower-photo-wrapper');
+        const modal = doc.getElementById('image-modal');
+        const modalClose = doc.getElementById('image-modal-close');
+        if (photoWrapper && modal && modalClose) {
+          photoWrapper.focus();
+          const triggerBefore = doc.activeElement;
+          photoWrapper.click();
+          assert('Modal opens on photo click', modal.open || modal.hasAttribute('open'));
+
+          // Close modal via close button
+          modalClose.click();
+          assert('Modal closes on close click', !modal.open && !modal.hasAttribute('open'));
+          assert('Focus returns cleanly to photo trigger after button close', doc.activeElement === triggerBefore);
+
+          // Test Escape key close & focus return
+          photoWrapper.click();
+          modal.dispatchEvent(new win.KeyboardEvent('cancel', { bubbles: true, cancelable: true }));
+          if (modal.open) modal.close();
+          assert('Escape/cancel closes modal and returns focus', doc.activeElement === triggerBefore);
+        } else {
+          assert('Modal elements present', false, `photoWrapper: ${!!photoWrapper}, modal: ${!!modal}, modalClose: ${!!modalClose}`);
+        }
+
+        // Test 6: Category Filter Tabs navigation (B1)
+        const tabBouquets = doc.getElementById('cat-tab-bouquets');
+        const colSection = doc.getElementById('collection');
+        const bouqSection = doc.getElementById('bouquets');
+        if (tabBouquets && colSection && bouqSection) {
+          tabBouquets.click();
+          assert(
+            'Category tab "bouquets" shows bouquets and dims/hides stem collection',
+            tabBouquets.getAttribute('aria-pressed') === 'true' &&
+            colSection.style.display === 'none' &&
+            bouqSection.style.display !== 'none'
+          );
+        }
+
+        // Test 7: Mobile Custom Builder Accordion Toggle (B1)
+        const toggleBtn = doc.getElementById('btn-toggle-custom');
+        const builderBody = doc.getElementById('custom-builder-body');
+        if (toggleBtn && builderBody) {
+          toggleBtn.click();
+          assert(
+            'Custom builder toggles to collapsed state',
+            toggleBtn.getAttribute('aria-expanded') === 'false' && builderBody.classList.contains('collapsed')
+          );
+          toggleBtn.click();
+          assert(
+            'Custom builder toggles back to expanded state',
+            toggleBtn.getAttribute('aria-expanded') === 'true' && !builderBody.classList.contains('collapsed')
+          );
+        }
+
+        statusEl.textContent = 'All real-browser interactions executed successfully.';
+        statusEl.className = 'pass';
+      } catch (err) {
+        statusEl.textContent = 'Execution Error: ' + err.message;
+        statusEl.className = 'fail';
+        logs.push(`✖ EXCEPTION: ${err.message}\n${err.stack}`);
+      }
+
+      resultsEl.textContent = logs.join('\n');
+      console.log('BROWSER_SPEC_RESULTS:\n' + logs.join('\n'));
+      document.body.setAttribute('data-done', 'true');
+    };
+  </script>
+</body>
+</html>

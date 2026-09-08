@@ -222,6 +222,10 @@ function createMockElement(tagName, id = '', className = '') {
       handlers.forEach(h => h({ type: 'focus', target: element }));
     },
 
+    getBoundingClientRect() {
+      return { top: 100, bottom: 200, left: 0, right: 300, width: 300, height: 100 };
+    },
+
     querySelector(sel) {
       return querySelectorUnder(element, sel);
     },
@@ -287,8 +291,10 @@ registerEl('header', '', 'site-header');
 registerEl('footer', 'site-footer', 'site-footer');
 registerEl('div', 'hero');
 registerEl('div', 'collection');
+registerEl('div', 'bouquets');
 registerEl('div', 'order');
 registerEl('div', 'custom-builder');
+registerEl('div', 'custom-builder-body');
 registerEl('div', 'sticky-order-bar');
 
 // Sticky bar sub-elements
@@ -351,9 +357,14 @@ registerEl('div', 'nav-menu');
 registerEl('div', 'nav-scrim');
 registerEl('a', 'brand-link');
 registerEl('button', 'btn-edit-selection');
-registerEl('div', 'finish-label');
+registerEl('h3', 'finish-label');
+registerEl('textarea', 'card-note-input');
 registerEl('textarea', 'order-note-input');
+registerEl('div', 'wrap-chips');
 registerEl('div', 'wrap-options');
+registerEl('nav', 'category-nav');
+registerEl('button', 'btn-toggle-custom');
+registerEl('div', 'channels-disabled-box');
 
 // Modal
 const imageModal = registerEl('dialog', 'image-modal');
@@ -387,6 +398,14 @@ docElement.appendChild(body);
 
 const metaDesc = createMockElement('meta');
 metaDesc.setAttribute('name', 'description');
+const metaOgTitle = createMockElement('meta');
+metaOgTitle.setAttribute('property', 'og:title');
+const metaOgDesc = createMockElement('meta');
+metaOgDesc.setAttribute('property', 'og:description');
+const metaTwTitle = createMockElement('meta');
+metaTwTitle.setAttribute('name', 'twitter:title');
+const metaTwDesc = createMockElement('meta');
+metaTwDesc.setAttribute('name', 'twitter:description');
 
 const storageStore = {};
 const mockLocalStorage = {
@@ -398,10 +417,15 @@ const mockLocalStorage = {
 const mockDocument = {
   documentElement: docElement,
   body: body,
+  title: '',
   activeElement: null,
   getElementById: (id) => elementsRegistry[id] || null,
   querySelector: (sel) => {
     if (sel === 'meta[name="description"]') return metaDesc;
+    if (sel === 'meta[property="og:title"]') return metaOgTitle;
+    if (sel === 'meta[property="og:description"]') return metaOgDesc;
+    if (sel === 'meta[name="twitter:title"]') return metaTwTitle;
+    if (sel === 'meta[name="twitter:description"]') return metaTwDesc;
     if (sel.startsWith('#')) return elementsRegistry[sel.slice(1)] || null;
     return querySelectorUnder(body, sel);
   },
@@ -708,8 +732,146 @@ imageModal.close();
 console.log('✔ Suite 10 Passed: Dialog close event cleanly dispatches and manages focus');
 
 // ---------------------------------------------------------------------------
+// Suite 11: Channel Readiness Centralization (A1)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 11: Channel Readiness Centralization (A1) ---');
+// WhatsApp ready because waPhone placeholder exists
+assert.strictEqual(app.isWhatsAppReady(), true, 'WhatsApp should be ready when phone is set');
+// Shopee NOT ready because shopeeUrl is unconfirmed empty placeholder
+assert.strictEqual(app.isShopeeReady(), false, 'Shopee should not be ready when URL is unconfirmed empty placeholder');
+
+// Test channels-disabled-box appears when both channels are turned off
+const channelsBox = mockDocument.getElementById('channels-disabled-box');
+const origDataA1 = JSON.parse(JSON.stringify(app.getData()));
+const disabledChannelsData = JSON.parse(JSON.stringify(origDataA1));
+disabledChannelsData.store.channels.showWhatsapp = false;
+disabledChannelsData.store.channels.showShopee = false;
+app.setData(disabledChannelsData);
+
+assert.strictEqual(channelsBox.style.display, 'block', 'channels-disabled-box must be visible when all channels are disabled');
+assert(channelsBox.textContent.includes('dijeda') || channelsBox.textContent.includes('paused'), 'channels-disabled-box text must contain neutral offline/paused notice');
+
+// Restore original config
+app.setData(origDataA1);
+assert.strictEqual(channelsBox.style.display, 'none', 'channels-disabled-box must hide when active channel exists');
+console.log('✔ Suite 11 Passed: Centralized readiness checks and neutral offline state verified');
+
+// ---------------------------------------------------------------------------
+// Suite 12: Dynamic Rule Interpolation (A2)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 12: Dynamic Rule Interpolation (A2) ---');
+const testTemplate = 'Min {minStems} tangkai, diskon {bulkPercent}% mulai {bulkFrom} tangkai, jasa wrap {wrapFee}';
+const interpolated = app.interpolateRules(testTemplate);
+assert.strictEqual(interpolated, 'Min 3 tangkai, diskon 10% mulai 9 tangkai, jasa wrap Rp 35.000', 'Rule interpolation must correctly replace all tokens');
+
+// Mutate rule in live store and test dynamic re-interpolation
+const origDataA2 = JSON.parse(JSON.stringify(app.getData()));
+const modifiedRulesData = JSON.parse(JSON.stringify(origDataA2));
+modifiedRulesData.minStems = 5;
+modifiedRulesData.bulkRate = 0.25;
+modifiedRulesData.bulkFrom = 10;
+app.setData(modifiedRulesData);
+
+const mutatedInterpolated = app.interpolateRules(testTemplate);
+assert.strictEqual(mutatedInterpolated, 'Min 5 tangkai, diskon 25% mulai 10 tangkai, jasa wrap Rp 35.000', 'Interpolation must reflect updated store rules');
+
+app.setData(origDataA2);
+console.log('✔ Suite 12 Passed: Rule tokens dynamically interpolate from live store configuration');
+
+// ---------------------------------------------------------------------------
+// Suite 13: Focus Preservation & Keyboard Accessibility (A3)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 13: Focus Preservation & Keyboard Accessibility (A3) ---');
+const finishLabel = mockDocument.getElementById('finish-label');
+
+// When a single stem is selected, focus moves to #finish-label
+finishLabel.focused = false;
+app.selectStem('Sunflower', true);
+assert.strictEqual(finishLabel.focused, true, 'Selecting a stem should focus #finish-label for keyboard navigation');
+
+// Verify wrap chips radio group roving tabindex & arrow navigation
+const wrapChipsContainer = mockDocument.getElementById('wrap-chips');
+app.renderAll();
+
+const chips = wrapChipsContainer.children;
+assert(chips.length > 0, 'Wrap chips should be populated');
+assert.strictEqual(chips[0].getAttribute('tabindex'), '0');
+assert.strictEqual(chips[1].getAttribute('tabindex'), '-1');
+assert.strictEqual(chips[0].getAttribute('role'), 'radio');
+
+// Simulate ArrowRight keydown on chips[0]
+chips[0].dispatchEvent({
+  type: 'keydown',
+  key: 'ArrowRight',
+  preventDefault: () => {}
+});
+
+assert.strictEqual(chips[1].classList.contains('active'), true, 'ArrowRight should activate next wrap chip');
+assert.strictEqual(chips[1].getAttribute('tabindex'), '0', 'New active chip should have tabindex 0');
+assert.strictEqual(chips[0].getAttribute('tabindex'), '-1', 'Previous active chip should have tabindex -1');
+console.log('✔ Suite 13 Passed: Finish label focus transfer and wrap chips roving tabindex/arrow navigation verified');
+
+// ---------------------------------------------------------------------------
+// Suite 14: Language Reload Metadata (A4)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 14: Language Reload Metadata (A4) ---');
+// Switch to English
+app.setLanguage('en');
+assert.strictEqual(mockDocument.documentElement.lang, 'en', 'Document lang should be en');
+assert(mockDocument.title.includes('Finished Chenille Stem Flowers & Handcrafted Bouquets'), 'Document title should update to EN');
+assert(metaDesc.getAttribute('content').includes('Chenille stem botanical flowers'), 'Meta description should update to EN');
+assert(metaOgTitle.getAttribute('content').includes('Handcrafted Chenille Stem Flowers'), 'OpenGraph title should update to EN');
+assert(metaTwDesc.getAttribute('content').includes('Flowers that never wilt'), 'Twitter description should update to EN');
+
+// Switch back to Indonesian
+app.setLanguage('id');
+assert.strictEqual(mockDocument.documentElement.lang, 'id', 'Document lang should be id');
+assert(mockDocument.title.includes('Bunga Jadi & Buket Kawat Bulu Chenille'), 'Document title should update to ID');
+assert(metaDesc.getAttribute('content').includes('Bunga kawat bulu chenille'), 'Meta description should update to ID');
+console.log('✔ Suite 14 Passed: Synchronous language reload metadata verified across documentElement, title, and social meta tags');
+
+// ---------------------------------------------------------------------------
+// Suite 15: Category Navigation & Custom Builder Mobile Toggle (B1)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 15: Category Navigation & Custom Builder Mobile Toggle (B1) ---');
+const colSection = mockDocument.getElementById('collection');
+const bqSection = mockDocument.getElementById('bouquets');
+
+// Filter to 'stems'
+app.setCategory('stems');
+assert.notStrictEqual(colSection.style.display, 'none');
+assert.strictEqual(bqSection.style.display, 'none');
+
+// Filter to 'bouquets'
+app.setCategory('bouquets');
+assert.strictEqual(colSection.style.display, 'none');
+assert.notStrictEqual(bqSection.style.display, 'none');
+
+// Filter to 'all'
+app.setCategory('all');
+assert.notStrictEqual(colSection.style.display, 'none');
+assert.notStrictEqual(bqSection.style.display, 'none');
+
+// Custom builder mobile toggle button
+const toggleBtn = mockDocument.getElementById('btn-toggle-custom');
+const customBuilderBody = mockDocument.getElementById('custom-builder-body');
+
+if (toggleBtn && customBuilderBody) {
+  // Simulate click to toggle
+  toggleBtn.dispatchEvent('click');
+  assert(customBuilderBody.classList.contains('collapsed'), 'Clicking toggle button should collapse builder body');
+  assert.strictEqual(toggleBtn.getAttribute('aria-expanded'), 'false');
+
+  toggleBtn.dispatchEvent('click');
+  assert(!customBuilderBody.classList.contains('collapsed'), 'Clicking toggle button again should expand builder body');
+  assert.strictEqual(toggleBtn.getAttribute('aria-expanded'), 'true');
+}
+
+console.log('✔ Suite 15 Passed: Category filtering and custom builder mobile collapse verified');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 10 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 15 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

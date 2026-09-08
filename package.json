@@ -1,0 +1,13 @@
+{
+  "name": "komorebi-creations",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "python -m http.server 8080",
+    "dev": "python -m http.server 8080",
+    "serve": "npx -y serve -l 8080 .",
+    "test": "node tests/verify-ordering.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

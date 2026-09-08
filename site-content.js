@@ -192,14 +192,14 @@ window.KOMOREBI_DATA = {
         size: "40 cm stem",
         detail: "coral, two-tone",
         blurb: "Two rings of narrow coral petals around a seeded brown centre.",
-        singleNote: "Price is for 1 finished stem (photo shows three stems for color reference)."
+        singleNote: "Price per finished stem · Photo shows 3 color references"
       },
       id: {
         name: "Gerbera",
         size: "tangkai 40 cm",
         detail: "koral, dua nada",
         blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
-        singleNote: "Harga untuk 1 tangkai jadi (foto menampilkan 3 tangkai untuk referensi warna)."
+        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 varian warna"
       }
     },
     Lavender: {
@@ -282,8 +282,8 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
       pkgBlurbs: [
-        "Tiga tangkai, satu jenis atau campuran bunga pilihan studio. Pas untuk meja dan nakas.",
-        "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik.",
+        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio (draf). Pas untuk meja dan nakas.",
+        "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik studio.",
         "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
         "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
       ],
@@ -298,21 +298,22 @@ window.KOMOREBI_DATA = {
       pkgBtnActive: "✓ Dipilih",
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
+      pkgFavoriteTag: "Favorit Studio",
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
-      customIntro: "Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal 3 tangkai; 9 tangkai ke atas otomatis mendapat potongan 10% untuk bunganya.",
+      customIntro: "Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal {minStems} tangkai; {bulkFrom} tangkai ke atas otomatis mendapat potongan {bulkPercent}% untuk bunganya.",
       customPickLabel: "Pilih tangkainya",
       resetLabel: "Atur ulang",
       estimateLabel: "Estimasi biaya",
       flowersLabel: "Bunga",
-      discountLabel: "Potongan hemat (9+ tangkai, 10%)",
+      discountLabel: "Potongan hemat ({bulkFrom}+ tangkai, {bulkPercent}%)",
       wrapFeeLabel: "Bungkus & pita (termasuk dalam total)",
       estTotalLabel: "Estimasi total",
       stemsWord: "tangkai",
       stemWord: "tangkai",
-      minHint: "Tambahkan minimal 3 tangkai untuk memesan buket custom.",
-      okHint: "Estimasi — total akhir dan ongkir kami konfirmasikan via WhatsApp sebelum pembayaran.",
+      minHint: "Tambahkan minimal {minStems} tangkai untuk memesan buket custom.",
+      okHint: "Estimasi — total akhir dan ongkir kami konfirmasikan via chat sebelum pembayaran.",
       useCustomLabel: "Lanjut ke sentuhan akhir ↓",
       emptyCustomMsg: "Belum ada bunga dipilih. Gunakan tombol + di atas untuk menambahkan tangkai.",
       addedToast: "{flower} ditambahkan ke buket ({count} tangkai)",
@@ -323,6 +324,7 @@ window.KOMOREBI_DATA = {
       kitSoonTitle: "Kit DIY-nya masih kami siapkan",
       kitSoonBody: "Kami sedang menggambar panduannya dan menguji kemasannya, supaya pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak yang menunggu, makin cepat kami luncurkan.",
       kitSoonCta: "Saya mau kitnya →",
+      kitSoonCtaDisabled: "Segera hadir",
       kitSoonSecondary: "Baca FAQ",
 
       howEyebrow: "Cara dibuat",
@@ -370,6 +372,7 @@ window.KOMOREBI_DATA = {
       configureStemsCta: "Atur bunga ↑",
       channelComingSoon: "segera hadir",
       channelUnavailableNotice: "Listing Shopee sedang disiapkan. Seluruh pemesanan dan kustomisasi dilayani langsung via WhatsApp studio.",
+      channelsAllDisabledNotice: "Pemesanan online saat ini sedang dijeda. Hubungi kami via Instagram untuk pertanyaan ketersediaan.",
       shopeeLabel: "Shopee",
       shopeeSub: "Official Store · Belanja praktis",
       shopeeAction: "buka toko →",
@@ -381,7 +384,7 @@ window.KOMOREBI_DATA = {
       waLabel: "WhatsApp — Konfirmasi Pesanan",
       orderNote: "Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui chat WhatsApp studio sebelum Anda melakukan transfer.",
       btnEditSelection: "Ubah pilihan ↑",
-      customMinErrorSummary: "Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.",
+      customMinErrorSummary: "Tambahkan minimal {minStems} tangkai untuk melanjutkan pesanan buket custom.",
       customMinHint: "Minimal {n} tangkai",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
@@ -389,6 +392,12 @@ window.KOMOREBI_DATA = {
       cardLinePrefix: "Kartu ucapan",
       stemSuffix: "— tangkai jadi",
       customTitleShort: "Buket custom",
+      categoryAll: "Semua",
+      categoryStems: "Bunga Jadi",
+      categoryBouquets: "Paket Buket",
+      categoryCustom: "Buket Custom",
+      customBuilderToggleOpen: "Susun buket custom sendiri ↓",
+      customBuilderToggleClose: "Tutup penyusun custom ↑",
       stemIncludes: [
         "{flower} jadi ({qty} tangkai), dirangkai oleh studio",
         "{size}, siap dipajang di vas",
@@ -468,8 +477,8 @@ window.KOMOREBI_DATA = {
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
       pkgBlurbs: [
-        "Three stems, single flower or studio mix. Ideal for desk and bedside display.",
-        "Five stems arranged with gentle height at the centre. A balanced classic bouquet.",
+        "Three stems — choice of single flower variety or studio mix (draft). Ideal for desk and bedside display.",
+        "Five stems arranged with gentle height at the centre. A balanced classic studio bouquet.",
         "Nine stems in a harmonious studio mix. 10% volume savings applied.",
         "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."
       ],
@@ -484,21 +493,22 @@ window.KOMOREBI_DATA = {
       pkgBtnActive: "✓ Selected",
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
+      pkgFavoriteTag: "Studio Favorite",
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
-      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum 3 stems; 9 or more automatically receives 10% off the flowers.",
+      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum {minStems} stems; {bulkFrom} or more automatically receives {bulkPercent}% off the flowers.",
       customPickLabel: "Choose your stems",
       resetLabel: "Reset",
       estimateLabel: "Estimate",
       flowersLabel: "Flowers",
-      discountLabel: "Volume discount (9+ stems, 10%)",
+      discountLabel: "Volume discount ({bulkFrom}+ stems, {bulkPercent}%)",
       wrapFeeLabel: "Wrapping & ribbon (included in total)",
       estTotalLabel: "Estimated total",
       stemsWord: "stems",
       stemWord: "stem",
-      minHint: "Add at least 3 stems to order a custom bouquet.",
-      okHint: "An estimate — final totals and shipping are confirmed on WhatsApp before payment.",
+      minHint: "Add at least {minStems} stems to order a custom bouquet.",
+      okHint: "An estimate — final totals and shipping are confirmed via chat before payment.",
       useCustomLabel: "Continue to finishing ↓",
       emptyCustomMsg: "No flowers selected yet. Use the + buttons above to add stems.",
       addedToast: "{flower} added to bouquet ({count} stems)",
@@ -509,6 +519,7 @@ window.KOMOREBI_DATA = {
       kitSoonTitle: "The DIY kit is still in the workshop",
       kitSoonBody: "We're drawing the plates and testing the packs so a beginner can build a flower in twenty minutes. If that's what you came for, tell us — the more people waiting, the sooner we launch it.",
       kitSoonCta: "I want the kit →",
+      kitSoonCtaDisabled: "Coming soon",
       kitSoonSecondary: "Read the FAQ",
 
       howEyebrow: "How they're made",
@@ -556,6 +567,7 @@ window.KOMOREBI_DATA = {
       configureStemsCta: "Configure stems ↑",
       channelComingSoon: "coming soon",
       channelUnavailableNotice: "Shopee listings opening soon. Orders are currently welcomed directly via studio WhatsApp.",
+      channelsAllDisabledNotice: "Online ordering is temporarily paused. Contact us via Instagram for availability inquiries.",
       shopeeLabel: "Shopee",
       shopeeSub: "Official Store · Direct checkout",
       shopeeAction: "visit store →",
@@ -567,7 +579,7 @@ window.KOMOREBI_DATA = {
       waLabel: "WhatsApp — Confirm Order",
       orderNote: "Total and shipping costs are confirmed directly with our studio via WhatsApp chat before payment.",
       btnEditSelection: "Edit selection ↑",
-      customMinErrorSummary: "Add at least 3 stems to proceed with a custom bouquet.",
+      customMinErrorSummary: "Add at least {minStems} stems to proceed with a custom bouquet.",
       customMinHint: "Minimum {n} stems",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
@@ -575,6 +587,12 @@ window.KOMOREBI_DATA = {
       cardLinePrefix: "Message card",
       stemSuffix: "— finished stem",
       customTitleShort: "Custom bouquet",
+      categoryAll: "All",
+      categoryStems: "Finished Stems",
+      categoryBouquets: "Bouquet Packages",
+      categoryCustom: "Custom Bouquet",
+      customBuilderToggleOpen: "Build your own custom bouquet ↓",
+      customBuilderToggleClose: "Close custom builder ↑",
       stemIncludes: [
         "{flower} finished ({qty} stem(s)), assembled by studio",
         "{size}, ready to place in a vase",

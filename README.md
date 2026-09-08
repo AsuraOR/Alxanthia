@@ -29,17 +29,17 @@
 | **3** | **Akun Instagram Studio** (`store.instagramUrl`) | `"https://instagram.com/komorebi"` | ⏳ Placeholder | Masukkan URL akun Instagram resmi studio (mis. `"https://instagram.com/komorebicreations"`). |
 | **4** | **Lokasi Studio & Ekspedisi Pengiriman** | *"Dikirim dari Indonesia"* (seluruh pesanan) | ⏳ Menunggu Spesifikasi | Di FAQ dinyatakan dikirim dari Indonesia. Jika pemilik ingin menegaskan kota asal (mis. *"Jakarta Selatan"* atau *"Bandung"*) dan jenis kurir (Instant/Sameday GoSend, JNE, SiCepat), dapat disunting di `translations.id.faqs` dan `translations.en.faqs`. |
 | **5** | **Jam Operasional Balas Chat Studio** | Standar hari kerja (2–3 hari pembuatan) | ⏳ Opsional | Jika memiliki jam operasional studio tertentu (mis. *"Senin–Sabtu 09.00–18.00 WIB"*), dapat ditambahkan ke teks catatan pemesanan di `site-content.js`. |
-| **6** | **Komposisi Spesifik Formula Buket** | Campuran bunga pilihan studio (*studio mix*) | ✅ Terverifikasi | Deskripsi paket buket saat ini secara jujur menyatakan racikan variasi artistik studio (*harmonious studio mix*), bukan formula kaku yang dibuat-buat. Jika di masa depan ada resep tangkai yang kaku, cantumkan di `site-content.js`. |
-| **7** | **Domain Resmi & URL Kanonikal** | `"https://komorebicreations.com/"` | ⏳ Staging | Digunakan pada tag canonical dan Open Graph di `index.html`. Bila domain final berbeda, ganti di `index.html` dan `CNAME`. |
-| **8** | **Proteksi Kode Sandi Akses Staging** (`auth.enabled`) | `true` (Sandi: `"22062024"`) | 🔒 Aktif di Staging | Proteksi privat aktif agar toko tidak dapat diakses publik sebelum pemilik siap. Ubah ke `false` saat peluncuran publik. |
+| **6** | **Komposisi Spesifik Formula Buket** | Campuran bunga pilihan studio (*studio mix*) | ⏳ Draf Placeholder (Menunggu Konfirmasi Pemilik) | Deskripsi paket buket saat ini menggunakan draf racikan artistik studio (*harmonious studio mix*). Seluruh rincian menunggu konfirmasi akhir pemilik sebelum peluncuran resmi. |
+| **7** | **Domain Resmi & URL Kanonikal** | `"https://komorebicreations.com/"` | ⏳ Menunggu Konfirmasi Domain | Digunakan pada tag canonical dan Open Graph di `index.html`. Bila domain final berbeda, sesuaikan di `index.html`, `sitemap.xml`, dan `CNAME`. |
+| **8** | **Tirai Pratinjau Staging** (`auth.enabled`) | `true` (Sandi dikonfigurasi di `site-content.js`) | 🔒 Tirai Pratinjau Aktif | Tirai pratinjau sisi klien untuk mencegah perayapan dan peninjauan draf sebelum pemilik siap. Sandi diatur langsung oleh pemilik di `site-content.js`. Ubah ke `false` saat peluncuran publik. |
 
 ---
 
 ## 🌿 Tentang Komorebi Creations
 
-**Komorebi Creations** adalah studio kerajinan botani independen yang merangkai bunga abadi berbahan benang kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap tangkai dibentuk dengan tangan, dirangkai kokoh, dan dikemas rapi siap pajang langsung dari studio kami untuk pengiriman ke seluruh nusantara.
+**Komorebi Creations** adalah studio kerajinan botani independen yang merangkai bunga abadi berbahan kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap tangkai dibentuk dengan tangan, dirangkai kokoh, dan dikemas rapi siap pajang langsung dari studio kami untuk pengiriman ke seluruh nusantara.
 
-### 🌸 Koleksi Botani & Struktur Harga Resmi
+### 🌸 Koleksi Botani & Struktur Harga (Draf Placeholder Toko)
 
 #### 1. Tangkai Jadi Tunggal (Single Finished Stems)
 | Spesies Bunga | Nama Latin Botani | Harga / Tangkai | Karakter Rangkaian |
@@ -77,14 +77,15 @@ Situs Komorebi dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**
   - Transisi status instan: Memilih tangkai bunga satuan, mengklik paket buket, atau menggeser tombol stepper custom builder seketika memperbarui mode pesanan, kalkulasi harga, pratinjau foto, dan draf WhatsApp tanpa desinkronisasi.
 - **Keamanan Input Pengguna (XSS Prevention - R02)**:
   - Input kartu ucapan (`orderNote`) dan data dinamis dimasukkan ke DOM menggunakan `textContent` pada elemen `span` terisolasi dengan bullet dot terpisah (`<span class="bullet-dot" aria-hidden="true">·</span>`). Tidak ada kode HTML atau karakter berbahaya yang dapat tereksekusi.
-- **Aksesibilitas & Ergonomi (WCAG 2.5.5 - R05, R07)**:
-  - Seluruh tombol aksi interaktif (`.btn-order-stem`, `.btn-add-bouquet`, `.btn-choose-bouquet`, `.btn-pkg-continue`, `.btn-channel`) memiliki ukuran touch target minimal **44px × 44px**.
-  - Tipografi terkecil di seluruh breakpoint layar dinaikkan menjadi minimal **11px–12.5px** sehingga tidak ada teks yang sulit dibaca pada ponsel sempit (320px–390px).
-  - Dialog inspektor foto (`<dialog id="image-modal">`) mengembalikan fokus keyboard secara mulus ke elemen pemicu (`modalReturnElement`) saat ditutup melalui tombol silang, tombol Escape, atau klik backdrop luar.
-  - Sticky mobile order bar memiliki mesin pantau IntersectionObserver yang otomatis menyembunyikan bar saat hero banner atau ringkasan pesanan terlihat, mencegah tumpang tindih visual.
-- **Kejujuran Saluran Marketplace (R01)**:
-  - Bendera konfigurasi `store.channels.showShopee` dan `store.channels.showWhatsapp` dihormati secara ketat.
-  - Jika URL toko Shopee belum dikonfirmasi, sistem tidak mengarahkan pengunjung ke halaman generic Shopee, melainkan menampilkan badge *"Segera hadir"* yang dinonaktifkan dengan jujur serta menjelaskan bahwa buket custom dan kartu ucapan dilayani via WhatsApp studio.
+- **Aksesibilitas & Ergonomi (WCAG 2.5.5 - R05, R07, A3, B2)**:
+  - Seluruh tombol aksi interaktif (`.btn-order-stem`, `.btn-add-bouquet`, `.btn-choose-bouquet`, `.btn-pkg-continue`, `.btn-channel`, `.btn-stepper`, `.chip-wrap`) memiliki ukuran touch target minimal **44px × 44px**.
+  - Tipografi seluruh badge dan teks penjelas diangkat menjadi minimal **11.5px–12px** (seluruh `font-size: 10px` telah dieliminasi).
+  - WAI-ARIA Radio Group pattern pada pilihan pembungkus (`#wrap-chips`) dengan navigasi tombol panah (Arrow Left/Right/Up/Down) dan roving tabindex (`tabindex="0"` pada item aktif, `-1` pada lainnya).
+  - Dialog inspektor foto (`<dialog id="image-modal">`) mengembalikan fokus keyboard secara mulus ke elemen pemicu (`modalReturnElement`) saat ditutup.
+  - Sticky mobile order bar memiliki IntersectionObserver yang otomatis menyembunyikan bar saat hero banner atau ringkasan pesanan terlihat, mencegah tumpang tindih visual.
+- **Kejujuran Saluran Marketplace (R01, A1)**:
+  - Bendera konfigurasi `store.channels.showShopee` dan `store.channels.showWhatsapp` dihormati secara ketat via fungsi kesiapan terpusat `isWhatsAppReady()` dan `isShopeeReady()`.
+  - Jika URL toko Shopee belum dikonfirmasi, sistem tidak mengarahkan pengunjung ke tautan generik, melainkan menampilkan status *"Segera hadir"* yang dinonaktifkan dengan jujur serta menjelaskan bahwa buket custom dan kartu ucapan dilayani via WhatsApp studio.
 
 ---
 
@@ -92,12 +93,12 @@ Situs Komorebi dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**
 
 ```text
 komorebi-creations-1/
-├── index.html            # Markup semantik utama, meta tag SEO/OpenGraph, JSON-LD, dialog modal & lock screen
-├── styles.css            # Stylesheet botani lengkap (design tokens, layout, dark botanical accordion, responsive queries)
-├── site-content.js       # Pusat konfigurasi data tunggal (katalog botani, teks bilingual ID/EN, link toko, auth)
-├── app.js                # Pengendali aplikasi interaktif (state machine, customizer engine, kalkulator harga, a11y)
+├── index.html            # Markup semantik utama, filter navigasi kategori, meta tag SEO/OpenGraph, JSON-LD, dialog modal & lock screen
+├── styles.css            # Stylesheet botani lengkap (design tokens, layout responsif, hirarki mobile, WCAG 44px touch targets)
+├── site-content.js       # Pusat konfigurasi data tunggal (katalog botani, teks bilingual ID/EN, link toko, aturan toko dinamis)
+├── app.js                # Pengendali aplikasi interaktif (state machine, customizer engine, metadata switcher, a11y)
 ├── tests/
-│   └── verify-ordering.js # 10 rangkaian tes integrasi otomatis yang mengeksekusi langsung app.js & site-content.js
+│   └── verify-ordering.js # 15 rangkaian tes integrasi otomatis yang mengeksekusi langsung app.js & site-content.js
 ├── revisions/            # Dokumen review post-implementasi & panduan revisi
 ├── CNAME                 # Konfigurasi custom domain staging
 ├── robots.txt            # Pengaturan robot mesin pencari
@@ -122,50 +123,50 @@ komorebi-creations-1/
 
 ---
 
-## 🔒 Arahan Staging & Protokol Peluncuran Publik (R09)
+## 🔒 Arahan Staging & Protokol Peluncuran Publik (R09, C2)
 
 ### Status Staging Saat Ini (Active Protection)
-Untuk melindungi merek dan mencegah perayapan mesin pencari terhadap data yang belum diverifikasi:
+Untuk melindungi merek dan mencegah perayapan mesin pencari terhadap data yang belum dikonfirmasi pemilik:
 1. **Robots Meta Tag**: `index.html` saat ini memiliki tag:
    ```html
    <meta name="robots" content="noindex, nofollow" />
    ```
-2. **Private Passcode Screen**: Seluruh konten situs terkunci di balik layar verifikasi kata sandi (`siteData.auth.passcode`). Kata sandi bawaan staging adalah:  
-   🔑 **`22062024`**
+2. **Staging Preview Curtain (Client-side Overlay)**: Seluruh konten situs berada di balik tirai pratinjau interaktif (`siteData.auth.passcode`) untuk mencegah paparan draf ke publik. *Pemberitahuan: ini merupakan tirai pratinjau sisi klien untuk kemudahan peninjauan pemilik toko sebelum publikasi, bukan kontrol akses kriptografis server-side.* Sandi pratinjau dikonfigurasi secara privat di [`site-content.js`](site-content.js) pada properti `auth.passcode`.
 
-### Protokol Langkah demi Langkah Peluncuran Publik (Public Go-Live)
-Ketika pemilik studio telah memverifikasi seluruh parameter pada **Daftar Input Pemilik**:
-1. Buka [`site-content.js`](site-content.js):
-   - Isi `store.whatsappNumber` dengan nomor WhatsApp resmi.
-   - Isi `store.shopeeUrl` jika toko Shopee sudah live (atau biarkan kosong jika belum).
-   - Ubah konfigurasi autentikasi menjadi nonaktif:
-     ```javascript
-     auth: {
-       enabled: false,
-       passcode: ""
-     }
-     ```
-2. Buka [`index.html`](index.html):
-   - Ubah tag robots staging menjadi izin pengindeksan publik:
-     ```html
-     <meta name="robots" content="index, follow" />
-     ```
-3. Jalankan rangkaian tes verifikasi:
-   ```bash
-   node tests/verify-ordering.js
-   ```
-4. Lakukan commit dan deploy ke platform hosting Anda.
+### 🚀 Checklist Peluncuran Publik (Go-Live Checklist)
+Ketika pemilik studio siap mempublikasikan toko secara resmi:
+- [ ] **WhatsApp Studio**: Perbarui nomor WhatsApp aktif di `site-content.js` (`store.whatsappNumber`).
+- [ ] **Shopee Official Store**: Masukkan URL toko Shopee resmi di `site-content.js` (`store.shopeeUrl`) saat toko live, atau biarkan kosong agar tombol tetap berstatus aman *"Segera hadir"*.
+- [ ] **Instagram**: Perbarui URL Instagram resmi studio di `site-content.js` (`store.instagramUrl`).
+- [ ] **Lokasi & Kurir**: Perbarui informasi kota asal pengiriman dan opsi ekspedisi di FAQ (`translations.id.faqs` dan `translations.en.faqs`).
+- [ ] **Formula & Harga Paket**: Konfirmasi harga dan komposisi buket (3, 5, 9, 15 tangkai) di `site-content.js`.
+- [ ] **Robots Indexing**: Di [`index.html`](index.html), ubah tag robots dari `noindex, nofollow` menjadi `index, follow`:
+  ```html
+  <meta name="robots" content="index, follow" />
+  ```
+- [ ] **Nonaktifkan Tirai Pratinjau**: Di [`site-content.js`](site-content.js), set `auth.enabled` ke `false`:
+  ```javascript
+  auth: {
+    enabled: false,
+    passcode: ""
+  }
+  ```
+- [ ] **Domain & DNS**: Pastikan `CNAME` dan `sitemap.xml` sesuai dengan domain produksi yang terhubung di penyedia DNS.
+- [ ] **Verifikasi Akhir**: Jalankan tes integrasi otomatis:
+  ```bash
+  node tests/verify-ordering.js
+  ```
 
 ---
 
 ## 🧪 Menjalankan Verifikasi & Server Lokal
 
 ### 1. Menjalankan Tes Integrasi Otomatis (R11)
-Tes ini memvalidasi 10 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
+Tes ini memvalidasi 15 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
 ```bash
 node tests/verify-ordering.js
 ```
-*Hasil yang diharapkan: 10 suite lulus (✔ ALL 10 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
+*Hasil yang diharapkan: 15 suite lulus (✔ ALL 15 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
 
 ### 2. Menjalankan Server Pratinjau Lokal
 Karena situs tidak menggunakan dependensi eksternal, Anda dapat menggunakan server HTTP bawaan:
@@ -176,7 +177,7 @@ python -m http.server 8080
 # Atau menggunakan Node.js (jika npx terpasang)
 npx serve -l 8080 .
 ```
-Buka browser pada `http://localhost:8080` dan masukkan sandi `22062024` untuk membuka pratinjau.
+Buka browser pada `http://localhost:8080` dan masukkan sandi staging yang tercantum di `site-content.js` untuk membuka pratinjau.
 
 ---
 

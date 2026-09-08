@@ -858,7 +858,7 @@ body.nav-open {
 /* Category Filter Navigation Tabs */
 .category-nav-wrapper {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   margin: 0 auto 30px;
   padding: 0;
   position: relative;
@@ -1903,6 +1903,8 @@ body.nav-open {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   padding: 30px 30px 34px;
+  position: sticky;
+  top: 90px;
 }
 
 .summary-top-row {
@@ -2803,7 +2805,7 @@ details.is-closing > .faq-answer-wrapper {
 /* Breakpoint: Phones & Small Tablets (<= 768px) */
 @media (max-width: 768px) {
   .collection-overview {
-    padding: 40px 16px 0;
+    padding: 28px 16px 0;
   }
 
   .collection-section {
@@ -2811,12 +2813,17 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .collection-overview .section-header-flex {
-    margin-bottom: 18px;
+    margin-bottom: 14px;
+  }
+
+  .category-header-row {
+    padding: 16px 0 20px;
+    margin-top: 18px;
   }
 
   /* Category Navigation Filter - Mobile 2x2 Segmented Matrix */
   .category-nav-wrapper {
-    margin: 0 auto 24px;
+    margin: 0 auto 16px;
     padding: 0;
     width: 100%;
     display: flex;
@@ -2869,8 +2876,8 @@ details.is-closing > .faq-answer-wrapper {
   }
   /* Hero Re-ordering (P2.3 & P2.4): Eyebrow -> Title -> Subtext -> Actions (Above the Fold) -> Figure (Photo) -> 1-col Benefits */
   .hero-section {
-    padding-top: 40px;
-    padding-bottom: 52px;
+    padding-top: 24px;
+    padding-bottom: 32px;
     grid-template-columns: 1fr;
     gap: 16px;
   }
@@ -2882,46 +2889,46 @@ details.is-closing > .faq-answer-wrapper {
   #hero-eyebrow,
   .hero-eyebrow {
     order: 1;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .hero-title {
     order: 2;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
     font-size: clamp(28px, 8vw, 40px);
     line-height: 1.1;
   }
 
   .hero-sub {
     order: 3;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
     font-size: var(--fs-body);
     line-height: 1.55;
   }
 
   .hero-actions {
     order: 4;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
     gap: 12px;
   }
 
   .hero-figure {
     order: 5;
-    margin: 0 0 20px;
-    padding: 12px 12px 10px;
+    margin: 0 0 16px;
+    padding: 10px 10px 8px;
   }
 
   .hero-img {
-    aspect-ratio: 4 / 5;
-    max-height: 460px;
+    aspect-ratio: 1 / 1;
+    max-height: 380px;
     object-fit: cover;
   }
 
   .hero-benefits {
     order: 6;
     grid-template-columns: 1fr;
-    gap: 16px;
-    padding-top: 20px;
+    gap: 10px;
+    padding-top: 14px;
   }
 
   /* Section Spacing & 2x2 Grid Layout for Mobile */
@@ -3197,8 +3204,8 @@ details.is-closing > .faq-answer-wrapper {
 
   .trust-inner {
     grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 24px 18px;
+    gap: 14px;
+    padding: 18px 18px;
   }
 
   .specs-grid {

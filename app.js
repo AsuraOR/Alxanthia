@@ -544,7 +544,7 @@
         const header = document.querySelector('.site-header');
         const headerHeight = (header && typeof header.getBoundingClientRect === 'function') ? header.getBoundingClientRect().height : 68;
         const rect = navEl.getBoundingClientRect();
-        if (rect.top < 0 || rect.top > headerHeight + 120) {
+        if (rect.top < 0 || rect.top > headerHeight + 16) {
           scrollToSection(navEl);
         }
       }

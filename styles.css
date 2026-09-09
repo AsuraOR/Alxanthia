@@ -212,8 +212,9 @@ button {
 }
 
 .brand-logo {
-  width: 40px;
+  width: auto;
   height: 40px;
+  max-width: 40px;
   object-fit: contain;
 }
 
@@ -2572,8 +2573,9 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 .footer-logo {
-  width: 30px;
+  width: auto;
   height: 30px;
+  max-width: 30px;
   object-fit: contain;
 }
 
@@ -2777,8 +2779,9 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .brand-logo {
-    width: 36px;
+    width: auto;
     height: 36px;
+    max-width: 36px;
   }
 
   .brand-name {
@@ -3260,8 +3263,9 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .footer-logo {
-    width: 26px;
+    width: auto;
     height: 26px;
+    max-width: 26px;
   }
 
   .footer-bottom {
@@ -3655,8 +3659,9 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 .lock-logo {
-  width: 48px;
+  width: auto;
   height: 48px;
+  max-width: 48px;
   object-fit: contain;
   margin: 0 auto 16px;
 }

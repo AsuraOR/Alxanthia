@@ -39,17 +39,17 @@ window.KOMOREBI_DATA = {
     whatsappNumber: "6281234567890",
     // Public HTTPS endpoint that stores an order and returns JSON. Keep API keys
     // server-side; see CHECKOUT-SETUP.md. Leave blank until it is deployed.
-    orderSubmissionUrl: "",
+    orderSubmissionUrl: "https://komorebi-order-endpoint.ketut-ketut92.workers.dev",
     whatsappTemplates: {
       id: {
-        stem:    "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+        stem: "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
         package: "Halo Komorebi! Saya ingin memesan {items} — {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
-        custom:  "Halo Komorebi! Saya ingin memesan Buket Custom ({stems} tangkai, estimasi {total}, belum termasuk ongkir):\n{itemList}\n{wrapInfo}{cardInfo}Apakah bisa dibuatkan?"
+        custom: "Halo Komorebi! Saya ingin memesan Buket Custom ({stems} tangkai, estimasi {total}, belum termasuk ongkir):\n{itemList}\n{wrapInfo}{cardInfo}Apakah bisa dibuatkan?"
       },
       en: {
-        stem:    "Hello Komorebi! I would like to order {items} — Total {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
+        stem: "Hello Komorebi! I would like to order {items} — Total {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
         package: "Hello Komorebi! I would like to order {items} — {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
-        custom:  "Hello Komorebi! I would like to order a Custom Bouquet ({stems} stems, estimated {total}, excludes delivery fee):\n{itemList}\n{wrapInfo}{cardInfo}Can this be arranged?"
+        custom: "Hello Komorebi! I would like to order a Custom Bouquet ({stems} stems, estimated {total}, excludes delivery fee):\n{itemList}\n{wrapInfo}{cardInfo}Can this be arranged?"
       }
     },
     whatsappWaitlistId: "Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.",
@@ -91,7 +91,7 @@ window.KOMOREBI_DATA = {
   wraps: [
     { key: "kraft", swatch: "#B79A6E" },
     { key: "cream", swatch: "#F0E7D6" },
-    { key: "sage",  swatch: "#7E8F7C" },
+    { key: "sage", swatch: "#7E8F7C" },
     { key: "blush", swatch: "#C9A4A8" }
   ],
 

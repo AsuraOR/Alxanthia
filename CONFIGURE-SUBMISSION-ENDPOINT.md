@@ -136,7 +136,7 @@ function validateOrder(order) {
   required.forEach(function (field) {
     if (!String(order[field] || '').trim()) throw new Error('Missing required field: ' + field);
   });
-  if (!/^KMR-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(order.order_reference)) throw new Error('Invalid order reference.');
+  if (!/^ALX-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(order.order_reference)) throw new Error('Invalid order reference.');
   if (!/^[+0-9 ()-]{8,20}$/.test(order.buyer_whatsapp)) throw new Error('Invalid buyer WhatsApp number.');
   if (!['self', 'gift'].includes(order.order_for)) throw new Error('Invalid recipient selection.');
   if (order.order_for === 'gift' && (!order.recipient_name || !order.recipient_whatsapp || !order.recipient_contact_permission)) {

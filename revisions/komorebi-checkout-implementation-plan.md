@@ -325,7 +325,7 @@ Configure hidden fields with stable, lowercase names. At minimum:
 
 | Field | Example | Notes |
 | --- | --- | --- |
-| `order_reference` | `KMR-260909-X7P4` | Generate before opening the form |
+| `order_reference` | `ALX-260909-X7P4` | Generate before opening the form |
 | `submitted_language` | `id` | Current website language |
 | `order_mode` | `custom` | `stem`, `package`, or `custom` |
 | `order_summary` | `2x Sunflower; 2x Rose; 1x Tulip` | Human-readable plain text |
@@ -360,13 +360,13 @@ Generate a non-sensitive reference before opening Tally.
 Recommended format:
 
 ```text
-KMR-YYMMDD-RRRR
+ALX-YYMMDD-RRRR
 ```
 
 Where `RRRR` is a short random uppercase alphanumeric suffix. Example:
 
 ```text
-KMR-260909-X7P4
+ALX-260909-X7P4
 ```
 
 Requirements:

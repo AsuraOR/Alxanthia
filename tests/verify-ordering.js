@@ -1404,7 +1404,7 @@ assert.strictEqual(normalized24.orderMode, 'stem');
 assert.strictEqual(normalized24.estimatedProductTotal, 60000);
 assert(normalized24.items[0].includes('Mawar'));
 const reference24 = app.generateOrderReference(new Date('2026-09-09T12:00:00Z'));
-assert(/^KMR-260909-[A-HJ-NP-Z2-9]{4}$/.test(reference24), 'Reference must use the non-sensitive KMR date/random format');
+assert(/^ALX-260909-[A-HJ-NP-Z2-9]{4}$/.test(reference24), 'Reference must use the non-sensitive ALX date/random format');
 const customerValues24 = new Map([['buyer_name', 'Ayu'], ['buyer_whatsapp', '081234567890'], ['address', 'Jl. Aman 1'], ['preferred_date', '2026-09-14']]);
 customerValues24.forEach = Map.prototype.forEach;
 const submission24 = app.buildOrderSubmission(customerValues24, reference24, normalized24);

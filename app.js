@@ -308,7 +308,7 @@
     const bytes = new Uint8Array(4);
     if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
     else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
-    return `KMR-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
+    return `ALX-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
   }
 
   function buildPostSubmissionWhatsApp(reference, buyerName = '', preferredDate = '', state = normalizedCheckoutState()) {

@@ -14,7 +14,7 @@ Deploy a small HTTPS endpoint and set its public URL as `store.orderSubmissionUr
 4. recalculate current product prices rather than trusting browser totals;
 5. store exactly one row in the restricted `Orders` sheet;
 6. make repeated `order_reference` values idempotent or flag them for review; and
-7. return HTTP 2xx JSON `{ "ok": true, "order_reference": "KMR-..." }` only after storage succeeds.
+7. return HTTP 2xx JSON `{ "ok": true, "order_reference": "ALX-..." }` only after storage succeeds.
 
 The website deliberately keeps the form visible and does not offer WhatsApp when the endpoint is missing, rejects the request, returns invalid JSON, or cannot be reached.
 

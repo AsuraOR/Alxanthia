@@ -371,7 +371,7 @@
 
       <!-- Mobile Fast Actions -->
       <div class="header-actions-mobile">
-        <a href="#order" class="nav-cta-mobile" id="mobile-order-btn">Pesan</a>
+        <a href="#collection-overview" class="nav-cta-mobile" id="mobile-order-btn">Pesan</a>
         <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Buka menu navigasi">
           <span class="nav-toggle-bar"></span>
           <span class="nav-toggle-bar"></span>
@@ -392,7 +392,7 @@
           <button type="button" id="lang-en" class="lang-btn" aria-pressed="false" aria-label="English">EN</button>
         </div>
 
-        <a href="#order" id="nav-order" class="nav-cta">Pesan</a>
+        <a href="#collection-overview" id="nav-order" class="nav-cta">Pesan</a>
       </nav>
     </div>
   </header>
@@ -573,6 +573,13 @@
     <div class="order-grid">
       <!-- Left Column: Finishing Options -->
       <div class="order-controls-col">
+        <!-- Inline Product Picker (visible only while the cart is empty) -->
+        <div class="order-picker" id="order-picker">
+          <p class="step-label" id="order-picker-label">Pilih produk</p>
+          <div class="order-picker-grid" id="order-picker-flowers"></div>
+          <div class="order-picker-grid" id="order-picker-packages"></div>
+        </div>
+
         <!-- Wrap Colour Chooser -->
         <h3 class="step-label" id="finish-label" tabindex="-1">Sentuhan akhir</h3>
         <p class="wrap-intro" id="wrap-intro">Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.</p>
@@ -681,7 +688,6 @@
   <section id="material" class="material-section container">
     <figure class="material-figure">
       <img id="material-image" src="img/macro-960.webp" srcset="img/macro-480.webp 480w, img/macro-960.webp 960w, img/macro-1254.webp 1254w" sizes="(max-width: 768px) 90vw, 540px" width="1254" height="1254" alt="Close-up of chenille stems" class="material-img" loading="lazy" decoding="async" />
-      <figcaption class="material-caption" id="mat-caption">Gbr. 1 — serat chenille pada inti kawat berpuntir</figcaption>
     </figure>
 
     <div class="material-text-col">

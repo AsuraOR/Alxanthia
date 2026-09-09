@@ -289,6 +289,34 @@
   }
 
   /**
+   * Announce a cart mutation via the single #order-announcer live region.
+   * Throttled to at most one DOM write per 500ms so holding a stepper
+   * button doesn't flood the queue — a rapid burst still ends with one
+   * trailing announcement reflecting the latest state (P2-02).
+   */
+  let announceTimer = null;
+  let lastAnnounceAt = 0;
+  function announceToScreenReader(message) {
+    const announcer = document.getElementById('order-announcer');
+    if (!announcer) return;
+    const elapsed = Date.now() - lastAnnounceAt;
+    if (announceTimer) {
+      clearTimeout(announceTimer);
+      announceTimer = null;
+    }
+    if (elapsed >= 500) {
+      announcer.textContent = message;
+      lastAnnounceAt = Date.now();
+    } else {
+      announceTimer = setTimeout(() => {
+        announcer.textContent = message;
+        lastAnnounceAt = Date.now();
+        announceTimer = null;
+      }, 500 - elapsed);
+    }
+  }
+
+  /**
    * Cart mutation: add a line, merging into an existing stem/package line
    * with the same identity (same flowerKey, or same pkgIndex). Custom lines
    * never merge — each committed bouquet is a distinct line.
@@ -312,6 +340,11 @@
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const { title } = describeLine(line, t);
+    announceToScreenReader(fillTemplate(t.announceLineAdded || '{item} added. {n} item(s) in cart.', { item: title, n: cart.length }));
+
     return line;
   }
 
@@ -322,10 +355,14 @@
   function removeLine(id) {
     const idx = cart.findIndex(l => l.id === id);
     if (idx === -1) return;
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const { title } = describeLine(cart[idx], t);
     cart.splice(idx, 1);
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+
+    announceToScreenReader(fillTemplate(t.announceLineRemoved || '{item} removed. {n} item(s) in cart.', { item: title, n: cart.length }));
 
     const linesEl = document.getElementById('cart-lines');
     if (linesEl) {
@@ -354,6 +391,10 @@
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const { title } = describeLine(line, t);
+    announceToScreenReader(fillTemplate(t.announceQtyChanged || '{item} updated to {qty}. {n} item(s) in cart.', { item: title, qty: newQty, n: cart.length }));
   }
 
   /**
@@ -386,7 +427,7 @@
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
-    addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
+    addLine({ type: 'package', pkgIndex: selectedPackage, variety: 'mix', qty: 1 });
     if (restoreFocus) {
       const activeBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
       if (activeBtn) activeBtn.focus({ preventScroll: true });
@@ -458,6 +499,18 @@
    */
   function selectWrap(wrapKey) {
     selectedWrap = wrapKey;
+    renderOrderSection();
+  }
+
+  /**
+   * Order action: choose a variety (or studio mix) for a package cart line.
+   * Additive only — computeCartTotals ignores variety, since it never
+   * changes price (P1-07).
+   */
+  function selectPackageVariety(lineId, variety) {
+    const line = cart.find(l => l.id === lineId && l.type === 'package');
+    if (!line) return;
+    line.variety = variety;
     renderOrderSection();
   }
 
@@ -1081,6 +1134,13 @@
   /**
    * Render How They're Made Section
    */
+  const STEP_ICON_PATHS = [
+    '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line>',
+    '<path d="M12 3C8 7 8 14 12 21C16 14 16 7 12 3Z"></path>',
+    '<path d="M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3"></path><line x1="8" y1="12" x2="16" y2="12"></line>',
+    '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>'
+  ];
+
   function renderHowTo(t) {
     setText('#how-eyebrow', t.howEyebrow);
     setText('#how-title', t.howTitle);
@@ -1088,10 +1148,27 @@
     const stepsEl = document.getElementById('steps-grid');
     if (stepsEl && t.steps) {
       stepsEl.innerHTML = '';
-      t.steps.forEach(step => {
+      const stepPhotos = siteData.stepPhotos || [];
+      t.steps.forEach((step, index) => {
         const div = document.createElement('div');
         div.className = 'step-card';
+        const photo = stepPhotos[index];
+        let photoHtml;
+        if (photo && photo.src) {
+          photoHtml = `
+            <img class="step-photo" src="${photo.src}" ${photo.srcset ? `srcset="${photo.srcset}" sizes="(max-width: 600px) 45vw, 280px"` : ''} alt="${step[1]}" loading="lazy" width="480" height="480" />
+          `;
+        } else {
+          const iconPath = STEP_ICON_PATHS[index] || STEP_ICON_PATHS[0];
+          photoHtml = `
+            <div class="step-photo-placeholder" role="img" aria-label="${step[1]}">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>
+              <span class="step-photo-label">${t.stepPhotoLabel || ''}</span>
+            </div>
+          `;
+        }
         div.innerHTML = `
+          ${photoHtml}
           <p class="step-kicker">${step[0]}</p>
           <h3 class="step-title">${step[1]}</h3>
           <p class="step-desc">${step[2]}</p>
@@ -1108,7 +1185,6 @@
     setText('#mat-eyebrow', t.matEyebrow);
     setText('#mat-title', t.matTitle);
     setText('#mat-body', t.matBody);
-    setText('#mat-caption', t.matCaption);
     setAttr('#material-image', 'src', siteData.images.macro);
     setAttr('#material-image', 'alt', currentLang === 'en'
       ? 'Close-up of chenille stems showing the soft pile over a twisted wire core'
@@ -1137,6 +1213,12 @@
   /**
    * Cart line title/photo helper — resolves what a line represents for display.
    */
+  function varietyName(varietyKey, t) {
+    if (!varietyKey || varietyKey === 'mix') return t.pkgVarietyMix || 'Studio mix';
+    const flower = siteData.flowers[varietyKey];
+    return flower ? (flower[currentLang] || flower.en).name : varietyKey;
+  }
+
   function describeLine(line, t) {
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
@@ -1145,7 +1227,10 @@
     }
     if (line.type === 'package') {
       const pkg = siteData.packages[line.pkgIndex];
-      const title = t.pkgNames[line.pkgIndex] || `Package ${line.pkgIndex + 1}`;
+      const pkgName = t.pkgNames[line.pkgIndex] || `Package ${line.pkgIndex + 1}`;
+      const title = (line.variety && line.variety !== 'mix')
+        ? `${pkgName} — ${varietyName(line.variety, t)}`
+        : pkgName;
       return { title, photoSrc: pkg ? (pkg.photoWebp || pkg.photo) : '', photoAlt: title };
     }
     // custom
@@ -1154,6 +1239,93 @@
     const title = `${t.customTitleShort} (${bouquetStems} ${t.stemsWord})`;
     const illustrativePkg = siteData.packages[1];
     return { title, photoSrc: illustrativePkg ? (illustrativePkg.photoWebp || illustrativePkg.photo) : '', photoAlt: title };
+  }
+
+  /**
+   * Locate a rendered cart-line <li> by its line id, from a stable ancestor
+   * (#cart-lines survives re-renders; the <li>s inside it don't).
+   */
+  function findCartLineEl(linesEl, lineId) {
+    const items = Array.from(linesEl.querySelectorAll('.cart-line'));
+    return items.find(el => el.getAttribute('data-line-id') === String(lineId)) || null;
+  }
+
+  /**
+   * Package variety chooser — one radio per flower plus "studio mix".
+   * Reuses the #wrap-chips roving-tabindex / arrow-key pattern exactly
+   * (same role="radio", aria-checked, keyboard handling) rather than a
+   * second implementation (P1-07).
+   */
+  function renderVarietyChooser(line, t, linesEl) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'cart-line-variety';
+
+    const label = document.createElement('p');
+    label.className = 'cart-line-variety-label';
+    label.textContent = t.pkgVarietyLabel || 'Pilih varietas';
+    wrapper.appendChild(label);
+
+    const optionsEl = document.createElement('div');
+    optionsEl.className = 'cart-line-variety-options';
+    optionsEl.setAttribute('role', 'radiogroup');
+    optionsEl.setAttribute('aria-label', t.pkgVarietyLabel || 'Pilih varietas');
+
+    const options = ['mix', ...(siteData.flowerOrder || [])];
+    const currentVariety = line.variety || 'mix';
+
+    options.forEach((key, idx) => {
+      const active = currentVariety === key;
+      const name = varietyName(key, t);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `chip-wrap chip-variety ${active ? 'active' : ''}`;
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', active ? 'true' : 'false');
+      btn.setAttribute('tabindex', active ? '0' : '-1');
+      btn.setAttribute('data-variety-index', String(idx));
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = name;
+      btn.appendChild(nameSpan);
+      if (active) {
+        const check = document.createElement('span');
+        check.className = 'wrap-check';
+        check.setAttribute('aria-hidden', 'true');
+        check.textContent = '✓';
+        btn.appendChild(check);
+      }
+
+      const focusActiveChip = () => {
+        const freshLi = findCartLineEl(linesEl, line.id);
+        const freshOptions = freshLi ? freshLi.querySelector('.cart-line-variety-options') : null;
+        const activeChip = freshOptions ? freshOptions.querySelector('.chip-variety.active') : null;
+        if (activeChip) activeChip.focus();
+      };
+
+      btn.addEventListener('click', () => {
+        selectPackageVariety(line.id, key);
+        focusActiveChip();
+      });
+      btn.addEventListener('keydown', (e) => {
+        let targetIdx = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          targetIdx = (idx + 1) % options.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          targetIdx = (idx - 1 + options.length) % options.length;
+        }
+        if (targetIdx >= 0) {
+          selectPackageVariety(line.id, options[targetIdx]);
+          focusActiveChip();
+        }
+      });
+
+      optionsEl.appendChild(btn);
+    });
+
+    wrapper.appendChild(optionsEl);
+    return wrapper;
   }
 
   /**
@@ -1231,8 +1403,100 @@
       removeBtn.addEventListener('click', () => removeLine(line.id));
       li.appendChild(removeBtn);
 
+      if (line.type === 'package') {
+        li.appendChild(renderVarietyChooser(line, t, linesEl));
+      }
+
       linesEl.appendChild(li);
     });
+  }
+
+  /**
+   * Build one compact selectable tile for the empty-cart order picker.
+   * Shared shape for both flowers and packages so the markup lives in one place.
+   */
+  function renderPickerTile({ photoSrc, title, priceStr, ariaLabel, onSelect }) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'picker-tile';
+    tile.setAttribute('aria-label', ariaLabel);
+
+    const thumb = document.createElement('img');
+    thumb.className = 'picker-tile-photo';
+    thumb.src = photoSrc;
+    thumb.alt = '';
+    thumb.setAttribute('aria-hidden', 'true');
+    thumb.width = 64;
+    thumb.height = 64;
+    thumb.loading = 'lazy';
+    tile.appendChild(thumb);
+
+    const info = document.createElement('span');
+    info.className = 'picker-tile-info';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'picker-tile-title';
+    titleEl.textContent = title;
+    const priceEl = document.createElement('span');
+    priceEl.className = 'picker-tile-price';
+    priceEl.textContent = priceStr;
+    info.appendChild(titleEl);
+    info.appendChild(priceEl);
+    tile.appendChild(info);
+
+    tile.addEventListener('click', onSelect);
+    return tile;
+  }
+
+  /**
+   * Render the inline order picker — visible only while the cart is empty,
+   * so the header "Pesan" CTA and #order never land on a dead end (P1-08).
+   */
+  function renderOrderPicker() {
+    const pickerEl = document.getElementById('order-picker');
+    if (!pickerEl) return;
+
+    if (cart.length > 0) {
+      pickerEl.style.display = 'none';
+      return;
+    }
+    pickerEl.style.display = 'block';
+
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    setText('#order-picker-label', t.orderPickerLabel || 'Pilih produk');
+
+    const flowersEl = document.getElementById('order-picker-flowers');
+    if (flowersEl) {
+      while (flowersEl.children.length > 0) flowersEl.removeChild(flowersEl.children[flowersEl.children.length - 1]);
+      (siteData.flowerOrder || []).forEach(key => {
+        const flower = siteData.flowers[key];
+        if (!flower) return;
+        const trans = flower[currentLang] || flower.en;
+        const priceStr = formatRp(flower.stemPrice || 55000);
+        flowersEl.appendChild(renderPickerTile({
+          photoSrc: flower.photo,
+          title: trans.name,
+          priceStr,
+          ariaLabel: `${t.orderStemLabel} — ${trans.name}, ${priceStr}`,
+          onSelect: () => selectStemOrder(key, false)
+        }));
+      });
+    }
+
+    const packagesEl = document.getElementById('order-picker-packages');
+    if (packagesEl) {
+      while (packagesEl.children.length > 0) packagesEl.removeChild(packagesEl.children[packagesEl.children.length - 1]);
+      (siteData.packages || []).forEach((pkg, index) => {
+        const title = t.pkgNames[index] || `Package ${index + 1}`;
+        const priceStr = formatRp(pkg.price);
+        packagesEl.appendChild(renderPickerTile({
+          photoSrc: pkg.photoWebp || pkg.photo,
+          title,
+          priceStr,
+          ariaLabel: `${t.pkgBtn} — ${title}, ${priceStr}`,
+          onSelect: () => selectPackageOrder(index, false)
+        }));
+      });
+    }
   }
 
   /**
@@ -1241,6 +1505,8 @@
   function renderOrderSection() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const cartHasSelection = cart.length > 0;
+
+    renderOrderPicker();
 
     setText('#order-eyebrow', t.orderEyebrow);
     setText('#order-title', t.orderTitle);
@@ -1332,9 +1598,9 @@
 
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
-      if (siteData.store.showPrices) {
+      if (siteData.store.showPrices && cartHasSelection) {
         priceEl.style.display = 'block';
-        priceEl.textContent = cartHasSelection ? formatRp(cartTotals.total) : (t.emptySummaryPrice || '—');
+        priceEl.textContent = formatRp(cartTotals.total);
       } else {
         priceEl.style.display = 'none';
       }
@@ -1550,8 +1816,8 @@
           }
         } else if (line.type === 'package') {
           const pkg = siteData.packages[line.pkgIndex];
-          const pkgName = t.pkgNames[line.pkgIndex];
-          const items = `${pkgName} (${pkg.stems} ${currentLang === 'en' ? 'stems' : 'tangkai'})`;
+          const { title: pkgTitle } = describeLine(line, t);
+          const items = `${pkgTitle} (${pkg.stems} ${currentLang === 'en' ? 'stems' : 'tangkai'})`;
           const vars = {
             items, total: formatRp(cartTotals.total), stems: pkg.stems,
             itemList: `• ${items}`, wrapInfo: wrapTxt, cardInfo: cardTxt
@@ -1603,14 +1869,6 @@
     updateWhatsAppLink();
 
     setText('#order-note', t.orderNote);
-
-    // Announcer for screen readers
-    const announcer = document.getElementById('order-announcer');
-    if (announcer) {
-      announcer.textContent = cartHasSelection
-        ? `${cartTotals.stems} ${t.stemsWord} — ${formatRp(cartTotals.total)}.`
-        : (t.emptySummaryTitle || (currentLang === 'en' ? 'No flower selected yet' : 'Belum ada bunga dipilih'));
-    }
 
     // 7. Update sticky mobile order bar (R04)
     if (!cartHasSelection) {
@@ -2288,6 +2546,7 @@
       resetCustom: resetCustomCounts,
       useCustom: useCustomBouquet,
       selectWrap: selectWrap,
+      selectPackageVariety: selectPackageVariety,
       setOrderNote: (note) => {
         orderNote = typeof note === 'string' ? note : '';
         renderOrderSection();

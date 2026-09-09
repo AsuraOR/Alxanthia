@@ -70,6 +70,14 @@ window.KOMOREBI_DATA = {
     macroSizes: "(max-width: 768px) 90vw, 540px"
   },
 
+  // "How It's Made" step photos, in step order (01 Potong / 02 Bentuk / 03 Rangkai / 04 Bungkus & kirim)
+  stepPhotos: [
+    { src: "img/step-1-potong-480.webp", srcset: "img/step-1-potong-480.webp 480w, img/step-1-potong-800.webp 800w" },
+    { src: "img/step-2-bentuk-480.webp", srcset: "img/step-2-bentuk-480.webp 480w, img/step-2-bentuk-800.webp 800w" },
+    { src: "img/step-3-rangkai-480.webp", srcset: "img/step-3-rangkai-480.webp 480w, img/step-3-rangkai-800.webp 800w" },
+    { src: "img/step-4-bungkus-480.webp", srcset: "img/step-4-bungkus-480.webp 480w, img/step-4-bungkus-800.webp 800w" }
+  ],
+
   // Pricing & Builder Rules (editable without modifying app.js)
   wrapFee: 35000,
   bulkFrom: 9,
@@ -323,6 +331,8 @@ window.KOMOREBI_DATA = {
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
+      pkgVarietyLabel: "Pilih varietas",
+      pkgVarietyMix: "Campuran studio",
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
@@ -354,6 +364,7 @@ window.KOMOREBI_DATA = {
 
       howEyebrow: "Cara dibuat",
       howTitle: "Dikerjakan tangan, lalu dikirim ke Anda",
+      stepPhotoLabel: "Foto proses segera hadir",
       steps: [
         ["01 — Potong", "Kelopak dipotong sesuai pola", "Setiap bunga punya polanya sendiri. Chenille dipotong dan disortir per bagian sebelum dirangkai."],
         ["02 — Bentuk", "Setiap kelopak dilengkungkan tangan", "Inti kawat di dalam chenille menerima lengkungan lalu menahannya. Itulah yang membuat kelopaknya terasa tumbuh, bukan sekadar dilipat."],
@@ -363,7 +374,6 @@ window.KOMOREBI_DATA = {
 
       matEyebrow: "Bahannya",
       matTitle: "Mengapa chenille bergerak seperti kelopak",
-      matCaption: "Gbr. 1 — serat chenille pada inti kawat berpuntir",
       matBody: "Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.",
       matPoints: [
         ["Bisa dibentuk ulang dengan tangan.", "Kalau kelopak tertekan di perjalanan, cukup lengkungkan kembali mengikuti lentur kawat intinya."],
@@ -373,6 +383,7 @@ window.KOMOREBI_DATA = {
 
       orderEyebrow: "Pesan",
       orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
+      orderPickerLabel: "Pilih produk",
       finishLabel: "Sentuhan akhir",
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
@@ -414,6 +425,9 @@ window.KOMOREBI_DATA = {
       removeLineLabel: "Hapus {item} dari keranjang",
       decreaseLineLabel: "Kurangi jumlah {item}",
       increaseLineLabel: "Tambah jumlah {item}",
+      announceLineAdded: "{item} ditambahkan. {n} item di keranjang.",
+      announceLineRemoved: "{item} dihapus. {n} item di keranjang.",
+      announceQtyChanged: "{item} diperbarui menjadi {qty}. {n} item di keranjang.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Pembungkus",
@@ -526,6 +540,8 @@ window.KOMOREBI_DATA = {
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
+      pkgVarietyLabel: "Choose a variety",
+      pkgVarietyMix: "Studio mix",
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
@@ -557,6 +573,7 @@ window.KOMOREBI_DATA = {
 
       howEyebrow: "How they're made",
       howTitle: "Made by hand, then sent to you",
+      stepPhotoLabel: "Process photo coming soon",
       steps: [
         ["01 — Cut", "Petals cut to pattern", "Each flower has its own drawn pattern. Chenille is cut and sorted by part before anything is assembled."],
         ["02 — Shape", "Every petal curved by hand", "The wire core inside the chenille takes a curve and holds it. That is what makes a petal read as grown rather than folded."],
@@ -566,7 +583,6 @@ window.KOMOREBI_DATA = {
 
       matEyebrow: "The material",
       matTitle: "Why chenille behaves like a petal",
-      matCaption: "Fig. 1 — chenille pile on a twisted wire core",
       matBody: "A soft chenille pile over a twisted wire core: it takes a curve the way a petal does, and then it holds it. That is what makes these flowers read as grown rather than folded.",
       matPoints: [
         ["Reshapes with your fingers.", "If a petal flattens in transit, gently curve it back along its flexible wire core."],
@@ -576,6 +592,7 @@ window.KOMOREBI_DATA = {
 
       orderEyebrow: "Order",
       orderTitle: "Finish your order, then confirm via chat",
+      orderPickerLabel: "Choose a product",
       finishLabel: "Finishing",
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
@@ -617,6 +634,9 @@ window.KOMOREBI_DATA = {
       removeLineLabel: "Remove {item} from cart",
       decreaseLineLabel: "Decrease {item} quantity",
       increaseLineLabel: "Increase {item} quantity",
+      announceLineAdded: "{item} added. {n} item(s) in cart.",
+      announceLineRemoved: "{item} removed. {n} item(s) in cart.",
+      announceQtyChanged: "{item} updated to {qty}. {n} item(s) in cart.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Wrap",

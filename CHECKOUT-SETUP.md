@@ -1,5 +1,7 @@
 # Native checkout launch setup
 
+For a non-technical, click-by-click walkthrough with copy-and-paste code, start with [`CONFIGURE-SUBMISSION-ENDPOINT.md`](CONFIGURE-SUBMISSION-ENDPOINT.md).
+
 The buyer, recipient, delivery, gift, notes, and consent form now runs directly on the Komorebi website. Product details come from the existing cart and customers never re-enter them. The browser must still send the completed order to a server before WhatsApp is offered; frontend code alone cannot safely write to a private spreadsheet.
 
 ## Submission endpoint

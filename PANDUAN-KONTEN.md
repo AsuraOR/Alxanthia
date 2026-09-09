@@ -1,4 +1,4 @@
-# 📝 Panduan Edit Konten — Komorebi Creations
+# 📝 Panduan Edit Konten — Alxanthia Studio
 
 Satu file ini merangkum **semua** yang bisa Anda ubah sendiri di website: teks,
 harga, foto, dan tautan. Semua isi website disimpan di **satu file**:
@@ -53,10 +53,10 @@ mana yang harus dibuka untuk mengubah apa.
 
 ```js
 store: {
-  brandName: "Komorebi",
+  brandName: "Alxanthia",
   tagline: "est. 2026",
-  logo: "komorebi-logo-96.webp",
-  logo2x: "komorebi-logo-192.webp",
+  logo: "alxanthia-logo-96.webp",
+  logo2x: "alxanthia-logo-192.webp",
   ...
 ```
 Ganti `brandName` dan `tagline` untuk mengubah nama/tulisan di sebelah logo.
@@ -202,7 +202,7 @@ hubungi developer karena perlu perubahan alur, bukan sekadar teks).
 
 ```js
 store: {
-  instagramUrl: "https://instagram.com/komorebi",
+  instagramUrl: "https://instagram.com/alxanthia",
   shopeeUrl: "",                    // kosongkan dulu sampai toko Shopee resmi dibuka
   email: "",
   address: "",

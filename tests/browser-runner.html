@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <title>Komorebi Real Browser Automated Spec</title>
+  <title>Alxanthia Real Browser Automated Spec</title>
   <style>
     body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
     .pass { color: #4ade80; }
@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <h1>KOMOREBI REAL-BROWSER TEST RUNNER</h1>
+  <h1>ALXANTHIA REAL-BROWSER TEST RUNNER</h1>
   <div id="status">Loading application iframe...</div>
   <pre id="results"></pre>
   <iframe id="app-frame" src="../index.html?unlock=22062024"></iframe>
@@ -37,7 +37,7 @@
 
       try {
         // Step 0: Ensure app is initialized
-        assert('App window and DOM ready', win.KomorebiApp !== undefined);
+        assert('App window and DOM ready', win.AlxanthiaApp !== undefined);
 
         // Test 1: Stem selection focus transfer to #finish-label (A3)
         const stemBtn = doc.querySelector('.btn-order-stem');

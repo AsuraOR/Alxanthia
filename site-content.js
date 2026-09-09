@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * KOMOREBI WEBSITE CONTENT CONFIGURATION (site-content.js)
+ * ALXANTHIA WEBSITE CONTENT CONFIGURATION (site-content.js)
  * =============================================================================
  * 
  * PETUNJUK UNTUK NON-DEVELOPER (INDONESIA):
@@ -13,7 +13,7 @@
  * =============================================================================
  */
 
-window.KOMOREBI_DATA = {
+window.ALXANTHIA_DATA = {
   // Private Access Passcode Protection
   auth: {
     enabled: true,
@@ -22,11 +22,11 @@ window.KOMOREBI_DATA = {
 
   // Store & Contact Links
   store: {
-    brandName: "Komorebi",
+    brandName: "Alxanthia",
     tagline: "est. 2026",
-    logo: "komorebi-logo-96.webp",
-    logo2x: "komorebi-logo-192.webp",
-    instagramUrl: "https://instagram.com/komorebi",
+    logo: "alxanthia-logo-96.webp",
+    logo2x: "alxanthia-logo-192.webp",
+    instagramUrl: "https://instagram.com/alxanthia",
     // Shopee store URL: left empty until confirmed by store owner (see README.md Owner-Input List)
     shopeeUrl: "",
     // Contact email: left empty until confirmed by store owner. The footer row only
@@ -42,18 +42,18 @@ window.KOMOREBI_DATA = {
     orderSubmissionUrl: "https://komorebi-order-endpoint.ketut-ketut92.workers.dev",
     whatsappTemplates: {
       id: {
-        stem: "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
-        package: "Halo Komorebi! Saya ingin memesan {items} — {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
-        custom: "Halo Komorebi! Saya ingin memesan Buket Custom ({stems} tangkai, estimasi {total}, belum termasuk ongkir):\n{itemList}\n{wrapInfo}{cardInfo}Apakah bisa dibuatkan?"
+        stem: "Halo Alxanthia! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+        package: "Halo Alxanthia! Saya ingin memesan {items} — {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
+        custom: "Halo Alxanthia! Saya ingin memesan Buket Custom ({stems} tangkai, estimasi {total}, belum termasuk ongkir):\n{itemList}\n{wrapInfo}{cardInfo}Apakah bisa dibuatkan?"
       },
       en: {
-        stem: "Hello Komorebi! I would like to order {items} — Total {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
-        package: "Hello Komorebi! I would like to order {items} — {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
-        custom: "Hello Komorebi! I would like to order a Custom Bouquet ({stems} stems, estimated {total}, excludes delivery fee):\n{itemList}\n{wrapInfo}{cardInfo}Can this be arranged?"
+        stem: "Hello Alxanthia! I would like to order {items} — Total {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
+        package: "Hello Alxanthia! I would like to order {items} — {total} (excludes delivery fee). {wrapInfo}{cardInfo}Is it available?",
+        custom: "Hello Alxanthia! I would like to order a Custom Bouquet ({stems} stems, estimated {total}, excludes delivery fee):\n{itemList}\n{wrapInfo}{cardInfo}Can this be arranged?"
       }
     },
-    whatsappWaitlistId: "Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.",
-    whatsappWaitlistEn: "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.",
+    whatsappWaitlistId: "Halo Alxanthia! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.",
+    whatsappWaitlistEn: "Hello Alxanthia! I'm interested in the DIY kit — please let me know when it launches.",
     // Marketplace & Channel visibility toggles
     channels: {
       showShopee: true,
@@ -474,7 +474,7 @@ window.KOMOREBI_DATA = {
       footerWhatsappLabel: "WhatsApp",
       footerOrderLink: "Cara pesan",
       footerPaymentNote: "Pembayaran dikonfirmasi via WhatsApp",
-      copyright: "© 2026 Komorebi",
+      copyright: "© 2026 Alxanthia",
       marketplaceComingSoonBadge: "segera hadir"
     },
 
@@ -683,7 +683,7 @@ window.KOMOREBI_DATA = {
       footerWhatsappLabel: "WhatsApp",
       footerOrderLink: "How to order",
       footerPaymentNote: "Payment confirmed via WhatsApp",
-      copyright: "© 2026 Komorebi",
+      copyright: "© 2026 Alxanthia",
       marketplaceComingSoonBadge: "coming soon"
     }
   }

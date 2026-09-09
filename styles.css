@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KOMOREBI CREATIONS — 1:1 BOTANICAL STYLESHEET
+   ALXANTHIA STUDIO — 1:1 BOTANICAL STYLESHEET
    ========================================================================== */
 
 :root {
@@ -38,7 +38,7 @@
   --fs-button: 14px;
   --fs-body: 16px;
 
-  /* Motion System Tokens (Komorebi Animation Brief) */
+  /* Motion System Tokens (Alxanthia Animation Brief) */
   --motion-duration-btn: 180ms;
   --motion-duration-preview: 200ms;
   --motion-duration-disclosure: 220ms;
@@ -3472,7 +3472,7 @@ details.is-closing > .faq-answer-wrapper {
   }
 }
 
-/* Reduced Motion Support (Komorebi Animation Brief) */
+/* Reduced Motion Support (Alxanthia Animation Brief) */
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto !important;

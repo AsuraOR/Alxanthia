@@ -2,7 +2,7 @@
 
 For a non-technical, click-by-click walkthrough with copy-and-paste code, start with [`CONFIGURE-SUBMISSION-ENDPOINT.md`](CONFIGURE-SUBMISSION-ENDPOINT.md).
 
-The buyer, recipient, delivery, gift, notes, and consent form now runs directly on the Komorebi website. Product details come from the existing cart and customers never re-enter them. The browser must still send the completed order to a server before WhatsApp is offered; frontend code alone cannot safely write to a private spreadsheet.
+The buyer, recipient, delivery, gift, notes, and consent form now runs directly on the Alxanthia website. Product details come from the existing cart and customers never re-enter them. The browser must still send the completed order to a server before WhatsApp is offered; frontend code alone cannot safely write to a private spreadsheet.
 
 ## Submission endpoint
 
@@ -33,7 +33,7 @@ Name the primary worksheet `Orders`. Use the columns in section 9 of `revisions/
 
 ## Manual payment workflow
 
-Before creating a Midtrans Payment Link, verify the row, current prices, capacity, address, delivery service, shipping fee, and final total. Put the Komorebi reference in the Midtrans description, save the unique link to the same row, and change Payment Status to `Awaiting payment`. Set `Paid` only after checking the Midtrans dashboard or official notification—never from a message or screenshot.
+Before creating a Midtrans Payment Link, verify the row, current prices, capacity, address, delivery service, shipping fee, and final total. Put the Alxanthia reference in the Midtrans description, save the unique link to the same row, and change Payment Status to `Awaiting payment`. Set `Paid` only after checking the Midtrans dashboard or official notification—never from a message or screenshot.
 
 ## Launch test
 

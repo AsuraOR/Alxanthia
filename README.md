@@ -1,13 +1,13 @@
 <div align="center">
 
-  <img src="komorebi-logo-96.webp" alt="Komorebi Logo" width="88" height="88" />
+  <img src="alxanthia-logo-96.webp" alt="Alxanthia Logo" width="88" height="88" />
 
-  # Komorebi Creations
+  # Alxanthia Studio
 
   **Bunga yang mekar selamanya — dirangkai tangan oleh kami untuk Anda.**  
   *Handcrafted Finished Chenille Stem Flowers & Botanical Bouquets*
 
-  [![Domain](https://img.shields.io/badge/website-komorebicreations.com-3F5545?style=for-the-badge)](https://komorebicreations.com)
+  [![Domain](https://img.shields.io/badge/website-alxanthia.com-3F5545?style=for-the-badge)](https://alxanthia.com)
   [![Status](https://img.shields.io/badge/status-staging%20%2F%20private%20review-8E6127?style=for-the-badge)](#)
   [![Stack](https://img.shields.io/badge/stack-HTML5%20%7C%20CSS3%20%7C%20JS%20(Zero--Dependency)-23201B?style=for-the-badge)](#)
 
@@ -24,20 +24,20 @@
 
 | # | Parameter Operasional | Nilai Saat Ini di `site-content.js` | Status | Petunjuk Pembaruan untuk Pemilik |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Tautan Toko Shopee Resmi** (`store.shopeeUrl`) | `""` (string kosong) | ⏳ Menunggu Konfirmasi | Tombol Shopee di halaman saat ini otomatis berstatus aman *"Segera hadir"* dan dinonaktifkan. Begitu toko Shopee dibuka, isi dengan URL toko (mis. `"https://shopee.co.id/komorebi.creations"`). |
+| **1** | **Tautan Toko Shopee Resmi** (`store.shopeeUrl`) | `""` (string kosong) | ⏳ Menunggu Konfirmasi | Tombol Shopee di halaman saat ini otomatis berstatus aman *"Segera hadir"* dan dinonaktifkan. Begitu toko Shopee dibuka, isi dengan URL toko (mis. `"https://shopee.co.id/alxanthia.studio"`). |
 | **2** | **Nomor WhatsApp Studio** (`store.whatsappNumber`) | `"6281234567890"` | ⏳ Placeholder | Masukkan nomor WhatsApp aktif studio (awali dengan kode negara `62` tanpa tanda `+` atau spasi, contoh: `"6281298765432"`). Seluruh generator chat otomatis mengarah ke nomor ini. |
-| **3** | **Akun Instagram Studio** (`store.instagramUrl`) | `"https://instagram.com/komorebi"` | ⏳ Placeholder | Masukkan URL akun Instagram resmi studio (mis. `"https://instagram.com/komorebicreations"`). |
+| **3** | **Akun Instagram Studio** (`store.instagramUrl`) | `"https://instagram.com/alxanthia"` | ⏳ Placeholder | Masukkan URL akun Instagram resmi studio (mis. `"https://instagram.com/alxanthiacreations"`). |
 | **4** | **Lokasi Studio & Ekspedisi Pengiriman** | *"Dikirim dari Indonesia"* (seluruh pesanan) | ⏳ Menunggu Spesifikasi | Di FAQ dinyatakan dikirim dari Indonesia. Jika pemilik ingin menegaskan kota asal (mis. *"Jakarta Selatan"* atau *"Bandung"*) dan jenis kurir (Instant/Sameday GoSend, JNE, SiCepat), dapat disunting di `translations.id.faqs` dan `translations.en.faqs`. |
 | **5** | **Jam Operasional Balas Chat Studio** | Standar hari kerja (2–3 hari pembuatan) | ⏳ Opsional | Jika memiliki jam operasional studio tertentu (mis. *"Senin–Sabtu 09.00–18.00 WIB"*), dapat ditambahkan ke teks catatan pemesanan di `site-content.js`. |
 | **6** | **Komposisi Spesifik Formula Buket** | Campuran bunga pilihan studio (*studio mix*) | ⏳ Draf Placeholder (Menunggu Konfirmasi Pemilik) | Deskripsi paket buket saat ini menggunakan draf racikan artistik studio (*harmonious studio mix*). Seluruh rincian menunggu konfirmasi akhir pemilik sebelum peluncuran resmi. |
-| **7** | **Domain Resmi & URL Kanonikal** | `"https://komorebicreations.com/"` | ⏳ Menunggu Konfirmasi Domain | Digunakan pada tag canonical dan Open Graph di `index.html`. Bila domain final berbeda, sesuaikan di `index.html`, `sitemap.xml`, dan `CNAME`. |
+| **7** | **Domain Resmi & URL Kanonikal** | `"https://alxanthia.com/"` | ⏳ Menunggu Konfirmasi Domain | Digunakan pada tag canonical dan Open Graph di `index.html`. Bila domain final berbeda, sesuaikan di `index.html`, `sitemap.xml`, dan `CNAME`. |
 | **8** | **Tirai Pratinjau Staging** (`auth.enabled`) | `true` (Sandi dikonfigurasi di `site-content.js`) | 🔒 Tirai Pratinjau Aktif | Tirai pratinjau sisi klien untuk mencegah perayapan dan peninjauan draf sebelum pemilik siap. Sandi diatur langsung oleh pemilik di `site-content.js`. Ubah ke `false` saat peluncuran publik. |
 
 ---
 
-## 🌿 Tentang Komorebi Creations
+## 🌿 Tentang Alxanthia Studio
 
-**Komorebi Creations** adalah studio kerajinan botani independen yang merangkai bunga abadi berbahan kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap tangkai dibentuk dengan tangan, dirangkai kokoh, dan dikemas rapi siap pajang langsung dari studio kami untuk pengiriman ke seluruh nusantara.
+**Alxanthia Studio** adalah studio kerajinan botani independen yang merangkai bunga abadi berbahan kawat bulu chenille lembut di atas inti kawat lentur berpuntir. Setiap tangkai dibentuk dengan tangan, dirangkai kokoh, dan dikemas rapi siap pajang langsung dari studio kami untuk pengiriman ke seluruh nusantara.
 
 ### 🌸 Koleksi Botani & Struktur Harga (Draf Placeholder Toko)
 
@@ -69,7 +69,7 @@
 
 ## 🏛️ Arsitektur Sistem & Prinsip Teknis (R10)
 
-Situs Komorebi dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**:
+Situs Alxanthia dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**:
 - **Pure Web Standards**: Dibangun murni dengan semantik HTML5 modern, Vanilla CSS3 (Custom Properties & Fluid Typography), dan Vanilla ES6+ JavaScript.
 - **Zero Build Tools & No node_modules**: Tidak memerlukan Webpack, Vite, Babel, Tailwind, atau bundler rumit di runtime. File dapat langsung dibuka di browser apa pun atau dideploy ke web server statis (GitHub Pages, Cloudflare Pages, Nginx, Apache).
 - **Unidirectional State Machine (`app.js`)**:
@@ -92,7 +92,7 @@ Situs Komorebi dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**
 ## 📁 Struktur Direktori Repositori
 
 ```text
-komorebi-creations-1/
+alxanthia-studio/
 ├── index.html            # Markup semantik utama, filter navigasi kategori, meta tag SEO/OpenGraph, JSON-LD, dialog modal & lock screen
 ├── styles.css            # Stylesheet botani lengkap (design tokens, layout responsif, hirarki mobile, WCAG 44px touch targets)
 ├── site-content.js       # Pusat konfigurasi data tunggal (katalog botani, teks bilingual ID/EN, link toko, aturan toko dinamis)
@@ -107,8 +107,8 @@ komorebi-creations-1/
 ├── favicon-16x16.png     # Favicon 16px
 ├── favicon-32x32.png     # Favicon 32px
 ├── apple-touch-icon.png  # Ikon perangkat iOS
-├── komorebi-logo-96.webp # Logo studio resolusi 1x
-├── komorebi-logo-192.webp# Logo studio resolusi 2x
+├── alxanthia-logo-96.webp # Logo studio resolusi 1x
+├── alxanthia-logo-192.webp# Logo studio resolusi 2x
 ├── README.md             # Dokumentasi teknis & operasional ini
 └── img/                  # Fotografi botani responsif terkompresi (WebP bertingkat)
     ├── hero-*.webp       # Foto pembuka Bunga Matahari di atas kertas krem (400w, 800w, 1122w)
@@ -182,5 +182,5 @@ Buka browser pada `http://localhost:8080` dan masukkan sandi staging yang tercan
 ---
 
 <div align="center">
-  <sub>© 2026 Komorebi Creations · Handcrafted Botanical Bouquets</sub>
+  <sub>© 2026 Alxanthia Studio · Handcrafted Botanical Bouquets</sub>
 </div>

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * KOMOREBI CREATIONS — INTEGRATION TEST SUITE (EXERCISING ACTUAL APP.JS)
+ * ALXANTHIA STUDIO — INTEGRATION TEST SUITE (EXERCISING ACTUAL APP.JS)
  * =============================================================================
  * Run with: node tests/verify-ordering.js
  * 
@@ -15,7 +15,7 @@ const path = require('path');
 const vm = require('vm');
 
 console.log('======================================================================');
-console.log('KOMOREBI CREATIONS — EXECUTING ACTUAL APPLICATION INTEGRATION SUITE');
+console.log('ALXANTHIA STUDIO — EXECUTING ACTUAL APPLICATION INTEGRATION SUITE');
 console.log('======================================================================\n');
 
 // ---------------------------------------------------------------------------
@@ -475,8 +475,8 @@ vm.createContext(sandbox);
 vm.runInContext(siteContentSrc, sandbox);
 vm.runInContext(appSrc, sandbox);
 
-const app = sandbox.window.KomorebiApp;
-assert(app, 'FATAL: window.KomorebiApp must be exported by app.js');
+const app = sandbox.window.AlxanthiaApp;
+assert(app, 'FATAL: window.AlxanthiaApp must be exported by app.js');
 
 console.log('✔ Environment initialized: app.js loaded into high-fidelity DOM context\n');
 
@@ -538,7 +538,7 @@ const waChannelName = waBtn.querySelector('.channel-name');
 assert(waChannelName.textContent.includes('pilih bunga'), `WA button prompt should request selection, got: ${waChannelName.textContent}`);
 
 // Sticky Mobile Bar must prompt browsing
-assert.strictEqual(stickyTitle.textContent, 'Komorebi Creations');
+assert.strictEqual(stickyTitle.textContent, 'Alxanthia Studio');
 assert.strictEqual(stickyPrice.textContent, 'Pilih bunga');
 assert.strictEqual(stickyCta.textContent, 'Lihat bunganya ↓');
 console.log('✔ Suite 1 Passed: Order summary and sticky bar initialize to honest neutral state');
@@ -597,12 +597,12 @@ assert(decodedWa.includes('belum termasuk ongkir'), 'WhatsApp text must specify 
 // P1-01 / P1-02: exercise production message assembly for every mode and language.
 const originalMessageData = JSON.parse(JSON.stringify(app.getData()));
 const messageCases = [
-  ['id', 'stem', 'Halo Komorebi! Saya ingin memesan 1 × Mawar — tangkai jadi — Total Rp 60.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 60.000'],
-  ['en', 'stem', 'Hello Komorebi! I would like to order 1 × Rose — finished stem — Total Rp 60.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 60.000'],
-  ['id', 'package', 'Halo Komorebi! Saya ingin memesan Buket Mini (3 tangkai) — Rp 195.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 195.000'],
-  ['en', 'package', 'Hello Komorebi! I would like to order The Posy (3 stems) — Rp 195.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 195.000'],
-  ['id', 'custom', 'Halo Komorebi! Saya ingin memesan Buket Custom (3 tangkai, estimasi Rp 205.000, belum termasuk ongkir):\n• 2 × Bunga Matahari\n• 1 × Mawar\nPembungkus: Kraft. Apakah bisa dibuatkan?', 'Rp 205.000'],
-  ['en', 'custom', 'Hello Komorebi! I would like to order a Custom Bouquet (3 stems, estimated Rp 205.000, excludes delivery fee):\n• 2 × Sunflower\n• 1 × Rose\nWrap: Kraft. Can this be arranged?', 'Rp 205.000']
+  ['id', 'stem', 'Halo Alxanthia! Saya ingin memesan 1 × Mawar — tangkai jadi — Total Rp 60.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 60.000'],
+  ['en', 'stem', 'Hello Alxanthia! I would like to order 1 × Rose — finished stem — Total Rp 60.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 60.000'],
+  ['id', 'package', 'Halo Alxanthia! Saya ingin memesan Buket Mini (3 tangkai) — Rp 195.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 195.000'],
+  ['en', 'package', 'Hello Alxanthia! I would like to order The Posy (3 stems) — Rp 195.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 195.000'],
+  ['id', 'custom', 'Halo Alxanthia! Saya ingin memesan Buket Custom (3 tangkai, estimasi Rp 205.000, belum termasuk ongkir):\n• 2 × Bunga Matahari\n• 1 × Mawar\nPembungkus: Kraft. Apakah bisa dibuatkan?', 'Rp 205.000'],
+  ['en', 'custom', 'Hello Alxanthia! I would like to order a Custom Bouquet (3 stems, estimated Rp 205.000, excludes delivery fee):\n• 2 × Sunflower\n• 1 × Rose\nWrap: Kraft. Can this be arranged?', 'Rp 205.000']
 ];
 const readWaMessage = () => new URL(waBtn.getAttribute('href')).searchParams.get('text');
 for (const [lang, mode, expected, total] of messageCases) {

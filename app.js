@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * KOMOREBI CREATIONS — APPLICATION CONTROLLER (app.js)
+ * ALXANTHIA STUDIO — APPLICATION CONTROLLER (app.js)
  * =============================================================================
  * Product Pivot: Finished Flowers & Bouquets
  */
@@ -9,8 +9,8 @@
   'use strict';
 
   // Constants & Storage Keys
-  const LANG_KEY = 'komorebi.lang';
-  const AUTH_KEY = 'komorebi_unlocked';
+  const LANG_KEY = 'alxanthia.lang';
+  const AUTH_KEY = 'alxanthia_unlocked';
 
   // State
   let currentLang = 'id';
@@ -32,11 +32,11 @@
   }
 
   /**
-   * Load data directly from site-content.js (window.KOMOREBI_DATA)
+   * Load data directly from site-content.js (window.ALXANTHIA_DATA)
    */
   function loadData() {
-    if (window.KOMOREBI_DATA) {
-      siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
+    if (window.ALXANTHIA_DATA) {
+      siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
     }
   }
 
@@ -85,14 +85,14 @@
 
     const isEn = lang === 'en';
     const title = isEn
-      ? 'Komorebi — Finished Chenille Stem Flowers & Handcrafted Bouquets'
-      : 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets';
+      ? 'Alxanthia — Finished Chenille Stem Flowers & Handcrafted Bouquets'
+      : 'Alxanthia — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets';
     const desc = isEn
       ? 'Chenille stem botanical flowers that never wilt: Sunflower, Rose, Tulip, and Gerbera. Handcrafted ready-to-display stems and bouquets.'
       : 'Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang.';
     const ogTitle = isEn
-      ? 'Komorebi — Handcrafted Chenille Stem Flowers & Bouquets'
-      : 'Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille';
+      ? 'Alxanthia — Handcrafted Chenille Stem Flowers & Bouquets'
+      : 'Alxanthia — Bunga Jadi & Buket Kawat Bulu Chenille';
     const ogDesc = isEn
       ? 'Flowers that never wilt — handcrafted by us for you. Sunflower, Rose, Tulip, and Gerbera.'
       : 'Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera.';
@@ -316,8 +316,8 @@
     const name = buyerName || (state.language === 'en' ? '—' : '—');
     const date = preferredDate || (state.language === 'en' ? 'To be confirmed' : 'Akan dikonfirmasi');
     url.searchParams.set('text', state.language === 'en'
-      ? `Hello Komorebi! I have just submitted order request ${reference}.\n\nName: ${name}\nOrder: ${state.items.join('; ')}\nProduct subtotal: ${formatRp(state.estimatedProductTotal)}\nPreferred date: ${date}\n\nPlease confirm availability, timing, and delivery cost. Thank you!`
-      : `Halo Komorebi! Saya baru mengirim permintaan pesanan ${reference}.\n\nNama: ${name}\nPesanan: ${state.items.join('; ')}\nSubtotal produk: ${formatRp(state.estimatedProductTotal)}\nTanggal yang diinginkan: ${date}\n\nMohon konfirmasi ketersediaan, tanggal, dan ongkos kirimnya. Terima kasih!`);
+      ? `Hello Alxanthia! I have just submitted order request ${reference}.\n\nName: ${name}\nOrder: ${state.items.join('; ')}\nProduct subtotal: ${formatRp(state.estimatedProductTotal)}\nPreferred date: ${date}\n\nPlease confirm availability, timing, and delivery cost. Thank you!`
+      : `Halo Alxanthia! Saya baru mengirim permintaan pesanan ${reference}.\n\nNama: ${name}\nPesanan: ${state.items.join('; ')}\nSubtotal produk: ${formatRp(state.estimatedProductTotal)}\nTanggal yang diinginkan: ${date}\n\nMohon konfirmasi ketersediaan, tanggal, dan ongkos kirimnya. Terima kasih!`);
     return url.toString();
   }
 
@@ -1202,8 +1202,8 @@
       if (isWhatsAppReady()) {
         const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
         const waWaitlistMsg = currentLang === 'en'
-          ? (siteData.store.whatsappWaitlistEn || "Hello Komorebi! I'm interested in the DIY kit — please let me know when it launches.")
-          : (siteData.store.whatsappWaitlistId || 'Halo Komorebi! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.');
+          ? (siteData.store.whatsappWaitlistEn || "Hello Alxanthia! I'm interested in the DIY kit — please let me know when it launches.")
+          : (siteData.store.whatsappWaitlistId || 'Halo Alxanthia! Saya tertarik dengan kit DIY-nya — tolong kabari saya saat diluncurkan.');
         ctaLink.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waWaitlistMsg)}`;
         ctaLink.classList.remove('btn-disabled');
         ctaLink.removeAttribute('aria-disabled');
@@ -1814,8 +1814,8 @@
             const announcer = document.getElementById('order-announcer');
             if (announcer) {
               announcer.textContent = currentLang === 'en'
-                ? 'Opening Komorebi official store on Shopee...'
-                : 'Membuka toko resmi Komorebi di Shopee...';
+                ? 'Opening Alxanthia official store on Shopee...'
+                : 'Membuka toko resmi Alxanthia di Shopee...';
             }
           });
         }
@@ -1910,9 +1910,9 @@
           if (hasTemplate) {
             waMsg = fillTemplate(template, vars);
           } else if (currentLang === 'en') {
-            waMsg = `Hello Komorebi! I would like to order a Custom Bouquet (${cartTotals.stems} stems, estimated ${formatRp(cartTotals.total)}, excludes delivery fee):\n${flowerList}\n${wrapTxt}${cardTxt}Can this be arranged?`;
+            waMsg = `Hello Alxanthia! I would like to order a Custom Bouquet (${cartTotals.stems} stems, estimated ${formatRp(cartTotals.total)}, excludes delivery fee):\n${flowerList}\n${wrapTxt}${cardTxt}Can this be arranged?`;
           } else {
-            waMsg = `Halo Komorebi! Saya ingin memesan Buket Custom (${cartTotals.stems} tangkai, estimasi ${formatRp(cartTotals.total)}, belum termasuk ongkir):\n${flowerList}\n${wrapTxt}${cardTxt}Apakah bisa dibuatkan?`;
+            waMsg = `Halo Alxanthia! Saya ingin memesan Buket Custom (${cartTotals.stems} tangkai, estimasi ${formatRp(cartTotals.total)}, belum termasuk ongkir):\n${flowerList}\n${wrapTxt}${cardTxt}Apakah bisa dibuatkan?`;
           }
         } else if (line.type === 'package') {
           const pkg = siteData.packages[line.pkgIndex];
@@ -1925,9 +1925,9 @@
           if (hasTemplate) {
             waMsg = fillTemplate(template, vars);
           } else if (currentLang === 'en') {
-            waMsg = `Hello Komorebi! I would like to order ${items} — ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+            waMsg = `Hello Alxanthia! I would like to order ${items} — ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
           } else {
-            waMsg = `Halo Komorebi! Saya ingin memesan ${items} — ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+            waMsg = `Halo Alxanthia! Saya ingin memesan ${items} — ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
           }
         } else {
           // stem
@@ -1941,9 +1941,9 @@
           if (hasTemplate) {
             waMsg = fillTemplate(template, vars);
           } else if (currentLang === 'en') {
-            waMsg = `Hello Komorebi! I would like to order ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+            waMsg = `Hello Alxanthia! I would like to order ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
           } else {
-            waMsg = `Halo Komorebi! Saya ingin memesan ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+            waMsg = `Halo Alxanthia! Saya ingin memesan ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
           }
         }
       } else {
@@ -1956,8 +1956,8 @@
           return `• ${qtyPrefix}${title} — ${formatRp(lineTotal)}`;
         }).join('\n');
         waMsg = currentLang === 'en'
-          ? `Hello Komorebi! I would like to order:\n${itemList}\nTotal ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`
-          : `Halo Komorebi! Saya ingin memesan:\n${itemList}\nTotal ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+          ? `Hello Alxanthia! I would like to order:\n${itemList}\nTotal ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`
+          : `Halo Alxanthia! Saya ingin memesan:\n${itemList}\nTotal ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
       }
 
       btnWhatsapp.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`;
@@ -1972,7 +1972,7 @@
 
     // 7. Update sticky mobile order bar (R04)
     if (!cartHasSelection) {
-      setText('#sticky-order-title', 'Komorebi Creations');
+      setText('#sticky-order-title', 'Alxanthia Studio');
       setText('#sticky-order-price', t.stickyPrompt || (currentLang === 'en' ? 'Choose flowers' : 'Pilih bunga'));
       setText('#sticky-order-cta', `${t.ctaBrowse || (currentLang === 'en' ? 'Browse' : 'Lihat bunga')} ↓`);
     } else if (cartInvalid) {
@@ -2023,7 +2023,7 @@
    */
   function renderFooter(t) {
     setText('#footer-care', t.footerCare);
-    setText('#footer-copyright', t.copyright || '© 2026 Komorebi');
+    setText('#footer-copyright', t.copyright || '© 2026 Alxanthia');
     setText('#footer-tagline', siteData.store.tagline || '');
     setText('#footer-contact-title', t.footerContactTitle || 'Kontak');
     setText('#footer-help-title', t.footerHelpTitle || 'Bantuan');
@@ -2787,7 +2787,7 @@
     } catch (e) {}
 
     // Export API for Testing & Verification
-    window.KomorebiApp = {
+    window.AlxanthiaApp = {
       getData: () => siteData,
       setData: (newData) => {
         siteData = newData;
@@ -2798,7 +2798,7 @@
       applyLanguageMetadata: applyLanguageMetadata,
       renderAll: renderAll,
       reloadOriginal: () => {
-        siteData = JSON.parse(JSON.stringify(window.KOMOREBI_DATA));
+        siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
         renderAll();
       },
       selectStem: selectStemOrder,

@@ -1,11 +1,11 @@
-# Configure the Komorebi submission endpoint
+# Configure the Alxanthia submission endpoint
 
 This guide is written for the store owner. You do not need to know how to program: follow each step in order and copy the supplied code exactly.
 
 ## What you are setting up
 
 ```text
-Komorebi website form → Cloudflare Worker → Google Apps Script → Google Sheets
+Alxanthia website form → Cloudflare Worker → Google Apps Script → Google Sheets
 ```
 
 The website form is already present. It intentionally does not show a successful-order screen until an external endpoint confirms that the order was saved. The public endpoint setting is currently empty in `site-content.js`.
@@ -24,7 +24,7 @@ Never paste your webhook secret, Google credentials, Cloudflare API token, or Mi
 
 1. Sign in to the Google account that should own the orders.
 2. Open <https://sheets.google.com> and create a blank spreadsheet.
-3. Rename the spreadsheet **Komorebi Orders**.
+3. Rename the spreadsheet **Alxanthia Orders**.
 4. Rename its first worksheet tab **Orders**.
 5. Click cell `A1` and paste this tab-separated header row:
 
@@ -77,7 +77,7 @@ Format the Product Subtotal, Discount, Estimated Product Total, Shipping Fee, an
 ## Part 2 — Create the Google Apps Script
 
 1. In the spreadsheet, choose **Extensions → Apps Script**.
-2. Rename the project **Komorebi Order Writer**.
+2. Rename the project **Alxanthia Order Writer**.
 3. Delete the example `myFunction` code.
 4. Paste the code below.
 
@@ -185,7 +185,7 @@ function jsonResponse(value) {
 
 1. Click **Deploy → New deployment**.
 2. Click the gear beside **Select type**, then choose **Web app**.
-3. Enter **Komorebi order writer** as the description.
+3. Enter **Alxanthia order writer** as the description.
 4. Choose **Execute as: Me**.
 5. Choose **Who has access: Anyone**.
 6. Click **Deploy**, select your Google account, and approve the requested spreadsheet access.
@@ -197,7 +197,7 @@ function jsonResponse(value) {
 
 1. Sign in or create a free account at <https://dash.cloudflare.com>.
 2. Open **Workers & Pages → Create → Worker**.
-3. Name it **komorebi-order-endpoint** and deploy the starter Worker.
+3. Name it **alxanthia-order-endpoint** and deploy the starter Worker.
 4. Open **Edit code**, delete the starter code, and paste:
 
 ```javascript
@@ -250,7 +250,7 @@ function reply(body, status, headers) {
 | `WEBHOOK_SECRET` | The exact random secret used in Apps Script | Secret |
 
 8. Save the variables and redeploy if Cloudflare asks.
-9. Copy the public Worker URL, such as `https://komorebi-order-endpoint.your-name.workers.dev`.
+9. Copy the public Worker URL, such as `https://alxanthia-order-endpoint.your-name.workers.dev`.
 
 ---
 
@@ -265,7 +265,7 @@ orderSubmissionUrl: "",
 Change it to your public Worker URL:
 
 ```javascript
-orderSubmissionUrl: "https://komorebi-order-endpoint.your-name.workers.dev",
+orderSubmissionUrl: "https://alxanthia-order-endpoint.your-name.workers.dev",
 ```
 
 Only the Worker URL belongs here. Do not add the webhook secret, Apps Script URL, Google credentials, or Midtrans credentials.

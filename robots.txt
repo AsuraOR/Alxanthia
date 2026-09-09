@@ -1,7 +1,7 @@
-# Komorebi Creations robots.txt
-# https://komorebicreations.com/
+# Alxanthia Studio robots.txt
+# https://alxanthia.com/
 
 User-agent: *
 Allow: /
 
-Sitemap: https://komorebicreations.com/sitemap.xml
+Sitemap: https://alxanthia.com/sitemap.xml

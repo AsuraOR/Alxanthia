@@ -37,6 +37,9 @@ window.KOMOREBI_DATA = {
     address: "",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
+    // Publish the Tally form, add the hidden fields listed in CHECKOUT-SETUP.md,
+    // then replace this placeholder. No Tally management credentials belong here.
+    tallyFormUrl: "https://tally.so/r/FORM_ID",
     whatsappTemplates: {
       id: {
         stem:    "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",

@@ -3763,3 +3763,24 @@ details.is-closing > .faq-answer-wrapper {
   color: var(--text-dark);
 }
 
+/* Lightweight checkout review and hosted Tally handoff */
+.checkout-modal { width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border-medium); background: var(--bg-main); color: var(--text-dark); }
+.checkout-modal::backdrop { background: rgba(25, 31, 24, .72); }
+.checkout-panel { position: relative; padding: clamp(24px, 5vw, 52px); overflow: auto; }
+.checkout-panel h2 { margin: 0 40px 20px 0; font-family: var(--font-serif); font-size: clamp(28px, 5vw, 44px); }
+.checkout-reference { font-family: var(--font-mono); font-size: .82rem; letter-spacing: .04em; }
+.checkout-items { margin: 24px 0; padding-left: 20px; }
+.checkout-items li { margin: 8px 0; }
+.checkout-totals { border-block: 1px solid var(--border-medium); padding: 12px 0; }
+.checkout-totals div { display: flex; justify-content: space-between; gap: 20px; padding: 7px 0; }
+.checkout-totals dd { margin: 0; text-align: right; }
+.checkout-total { font-weight: 700; }
+.checkout-notice { padding: 14px; background: rgba(126, 143, 124, .14); line-height: 1.55; }
+.checkout-error { min-height: 1.4em; color: #9d3e32; font-weight: 600; }
+.checkout-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.btn-checkout-primary, .btn-checkout-secondary { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 12px 18px; border: 1px solid var(--text-dark); font: 600 var(--fs-button) var(--font-sans); text-decoration: none; cursor: pointer; }
+.btn-checkout-primary { background: var(--text-dark); color: var(--bg-main); }
+.btn-checkout-secondary { background: transparent; color: var(--text-dark); }
+#tally-frame { width: 100%; min-height: 620px; border: 0; margin-top: 16px; }
+body:has(.checkout-modal[open]) { overflow: hidden; }
+@media (max-width: 480px) { .checkout-actions > * { width: 100%; } #tally-frame { min-height: 70dvh; } }

@@ -650,8 +650,7 @@
             <p class="step-label" id="step3-label">Lanjut ke pemesanan</p>
             <div class="channel-buttons">
               <div id="channels-disabled-box" class="channels-disabled-box" style="display: none;" role="alert"></div>
-              <a href="#" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-whatsapp" target="_blank"
-                rel="noopener">
+              <button type="button" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-checkout">
                 <span class="channel-icon" aria-hidden="true">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -661,10 +660,10 @@
                   </svg>
                 </span>
                 <div class="channel-info-text">
-                  <span class="channel-name">WhatsApp — Konfirmasi Pesanan</span>
-                  <span class="channel-action">chat →</span>
+                  <span class="channel-name">Tinjau pesanan</span>
+                  <span class="channel-action">lanjut →</span>
                 </div>
-              </a>
+              </button>
 
               <!-- Shopee Interactive Channel Button -->
               <a href="https://shopee.co.id" class="btn-channel btn-shopee" id="btn-shopee" target="_blank"
@@ -849,6 +848,46 @@
         <h3 id="image-modal-title" class="image-modal-title"></h3>
         <p id="image-modal-caption" class="image-modal-caption"></p>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="checkout-modal" class="checkout-modal" aria-labelledby="checkout-title" aria-modal="true">
+    <div class="checkout-panel">
+      <button type="button" id="checkout-close" class="image-modal-close" aria-label="Tutup / Close">×</button>
+      <section id="checkout-review">
+        <p class="eyebrow" id="checkout-eyebrow">Tinjau pesanan</p>
+        <h2 id="checkout-title">Periksa detail pesanan Anda</h2>
+        <p class="checkout-reference"><span id="checkout-reference-label">Referensi pesanan</span>: <strong id="checkout-reference"></strong></p>
+        <ul id="checkout-items" class="checkout-items"></ul>
+        <dl class="checkout-totals">
+          <div><dt id="checkout-subtotal-label">Subtotal produk</dt><dd id="checkout-subtotal"></dd></div>
+          <div id="checkout-discount-row"><dt id="checkout-discount-label">Potongan</dt><dd id="checkout-discount"></dd></div>
+          <div class="checkout-total"><dt id="checkout-total-label">Estimasi total produk</dt><dd id="checkout-total"></dd></div>
+        </dl>
+        <p id="checkout-finish"></p>
+        <p id="checkout-notice" class="checkout-notice"></p>
+        <p id="checkout-error" class="checkout-error" role="alert"></p>
+        <div class="checkout-actions">
+          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
+          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
+        </div>
+      </section>
+      <section id="checkout-form-step" hidden>
+        <p class="eyebrow" id="checkout-form-eyebrow">Detail pengiriman</p>
+        <h2 id="checkout-form-title">Lengkapi formulir pesanan</h2>
+        <p id="checkout-form-summary"></p>
+        <iframe id="tally-frame" title="Formulir pemesanan Komorebi" loading="lazy"></iframe>
+        <p id="tally-load-error" class="checkout-error" role="alert"></p>
+      </section>
+      <section id="checkout-success" hidden>
+        <p class="eyebrow">Pesanan dicatat</p>
+        <h2 id="checkout-success-title">Pesanan Anda sudah dicatat.</h2>
+        <p id="checkout-success-copy"></p>
+        <p class="checkout-reference"><span id="success-reference-label">Referensi pesanan</span>: <strong id="success-reference"></strong></p>
+        <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
+        <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>
+        <p id="copy-status" role="status"></p>
+      </section>
     </div>
   </dialog>
 

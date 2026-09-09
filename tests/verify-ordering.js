@@ -454,6 +454,8 @@ const sandbox = {
   },
   setTimeout: (fn) => { fn(); },
   clearTimeout: () => {},
+  URL: URL,
+  URLSearchParams: URLSearchParams,
   console: console,
   location: { hash: '' },
   innerWidth: 1280,
@@ -1391,8 +1393,40 @@ assert(orderAnnouncer.textContent.includes('4'), 'A rapid burst must still end w
 console.log('✔ Suite 23 Passed: Adding, incrementing and removing a cart line each announce via the existing #order-announcer live region');
 
 // ---------------------------------------------------------------------------
+// Suite 24: Lightweight checkout payload, reference, and privacy boundaries
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 24: Tally Checkout Payload & Privacy ---');
+app.resetToInitial();
+const checkoutData = app.getData();
+checkoutData.store.tallyFormUrl = 'https://tally.so/r/test123';
+app.setData(checkoutData);
+app.selectStem('Rose', false);
+app.setOrderNote('<img src=x onerror=alert(1)> & selamat 🎉');
+const normalized24 = app.normalizedCheckoutState();
+assert.strictEqual(normalized24.orderMode, 'stem');
+assert.strictEqual(normalized24.estimatedProductTotal, 60000);
+assert(normalized24.items[0].includes('Mawar'));
+const reference24 = app.generateOrderReference(new Date('2026-09-09T12:00:00Z'));
+assert(/^KMR-260909-[A-HJ-NP-Z2-9]{4}$/.test(reference24), 'Reference must use the non-sensitive KMR date/random format');
+const tallyUrl24 = new URL(app.buildTallyUrl(reference24, normalized24));
+['order_reference', 'submitted_language', 'order_mode', 'order_summary', 'item_data', 'total_stems', 'wrap', 'gift_message', 'product_subtotal', 'discount_amount', 'estimated_product_total', 'currency', 'source'].forEach(key => {
+  assert(tallyUrl24.searchParams.has(key), `Tally URL must include approved hidden field ${key}`);
+});
+['address', 'buyer_phone', 'recipient_phone', 'email', 'midtrans_key'].forEach(key => {
+  assert(!tallyUrl24.searchParams.has(key), `Tally URL must exclude private/secret field ${key}`);
+});
+assert.strictEqual(tallyUrl24.searchParams.get('gift_message'), '<img src=x onerror=alert(1)> & selamat 🎉', 'Special text must survive URLSearchParams encoding as literal text');
+const submittedWa24 = new URL(app.buildPostSubmissionWhatsApp(reference24, 'Ayu', '2026-09-14', normalized24));
+const submittedMessage24 = submittedWa24.searchParams.get('text');
+assert(submittedMessage24.includes(reference24));
+assert(submittedMessage24.includes('Rp 60.000'));
+assert(!submittedMessage24.includes(normalized24.giftMessage), 'Private gift message must not enter post-submission WhatsApp URL');
+assert.strictEqual(app.buildTallyUrl(reference24, { ...normalized24 }), tallyUrl24.toString(), 'Review and handoff must use the same normalized checkout state');
+console.log('✔ Suite 24 Passed: Checkout uses safe URL APIs, approved fields, shared totals, literal gift text, and privacy-safe WhatsApp content');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 23 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 24 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

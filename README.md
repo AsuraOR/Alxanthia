@@ -162,11 +162,11 @@ Ketika pemilik studio siap mempublikasikan toko secara resmi:
 ## 🧪 Menjalankan Verifikasi & Server Lokal
 
 ### 1. Menjalankan Tes Integrasi Otomatis (R11)
-Tes ini memvalidasi 15 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
+Tes ini memvalidasi 18 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
 ```bash
 node tests/verify-ordering.js
 ```
-*Hasil yang diharapkan: 15 suite lulus (✔ ALL 15 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
+*Hasil yang diharapkan: 18 suite lulus (✔ ALL 18 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
 
 ### 2. Menjalankan Server Pratinjau Lokal
 Karena situs tidak menggunakan dependensi eksternal, Anda dapat menggunakan server HTTP bawaan:

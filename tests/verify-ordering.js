@@ -950,8 +950,172 @@ if (toggleBtn && customBuilderBody) {
 console.log('✔ Suite 15 Passed: Category filtering and custom builder mobile collapse verified');
 
 // ---------------------------------------------------------------------------
+// Suite 16: Cart Data Model & Pure Totals Function (P1-03)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 16: Cart Data Model & Pure Totals Function (P1-03) ---');
+
+// Empty cart never throws and reports a neutral, invalid total.
+const emptyTot = app.computeCartTotals([]);
+assert.strictEqual(emptyTot.total, 0, 'Empty cart total must be 0');
+assert.strictEqual(emptyTot.isValid, false, 'Empty cart must be invalid');
+assert.strictEqual(emptyTot.wrapFee, 0, 'Empty cart must not charge a wrap fee');
+
+// Single stem, qty 1 and qty 3 (Sunflower @ Rp 55.000).
+const stemQty1 = app.computeCartTotals([{ id: 1, type: 'stem', flowerKey: 'Sunflower', qty: 1 }]);
+assert.strictEqual(stemQty1.stems, 1);
+assert.strictEqual(stemQty1.subtotal, 55000);
+assert.strictEqual(stemQty1.total, 55000);
+assert.strictEqual(stemQty1.isValid, true);
+
+const stemQty3 = app.computeCartTotals([{ id: 1, type: 'stem', flowerKey: 'Sunflower', qty: 3 }]);
+assert.strictEqual(stemQty3.stems, 3);
+assert.strictEqual(stemQty3.subtotal, 165000);
+assert.strictEqual(stemQty3.total, 165000);
+
+// Single package (Buket Mini: 3 stems, Rp 195.000).
+const pkgTot = app.computeCartTotals([{ id: 1, type: 'package', pkgIndex: 0, qty: 1 }]);
+assert.strictEqual(pkgTot.stems, 3);
+assert.strictEqual(pkgTot.subtotal, 195000);
+assert.strictEqual(pkgTot.total, 195000);
+assert.strictEqual(pkgTot.isValid, true);
+
+// Custom bouquet: 3 stems (at minStems, no volume discount).
+const custom3 = app.computeCartTotals([
+  { id: 1, type: 'custom', counts: { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 }, qty: 1 }
+]);
+assert.strictEqual(custom3.stems, 3);
+assert.strictEqual(custom3.subtotal, 170000);
+assert.strictEqual(custom3.discount, 0);
+assert.strictEqual(custom3.wrapFee, 35000);
+assert.strictEqual(custom3.total, 205000);
+assert.strictEqual(custom3.isValid, true);
+
+// Custom bouquet: 8 stems (still below the 9-stem discount threshold).
+const custom8 = app.computeCartTotals([
+  { id: 1, type: 'custom', counts: { Sunflower: 8, Rose: 0, Tulip: 0, Gerbera: 0 }, qty: 1 }
+]);
+assert.strictEqual(custom8.stems, 8);
+assert.strictEqual(custom8.discount, 0, '8 stems must not trigger the volume discount');
+assert.strictEqual(custom8.total, 8 * 55000 + 35000);
+
+// Custom bouquet: 9 stems — the discount boundary.
+const custom9 = app.computeCartTotals([
+  { id: 1, type: 'custom', counts: { Sunflower: 5, Rose: 0, Tulip: 4, Gerbera: 0 }, qty: 1 }
+]);
+const custom9Sub = 5 * 55000 + 4 * 50000;
+const custom9Disc = Math.round(custom9Sub * 0.10);
+assert.strictEqual(custom9.stems, 9);
+assert.strictEqual(custom9.discount, custom9Disc, '9 stems must trigger the 10% volume discount');
+assert.strictEqual(custom9.total, custom9Sub - custom9Disc + 35000);
+assert.strictEqual(custom9.total, 462500, 'Must match getCustomTotals() for the same bouquet (Suite 8)');
+
+// Custom bouquet: 2 stems — below minStems, invalid.
+const custom2 = app.computeCartTotals([
+  { id: 1, type: 'custom', counts: { Sunflower: 2, Rose: 0, Tulip: 0, Gerbera: 0 }, qty: 1 }
+]);
+assert.strictEqual(custom2.isValid, false, 'A bouquet under minStems must be invalid');
+
+// Mixed cart: stem + package + two custom lines.
+// The 9-stem discount threshold is evaluated per bouquet, not on the cart total,
+// and the wrap fee is charged once no matter how many custom lines exist.
+const mixedCart = [
+  { id: 1, type: 'stem', flowerKey: 'Sunflower', qty: 4 },
+  { id: 2, type: 'package', pkgIndex: 1, qty: 1 }, // Handful: 5 stems, Rp 295.000
+  { id: 3, type: 'custom', counts: { Sunflower: 0, Rose: 3, Tulip: 0, Gerbera: 0 }, qty: 1 }, // 3 stems
+  { id: 4, type: 'custom', counts: { Sunflower: 0, Rose: 0, Tulip: 3, Gerbera: 0 }, qty: 1 } // 3 stems
+];
+const mixedTot = app.computeCartTotals(mixedCart);
+assert.strictEqual(mixedTot.stems, 4 + 5 + 3 + 3, 'Cart-level stems must sum every line');
+assert.strictEqual(mixedTot.discount, 0, 'No single bouquet reaches 9 stems, so summing across lines must not trigger a discount');
+assert.strictEqual(mixedTot.wrapFee, 35000, 'Wrap fee must be charged exactly once for a cart with two custom lines');
+const mixedExpectedSubtotal = (4 * 55000) + 295000 + (3 * 60000) + (3 * 50000);
+assert.strictEqual(mixedTot.subtotal, mixedExpectedSubtotal);
+assert.strictEqual(mixedTot.total, mixedExpectedSubtotal + 35000);
+
+// Purity: the input array (and its line objects) must never be mutated, and
+// calling twice with the same input must return equal results.
+const purityCart = [{ id: 1, type: 'stem', flowerKey: 'Rose', qty: 2 }];
+const purityCartSnapshot = JSON.parse(JSON.stringify(purityCart));
+const purityResult1 = app.computeCartTotals(purityCart);
+const purityResult2 = app.computeCartTotals(purityCart);
+assert.deepStrictEqual(purityCart, purityCartSnapshot, 'computeCartTotals must not mutate its argument');
+assert.deepStrictEqual(purityResult1, purityResult2, 'computeCartTotals must be deterministic for the same input');
+
+console.log('✔ Suite 16 Passed: computeCartTotals is pure, matches legacy pricing, and prices mixed carts correctly');
+
+// ---------------------------------------------------------------------------
+// Suite 17: Selections Route Through the Cart (P1-04)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 17: Selections Route Through the Cart (P1-04) ---');
+app.resetToInitial();
+assert.strictEqual(app.getCart().length, 0, 'Cart must start empty');
+assert.strictEqual(app.getState().hasUserSelected, false, 'hasUserSelected must be false when the cart is empty');
+
+app.selectStem('Rose', false);
+let cartAfterStem = app.getCart();
+assert.strictEqual(cartAfterStem.length, 1);
+assert.strictEqual(cartAfterStem[0].type, 'stem');
+assert.strictEqual(cartAfterStem[0].flowerKey, 'Rose');
+assert.strictEqual(cartAfterStem[0].qty, 1);
+assert.strictEqual(app.getState().hasUserSelected, true, 'hasUserSelected must be true once the cart holds a line');
+
+app.selectPackage(2, false);
+const cartAfterPackage = app.getCart();
+assert.strictEqual(cartAfterPackage.length, 1, 'Selecting a package after a stem must replace the cart, not add to it');
+assert.strictEqual(cartAfterPackage[0].type, 'package');
+assert.strictEqual(cartAfterPackage[0].pkgIndex, 2);
+
+app.resetToInitial();
+app.bumpCustom('Sunflower', 2);
+app.bumpCustom('Rose', 1);
+app.useCustom();
+const cartAfterCustom = app.getCart();
+assert.strictEqual(cartAfterCustom.length, 1);
+assert.strictEqual(cartAfterCustom[0].type, 'custom');
+assert.strictEqual(
+  JSON.stringify(cartAfterCustom[0].counts),
+  JSON.stringify({ Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 })
+);
+
+app.resetToInitial();
+assert.strictEqual(app.getCart().length, 0, 'resetToInitial must empty the cart');
+assert.strictEqual(app.getState().hasUserSelected, false);
+
+console.log('✔ Suite 17 Passed: Stem, package and custom selections all route through the single-item cart');
+
+// ---------------------------------------------------------------------------
+// Suite 18: Unified Commit Interaction & No Selected-Card Layout Shift (P1-05)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 18: Unified Commit Interaction (P1-05) ---');
+app.resetToInitial();
+
+let scrollCalls = [];
+const originalScrollTo = sandbox.scrollTo;
+sandbox.scrollTo = (opts) => { scrollCalls.push(opts); };
+
+scrollCalls = [];
+app.selectStem('Rose'); // default scroll = true
+const stemScrollCount = scrollCalls.length;
+assert(stemScrollCount > 0, 'Selecting a stem must scroll to #order by default');
+
+scrollCalls = [];
+app.selectPackage(1); // default scroll = true as of P1-05
+const pkgScrollCount = scrollCalls.length;
+assert(pkgScrollCount > 0, 'Selecting a package must scroll to #order by default, matching stem behaviour (P1-05)');
+
+sandbox.scrollTo = originalScrollTo;
+
+// The selected package card must show its active state without growing a second button.
+const packagesGrid = mockDocument.getElementById('packages-grid');
+const activeCard = packagesGrid.children.find(c => c.classList && c.classList.contains('active'));
+assert(activeCard, 'Selected package card must be marked active');
+assert.strictEqual(activeCard.querySelector('.btn-pkg-continue'), null, 'Selected package card must not render a second "continue" button (P1-05)');
+
+console.log('✔ Suite 18 Passed: Package selection scrolls like stem selection and adds no second button');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 15 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 18 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

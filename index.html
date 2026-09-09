@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille · Handcrafted Botanical Bouquets</title>
-  <meta name="description" content="Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang." />
+  <meta name="description"
+    content="Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang." />
   <link rel="canonical" href="https://komorebicreations.com/" />
 
   <!-- Robots Directive (Development / Staging Mode: change to 'index, follow' upon public release) -->
@@ -15,7 +17,8 @@
   <meta property="og:site_name" content="Komorebi Creations" />
   <meta property="og:url" content="https://komorebicreations.com/" />
   <meta property="og:title" content="Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille" />
-  <meta property="og:description" content="Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera." />
+  <meta property="og:description"
+    content="Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera." />
   <meta property="og:image" content="https://komorebicreations.com/img/hero-1122.webp" />
   <meta property="og:image:width" content="1122" />
   <meta property="og:image:height" content="1122" />
@@ -24,7 +27,8 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Komorebi — Bunga Jadi & Buket Kawat Bulu Chenille" />
-  <meta name="twitter:description" content="Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera." />
+  <meta name="twitter:description"
+    content="Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera." />
   <meta name="twitter:image" content="https://komorebicreations.com/img/hero-1122.webp" />
   <meta name="twitter:image:alt" content="Komorebi handcrafted chenille stem sunflower botanical plate" />
 
@@ -311,7 +315,9 @@
   <!-- Preconnect Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Karla:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
 
   <!-- Botanical Stylesheet -->
   <link rel="stylesheet" href="styles.css" />
@@ -323,6 +329,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <meta name="theme-color" content="#FAF7F2" />
 </head>
+
 <body id="top">
 
   <!-- Accessible Skip to Content Link -->
@@ -331,13 +338,17 @@
   <!-- ========================================================================
        PRIVATE ACCESS LOCK SCREEN (DEVELOPMENT STAGING)
        ======================================================================== -->
-  <div id="lock-screen" class="lock-screen" role="dialog" aria-modal="true" aria-label="Akses Terbatas / Private Access Gate">
+  <div id="lock-screen" class="lock-screen" role="dialog" aria-modal="true"
+    aria-label="Akses Terbatas / Private Access Gate">
     <div class="lock-card">
-      <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="48" height="48" alt="Komorebi" class="lock-logo" />
+      <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="48"
+        height="48" alt="Komorebi" class="lock-logo" />
       <p class="lock-brand">Komorebi</p>
-      <p class="lock-subtitle">Akses Terbatas · Situs Sedang Dikembangkan<br /><span style="font-size: 0.85em; opacity: 0.8;">Private Preview · In Development</span></p>
+      <p class="lock-subtitle">Akses Terbatas · Situs Sedang Dikembangkan<br /><span
+          style="font-size: 0.85em; opacity: 0.8;">Private Preview · In Development</span></p>
       <form id="lock-form" class="lock-form" autocomplete="off">
-        <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••" aria-label="Kata sandi akses / Access passcode" autofocus required />
+        <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••"
+          aria-label="Kata sandi akses / Access passcode" autofocus required />
         <button type="submit" class="lock-btn">Unlock →</button>
       </form>
       <p id="lock-error" class="lock-error" aria-live="polite" role="alert"></p>
@@ -349,8 +360,8 @@
       if (localStorage.getItem('komorebi_unlocked') === 'true') {
         document.getElementById('lock-screen').classList.add('unlocked');
       }
-    } catch (e) {}
-    window.addEventListener('DOMContentLoaded', function() {
+    } catch (e) { }
+    window.addEventListener('DOMContentLoaded', function () {
       if (window.location.hash) {
         var el = document.querySelector(window.location.hash);
         if (el) el.scrollIntoView();
@@ -364,7 +375,8 @@
   <header class="site-header" id="site-header">
     <div class="header-inner">
       <a href="#top" class="brand-group" id="brand-link" aria-label="Komorebi — Kembali ke atas">
-        <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="40" height="40" alt="Komorebi Logo" class="brand-logo" />
+        <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="40"
+          height="40" alt="Komorebi Logo" class="brand-logo" />
         <span class="brand-name">Komorebi</span>
         <span class="brand-est">est. 2026</span>
       </a>
@@ -372,7 +384,8 @@
       <!-- Mobile Fast Actions -->
       <div class="header-actions-mobile">
         <a href="#collection-overview" class="nav-cta-mobile" id="mobile-order-btn">Pesan</a>
-        <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Buka menu navigasi">
+        <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu"
+          aria-label="Buka menu navigasi">
           <span class="nav-toggle-bar"></span>
           <span class="nav-toggle-bar"></span>
           <span class="nav-toggle-bar"></span>
@@ -387,7 +400,8 @@
 
         <!-- Bilingual Switcher -->
         <div class="lang-switcher" role="group" aria-label="Pilih bahasa">
-          <button type="button" id="lang-id" class="lang-btn active" aria-pressed="true" aria-label="Bahasa Indonesia">ID</button>
+          <button type="button" id="lang-id" class="lang-btn active" aria-pressed="true"
+            aria-label="Bahasa Indonesia">ID</button>
           <span class="lang-sep" aria-hidden="true"></span>
           <button type="button" id="lang-en" class="lang-btn" aria-pressed="false" aria-label="English">EN</button>
         </div>
@@ -403,332 +417,363 @@
        ======================================================================== -->
   <main id="main-content">
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        HERO SECTION
        ======================================================================== -->
-  <section id="hero" class="hero-section container">
-    <div class="hero-text-col">
-      <p class="eyebrow" id="hero-eyebrow">Bunga jadi & buket · benang chenille</p>
-      <h1 class="hero-title" id="hero-title">Bunga yang tak pernah layu — kami rangkai untuk Anda.</h1>
-      <p class="hero-sub" id="hero-sub">Setiap tangkai kami bentuk dan rangkai sendiri, lalu dikemas siap dipajang. Ambil satu tangkai, salah satu paket buket kami, atau susun campuran Anda sendiri.</p>
+    <section id="hero" class="hero-section container">
+      <div class="hero-text-col">
+        <p class="eyebrow" id="hero-eyebrow">Bunga jadi & buket · benang chenille</p>
+        <h1 class="hero-title" id="hero-title">Bunga yang tak pernah layu — kami rangkai untuk Anda.</h1>
+        <p class="hero-sub" id="hero-sub">Setiap tangkai kami bentuk dan rangkai sendiri, lalu dikemas siap dipajang.
+          Ambil satu tangkai, salah satu paket buket kami, atau susun campuran Anda sendiri.</p>
 
-      <div class="hero-actions">
-        <a href="#collection" class="btn-primary" id="cta-browse">Lihat bunganya</a>
-        <a href="#bouquets" class="btn-secondary" id="cta-bouquets">Susun buket</a>
+        <div class="hero-actions">
+          <a href="#collection" class="btn-primary" id="cta-browse">Lihat bunganya</a>
+          <a href="#bouquets" class="btn-secondary" id="cta-bouquets">Susun buket</a>
+        </div>
+
+        <dl class="hero-benefits">
+          <div class="benefit-item">
+            <dt id="ben1-t">Datang sudah jadi</dt>
+            <dd id="ben1-d">Tidak perlu dirangkai — buka dan letakkan.</dd>
+          </div>
+          <div class="benefit-item">
+            <dt id="ben2-t">Tanpa air</dt>
+            <dd id="ben2-d">Chenille dan kawat, untuk pajangan dalam ruangan.</dd>
+          </div>
+          <div class="benefit-item">
+            <dt id="ben3-t">Dibuat sesuai pesanan</dt>
+            <dd id="ben3-d">Dipotong, dibentuk, dan dibungkus setelah Anda pesan.</dd>
+          </div>
+        </dl>
       </div>
 
-      <dl class="hero-benefits">
-        <div class="benefit-item">
-          <dt id="ben1-t">Datang sudah jadi</dt>
-          <dd id="ben1-d">Tidak perlu dirangkai — buka dan letakkan.</dd>
-        </div>
-        <div class="benefit-item">
-          <dt id="ben2-t">Tanpa air</dt>
-          <dd id="ben2-d">Chenille dan kawat, untuk pajangan dalam ruangan.</dd>
-        </div>
-        <div class="benefit-item">
-          <dt id="ben3-t">Dibuat sesuai pesanan</dt>
-          <dd id="ben3-d">Dipotong, dibentuk, dan dibungkus setelah Anda pesan.</dd>
-        </div>
-      </dl>
-    </div>
+      <figure class="hero-figure">
+        <img id="hero-image" src="img/hero-800.webp"
+          srcset="img/hero-400.webp 400w, img/hero-800.webp 800w, img/hero-1122.webp 1122w"
+          sizes="(max-width: 768px) 90vw, 496px" width="1122" height="1402"
+          alt="A finished sunflower made from chenille stems, on cream paper" class="hero-img" fetchpriority="high" />
+        <figcaption class="hero-caption">
+          <span class="hero-caption-latin" id="hero-caption-latin">Helianthus annuus</span>
+          <span class="hero-caption-pl" id="hero-caption-pl">PL. I</span>
+        </figcaption>
+      </figure>
+    </section>
 
-    <figure class="hero-figure">
-      <img id="hero-image" src="img/hero-800.webp" srcset="img/hero-400.webp 400w, img/hero-800.webp 800w, img/hero-1122.webp 1122w" sizes="(max-width: 768px) 90vw, 496px" width="1122" height="1402" alt="A finished sunflower made from chenille stems, on cream paper" class="hero-img" fetchpriority="high" />
-      <figcaption class="hero-caption">
-        <span class="hero-caption-latin" id="hero-caption-latin">Helianthus annuus</span>
-        <span class="hero-caption-pl" id="hero-caption-pl">PL. I</span>
-      </figcaption>
-    </figure>
-  </section>
-
-  <!-- ========================================================================
+    <!-- ========================================================================
        TRUST GUARANTEES BAR
        ======================================================================== -->
-  <section class="trust-bar">
-    <div class="container trust-inner" id="trust-inner">
-      <!-- Dynamically populated from site-content.js -->
-    </div>
-  </section>
+    <section class="trust-bar">
+      <div class="container trust-inner" id="trust-inner">
+        <!-- Dynamically populated from site-content.js -->
+      </div>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        COLLECTION OVERVIEW & CATEGORY FILTER BAR (B1)
        ======================================================================== -->
-  <section class="collection-overview container" id="collection-overview">
-    <div class="section-header-flex">
-      <div>
-        <p class="eyebrow" id="col-eyebrow">Koleksi</p>
-        <h2 class="section-title" id="col-title">Dua cara memesan</h2>
-      </div>
-      <p class="section-sub" id="col-intro">Tangkai jadi satuan, atau buket — versi kami atau versi Anda.</p>
-    </div>
-
-    <!-- Category Navigation Filter Tabs -->
-    <div class="category-nav-wrapper" id="category-filter-bar">
-      <nav class="category-nav-tabs" id="category-nav" aria-label="Pilih Kategori / Filter by Category">
-        <div class="category-tabs-inner">
-          <button type="button" class="category-tab active" data-category="all" id="cat-tab-all" aria-pressed="true">Semua</button>
-          <button type="button" class="category-tab" data-category="stems" id="cat-tab-stems" aria-pressed="false">Bunga Jadi</button>
-          <button type="button" class="category-tab" data-category="bouquets" id="cat-tab-bouquets" aria-pressed="false">Paket Buket</button>
-          <button type="button" class="category-tab" data-category="custom" id="cat-tab-custom" aria-pressed="false">Buket Custom</button>
+    <section class="collection-overview container" id="collection-overview">
+      <div class="section-header-flex">
+        <div>
+          <p class="eyebrow" id="col-eyebrow">Koleksi</p>
+          <h2 class="section-title" id="col-title">Dua cara memesan</h2>
         </div>
-      </nav>
-    </div>
-  </section>
+        <p class="section-sub" id="col-intro">Tangkai jadi satuan, atau buket — versi kami atau versi Anda.</p>
+      </div>
 
-  <!-- ========================================================================
+      <!-- Category Navigation Filter Tabs -->
+      <div class="category-nav-wrapper" id="category-filter-bar">
+        <nav class="category-nav-tabs" id="category-nav" aria-label="Pilih Kategori / Filter by Category">
+          <div class="category-tabs-inner">
+            <button type="button" class="category-tab active" data-category="all" id="cat-tab-all"
+              aria-pressed="true">Semua</button>
+            <button type="button" class="category-tab" data-category="stems" id="cat-tab-stems"
+              aria-pressed="false">Bunga Jadi</button>
+            <button type="button" class="category-tab" data-category="bouquets" id="cat-tab-bouquets"
+              aria-pressed="false">Paket Buket</button>
+            <button type="button" class="category-tab" data-category="custom" id="cat-tab-custom"
+              aria-pressed="false">Buket Custom</button>
+          </div>
+        </nav>
+      </div>
+    </section>
+
+    <!-- ========================================================================
        COLLECTION SECTION (CATEGORY 01: FINISHED FLOWERS)
        ======================================================================== -->
-  <section id="collection" class="collection-section container">
-    <!-- Category 01 Header Row -->
-    <div class="category-header-row">
-      <span class="category-mono-label" id="cat1-label">Kategori 01</span>
-      <h3 class="category-serif-title" id="cat1-title">Bunga jadi</h3>
-      <p class="category-note" id="cat1-note">Empat bunga, semuanya kami rangkai dan dijual per tangkai.</p>
-    </div>
+    <section id="collection" class="collection-section container">
+      <!-- Category 01 Header Row -->
+      <div class="category-header-row">
+        <span class="category-mono-label" id="cat1-label">Kategori 01</span>
+        <h3 class="category-serif-title" id="cat1-title">Bunga jadi</h3>
+        <p class="category-note" id="cat1-note">Empat bunga, semuanya kami rangkai dan dijual per tangkai.</p>
+      </div>
 
-    <!-- 4 Finished Flower Cards Grid -->
-    <div class="collection-grid" id="collection-grid">
-      <!-- Dynamically populated with 4 flower cards -->
-    </div>
-  </section>
+      <!-- 4 Finished Flower Cards Grid -->
+      <div class="collection-grid" id="collection-grid">
+        <!-- Dynamically populated with 4 flower cards -->
+      </div>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        BOUQUETS SECTION (CATEGORY 02: PACKAGES + BUILDER + TEASER)
        ======================================================================== -->
-  <section id="bouquets" class="bouquets-section container">
-    <!-- Category 02 Header Row -->
-    <div class="category-header-row">
-      <span class="category-mono-label" id="cat2-label">Kategori 02</span>
-      <h3 class="category-serif-title" id="cat2-title">Buket</h3>
-      <p class="category-note" id="cat2-note">Empat paket siap pesan, atau campuran custom yang Anda hitung sendiri.</p>
-    </div>
-
-    <!-- 4 Bouquet Packages Grid -->
-    <div class="packages-grid" id="packages-grid">
-      <!-- Dynamically populated with 4 package cards -->
-    </div>
-
-    <!-- Custom Bouquet Builder Panel -->
-    <div class="custom-builder-panel" id="custom-builder">
-      <div class="custom-builder-header">
-        <p class="eyebrow" id="custom-eyebrow">Buket custom</p>
-        <h4 class="custom-builder-title" id="custom-title">Atau hitung sendiri isinya</h4>
-        <p class="custom-builder-intro" id="custom-intro">Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal 3 tangkai; 9 tangkai ke atas otomatis mendapat potongan 10% untuk bunganya.</p>
-        <button type="button" class="btn-toggle-custom" id="btn-toggle-custom" aria-expanded="true" aria-controls="custom-builder-body">
-          <span id="custom-toggle-text">Tutup penyusun custom ↑</span>
-        </button>
+    <section id="bouquets" class="bouquets-section container">
+      <!-- Category 02 Header Row -->
+      <div class="category-header-row">
+        <span class="category-mono-label" id="cat2-label">Kategori 02</span>
+        <h3 class="category-serif-title" id="cat2-title">Buket</h3>
+        <p class="category-note" id="cat2-note">Empat paket siap pesan, atau campuran custom yang Anda hitung sendiri.
+        </p>
       </div>
 
-      <div class="custom-builder-body" id="custom-builder-body">
-        <!-- Left Column: Flower Stepper Rows -->
-        <div class="custom-builder-left">
-          <p class="step-label" id="custom-pick-label">Pilih tangkainya</p>
-          <ul class="custom-rows-list" id="custom-rows-list">
-            <!-- Dynamically populated with 4 flower counter rows -->
-          </ul>
-          <div class="custom-count-bar">
-            <span class="custom-stem-count" id="custom-stem-count">0 tangkai</span>
-            <button type="button" class="btn-custom-reset" id="custom-reset-btn">Atur ulang</button>
+      <!-- 4 Bouquet Packages Grid -->
+      <div class="packages-grid" id="packages-grid">
+        <!-- Dynamically populated with 4 package cards -->
+      </div>
+
+      <!-- Custom Bouquet Builder Panel -->
+      <div class="custom-builder-panel" id="custom-builder">
+        <div class="custom-builder-header">
+          <p class="eyebrow" id="custom-eyebrow">Buket custom</p>
+          <h4 class="custom-builder-title" id="custom-title">Atau hitung sendiri isinya</h4>
+          <p class="custom-builder-intro" id="custom-intro">Tambahkan bunga yang Anda inginkan, estimasi harga
+            diperbarui seketika. Minimal 3 tangkai; 9 tangkai ke atas otomatis mendapat potongan 10% untuk bunganya.</p>
+          <button type="button" class="btn-toggle-custom" id="btn-toggle-custom" aria-expanded="true"
+            aria-controls="custom-builder-body">
+            <span id="custom-toggle-text">Tutup penyusun custom ↑</span>
+          </button>
+        </div>
+
+        <div class="custom-builder-body" id="custom-builder-body">
+          <!-- Left Column: Flower Stepper Rows -->
+          <div class="custom-builder-left">
+            <p class="step-label" id="custom-pick-label">Pilih tangkainya</p>
+            <ul class="custom-rows-list" id="custom-rows-list">
+              <!-- Dynamically populated with 4 flower counter rows -->
+            </ul>
+            <div class="custom-count-bar">
+              <span class="custom-stem-count" id="custom-stem-count">0 tangkai</span>
+              <button type="button" class="btn-custom-reset" id="custom-reset-btn">Atur ulang</button>
+            </div>
+          </div>
+
+          <!-- Right Column: Live Estimate Card -->
+          <div class="custom-estimate-card">
+            <p class="step-label" id="custom-est-label">Estimasi</p>
+            <dl class="custom-est-list" id="custom-est-list">
+              <div class="custom-est-row">
+                <dt id="est-flowers-label">Bunga (0)</dt>
+                <dd id="est-flowers-val">Rp 0</dd>
+              </div>
+              <div class="custom-est-row est-discount-row" id="est-discount-row" style="display: none;">
+                <dt id="est-discount-label">Potongan grosir (9+ tangkai)</dt>
+                <dd id="est-discount-val">− Rp 0</dd>
+              </div>
+              <div class="custom-est-row">
+                <dt id="est-wrap-label">Bungkus & pita</dt>
+                <dd id="est-wrap-val">Rp 35.000</dd>
+              </div>
+              <div class="custom-est-total-row">
+                <dt id="est-total-label">Estimasi total</dt>
+                <dd id="est-total-val" aria-live="polite">—</dd>
+              </div>
+            </dl>
+            <p class="custom-hint" id="custom-hint">Tambahkan minimal tiga tangkai untuk memesan buket.</p>
+            <button type="button" class="btn-use-custom" id="btn-use-custom" disabled>Pakai buket ini</button>
           </div>
         </div>
-
-        <!-- Right Column: Live Estimate Card -->
-        <div class="custom-estimate-card">
-          <p class="step-label" id="custom-est-label">Estimasi</p>
-          <dl class="custom-est-list" id="custom-est-list">
-            <div class="custom-est-row">
-              <dt id="est-flowers-label">Bunga (0)</dt>
-              <dd id="est-flowers-val">Rp 0</dd>
-            </div>
-            <div class="custom-est-row est-discount-row" id="est-discount-row" style="display: none;">
-              <dt id="est-discount-label">Potongan grosir (9+ tangkai)</dt>
-              <dd id="est-discount-val">− Rp 0</dd>
-            </div>
-            <div class="custom-est-row">
-              <dt id="est-wrap-label">Bungkus & pita</dt>
-              <dd id="est-wrap-val">Rp 35.000</dd>
-            </div>
-            <div class="custom-est-total-row">
-              <dt id="est-total-label">Estimasi total</dt>
-              <dd id="est-total-val" aria-live="polite">—</dd>
-            </div>
-          </dl>
-          <p class="custom-hint" id="custom-hint">Tambahkan minimal tiga tangkai untuk memesan buket.</p>
-          <button type="button" class="btn-use-custom" id="btn-use-custom" disabled>Pakai buket ini</button>
-        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        ORDER / FINISHING SECTION (POSITIONED DIRECTLY AFTER SELECTION)
        ======================================================================== -->
-  <section id="order" class="order-section container">
-    <p class="eyebrow" id="order-eyebrow">Pesan</p>
-    <h2 class="section-title" id="order-title">Lengkapi pesanan Anda, lalu konfirmasi via chat</h2>
+    <section id="order" class="order-section container">
+      <p class="eyebrow" id="order-eyebrow">Pesan</p>
+      <h2 class="section-title" id="order-title">Lengkapi pesanan Anda, lalu konfirmasi via chat</h2>
 
-    <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+      <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-    <div class="order-grid">
-      <!-- Left Column: Finishing Options -->
-      <div class="order-controls-col">
-        <!-- Inline Product Picker (visible only while the cart is empty) -->
-        <div class="order-picker" id="order-picker">
-          <p class="step-label" id="order-picker-label">Pilih produk</p>
-          <div class="order-picker-grid" id="order-picker-flowers"></div>
-          <div class="order-picker-grid" id="order-picker-packages"></div>
-        </div>
-
-        <!-- Wrap Colour Chooser -->
-        <h3 class="step-label" id="finish-label" tabindex="-1">Sentuhan akhir</h3>
-        <p class="wrap-intro" id="wrap-intro">Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.</p>
-        <div class="wrap-chips" id="wrap-chips" role="radiogroup" aria-label="Pilih kertas pembungkus">
-          <!-- Dynamically populated wrap chips -->
-        </div>
-
-        <!-- Handwritten Message Card Textarea -->
-        <p class="step-label" id="card-label">Kartu ucapan</p>
-        <textarea id="card-note-input" class="card-note-textarea" rows="4" placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
-        <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.</p>
-      </div>
-
-      <!-- Right Column: Live Order Summary Box -->
-      <div class="summary-box">
-        <div class="order-summary-card-inner">
-          <div class="summary-top-row">
-            <p class="step-label" id="selection-label">Pilihan Anda</p>
-            <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan ↑</button>
+      <div class="order-grid">
+        <!-- Left Column: Finishing Options -->
+        <div class="order-controls-col">
+          <!-- Inline Product Picker (visible only while the cart is empty) -->
+          <div class="order-picker" id="order-picker">
+            <p class="step-label" id="order-picker-label">Pilih produk</p>
+            <div class="order-picker-grid" id="order-picker-flowers"></div>
+            <div class="order-picker-grid" id="order-picker-packages"></div>
           </div>
 
-          <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
-
-          <div class="summary-price-container">
-            <p class="summary-price" id="summary-price">Rp 55.000</p>
-            <span class="summary-shipping-note" id="summary-shipping-note">Belum termasuk ongkir</span>
+          <!-- Wrap Colour Chooser -->
+          <h3 class="step-label" id="finish-label" tabindex="-1">Sentuhan akhir</h3>
+          <p class="wrap-intro" id="wrap-intro">Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam
+            harga buket; tangkai satuan dibalut kertas pelindung siap vas.</p>
+          <div class="wrap-chips" id="wrap-chips" role="radiogroup" aria-label="Pilih kertas pembungkus">
+            <!-- Dynamically populated wrap chips -->
           </div>
 
-          <p class="step-label" id="includes-label">Termasuk</p>
-          <ul class="summary-includes-list" id="summary-includes-list">
-            <!-- Dynamically populated -->
-          </ul>
+          <!-- Handwritten Message Card Textarea -->
+          <p class="step-label" id="card-label">Kartu ucapan</p>
+          <textarea id="card-note-input" class="card-note-textarea" rows="4"
+            placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
+          <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil,
+            tanpa biaya tambahan.</p>
         </div>
 
-        <div class="order-actions-card-inner">
-          <div class="custom-min-warning-banner" id="custom-min-warning-banner" style="display: none;">
-            <p id="custom-min-warning-text">Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.</p>
-          </div>
-
-          <p class="step-label" id="step3-label">Lanjut ke pemesanan</p>
-          <div class="channel-buttons">
-            <div id="channels-disabled-box" class="channels-disabled-box" style="display: none;" role="alert"></div>
-            <a href="#" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-whatsapp" target="_blank" rel="noopener">
-              <span class="channel-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                </svg>
-              </span>
-              <div class="channel-info-text">
-                <span class="channel-name">WhatsApp — Konfirmasi Pesanan</span>
-                <span class="channel-action">chat →</span>
-              </div>
-            </a>
-
-            <!-- Shopee Interactive Channel Button -->
-            <a href="https://shopee.co.id" class="btn-channel btn-shopee" id="btn-shopee" target="_blank" rel="noopener">
-              <span class="channel-icon-wrapper" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <path d="M16 10a4 4 0 0 1-8 0"></path>
-                </svg>
-              </span>
-              <div class="channel-info-text">
-                <span class="channel-name">Shopee</span>
-                <span class="channel-sub" id="shopee-channel-sub">Official Store · Belanja praktis</span>
-              </div>
-              <span class="channel-action" id="shopee-channel-action">buka toko →</span>
-            </a>
-
-            <!-- Marketplace Context Info Box -->
-            <div class="marketplace-status-box" id="marketplace-status-box">
-              <div class="marketplace-badge-group">
-                <span class="mkt-badge">Shopee</span>
-                <span class="mkt-active-tag" id="mkt-soon-tag">Toko Resmi</span>
-              </div>
-              <p class="marketplace-status-text" id="marketplace-status-text">
-                Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan langsung via WhatsApp studio.
-              </p>
+        <!-- Right Column: Live Order Summary Box -->
+        <div class="summary-box">
+          <div class="order-summary-card-inner">
+            <div class="summary-top-row">
+              <p class="step-label" id="selection-label">Pilihan Anda</p>
+              <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan ↑</button>
             </div>
+
+            <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
+
+            <div class="summary-price-container">
+              <p class="summary-price" id="summary-price">Rp 55.000</p>
+              <span class="summary-shipping-note" id="summary-shipping-note">Belum termasuk ongkir</span>
+            </div>
+
+            <p class="step-label" id="includes-label">Termasuk</p>
+            <ul class="summary-includes-list" id="summary-includes-list">
+              <!-- Dynamically populated -->
+            </ul>
           </div>
 
-          <p class="order-note" id="order-note">Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui chat WhatsApp sebelum Anda melakukan transfer.</p>
+          <div class="order-actions-card-inner">
+            <div class="custom-min-warning-banner" id="custom-min-warning-banner" style="display: none;">
+              <p id="custom-min-warning-text">Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.</p>
+            </div>
+
+            <p class="step-label" id="step3-label">Lanjut ke pemesanan</p>
+            <div class="channel-buttons">
+              <div id="channels-disabled-box" class="channels-disabled-box" style="display: none;" role="alert"></div>
+              <a href="#" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-whatsapp" target="_blank"
+                rel="noopener">
+                <span class="channel-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
+                    </path>
+                  </svg>
+                </span>
+                <div class="channel-info-text">
+                  <span class="channel-name">WhatsApp — Konfirmasi Pesanan</span>
+                  <span class="channel-action">chat →</span>
+                </div>
+              </a>
+
+              <!-- Shopee Interactive Channel Button -->
+              <a href="https://shopee.co.id" class="btn-channel btn-shopee" id="btn-shopee" target="_blank"
+                rel="noopener">
+                <span class="channel-icon-wrapper" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <path d="M16 10a4 4 0 0 1-8 0"></path>
+                  </svg>
+                </span>
+                <div class="channel-info-text">
+                  <span class="channel-name">Shopee</span>
+                  <span class="channel-sub" id="shopee-channel-sub">Official Store · Belanja praktis</span>
+                </div>
+                <span class="channel-action" id="shopee-channel-action">buka toko →</span>
+              </a>
+
+              <!-- Marketplace Context Info Box -->
+              <div class="marketplace-status-box" id="marketplace-status-box">
+                <div class="marketplace-badge-group">
+                  <span class="mkt-badge">Shopee</span>
+                  <span class="mkt-active-tag" id="mkt-soon-tag">Toko Resmi</span>
+                </div>
+                <p class="marketplace-status-text" id="marketplace-status-text">
+                  Toko Shopee resmi kami siap melayani pesanan Anda. Untuk buket kustom & konsultasi rangkaian, pesan
+                  langsung via WhatsApp studio.
+                </p>
+              </div>
+            </div>
+
+            <p class="order-note" id="order-note">Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui
+              chat WhatsApp sebelum Anda melakukan transfer.</p>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        HOW THEY'RE MADE SECTION (CRAFTSMANSHIP EVIDENCE)
        ======================================================================== -->
-  <section id="howto" class="how-section dark-section">
-    <div class="container">
-      <p class="eyebrow" id="how-eyebrow">Cara dibuat</p>
-      <h2 class="section-title" id="how-title">Dikerjakan tangan, lalu dikirim ke Anda</h2>
+    <section id="howto" class="how-section dark-section">
+      <div class="container">
+        <p class="eyebrow" id="how-eyebrow">Cara dibuat</p>
+        <h2 class="section-title" id="how-title">Dikerjakan tangan, lalu dikirim ke Anda</h2>
 
-      <div class="steps-grid" id="steps-grid">
-        <!-- Dynamically populated with 4 steps -->
+        <div class="steps-grid" id="steps-grid">
+          <!-- Dynamically populated with 4 steps -->
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        MATERIAL SECTION
        ======================================================================== -->
-  <section id="material" class="material-section container">
-    <figure class="material-figure">
-      <img id="material-image" src="img/macro-960.webp" srcset="img/macro-480.webp 480w, img/macro-960.webp 960w, img/macro-1254.webp 1254w" sizes="(max-width: 768px) 90vw, 540px" width="1254" height="1254" alt="Close-up of chenille stems" class="material-img" loading="lazy" decoding="async" />
-    </figure>
+    <section id="material" class="material-section container">
+      <figure class="material-figure">
+        <img id="material-image" src="img/macro-960.webp"
+          srcset="img/macro-480.webp 480w, img/macro-960.webp 960w, img/macro-1254.webp 1254w"
+          sizes="(max-width: 768px) 90vw, 540px" width="1254" height="1254" alt="Close-up of chenille stems"
+          class="material-img" loading="lazy" decoding="async" />
+        <figcaption class="material-caption" id="mat-caption">Gbr. 1 — serat chenille pada inti kawat berpuntir
+        </figcaption>
+      </figure>
 
-    <div class="material-text-col">
-      <p class="eyebrow" id="mat-eyebrow">Bahannya</p>
-      <h2 class="section-title" id="mat-title">Mengapa chenille bergerak seperti kelopak</h2>
-      <p class="material-body" id="mat-body">Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.</p>
-      
-      <ul class="material-points" id="material-points">
-        <!-- Dynamically populated with 3 points -->
-      </ul>
-    </div>
-  </section>
+      <div class="material-text-col">
+        <p class="eyebrow" id="mat-eyebrow">Bahannya</p>
+        <h2 class="section-title" id="mat-title">Mengapa chenille bergerak seperti kelopak</h2>
+        <p class="material-body" id="mat-body">Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima
+          lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan
+          sekadar dilipat.</p>
 
-  <!-- ========================================================================
+        <ul class="material-points" id="material-points">
+          <!-- Dynamically populated with 3 points -->
+        </ul>
+      </div>
+    </section>
+
+    <!-- ========================================================================
        FAQ SECTION (DARK BOTANICAL CONTRAST)
        ======================================================================== -->
-  <section id="faq" class="faq-section dark-section">
-    <div class="container">
-      <p class="eyebrow" id="faq-eyebrow">Pertanyaan</p>
-      <h2 class="section-title" id="faq-title">Sebelum Anda memesan</h2>
+    <section id="faq" class="faq-section dark-section">
+      <div class="container">
+        <p class="eyebrow" id="faq-eyebrow">Pertanyaan</p>
+        <h2 class="section-title" id="faq-title">Sebelum Anda memesan</h2>
 
-      <div class="faq-accordion" id="faq-accordion">
-        <!-- Dynamically populated with 6 accessible FAQ accordion items -->
+        <div class="faq-accordion" id="faq-accordion">
+          <!-- Dynamically populated with 6 accessible FAQ accordion items -->
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ========================================================================
+    <!-- ========================================================================
        DIY KIT TEASER BAND (COMING LATER - SUBTLE PLACEMENT NEAR FOOTER)
        ======================================================================== -->
-  <aside class="kit-teaser-band container" id="kit-teaser-band" aria-label="Informasi Kit DIY / DIY Kit Teaser">
-    <div class="kit-teaser-text">
-      <p class="eyebrow" id="kit-soon-eyebrow">Segera menyusul</p>
-      <h4 class="kit-teaser-title" id="kit-soon-title">Kit DIY-nya masih kami siapkan</h4>
-      <p class="kit-teaser-body" id="kit-soon-body">Kami sedang menggambar panduannya dan menguji kemasannya, supaya pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak yang menunggu, makin cepat kami luncurkan.</p>
-    </div>
-    <div class="kit-teaser-actions">
-      <a href="#" class="btn-primary" id="kit-soon-cta" target="_blank" rel="noopener">Saya mau kitnya →</a>
-      <a href="#faq" class="btn-secondary" id="kit-soon-secondary">Baca FAQ</a>
-    </div>
-  </aside>
+    <aside class="kit-teaser-band container" id="kit-teaser-band" aria-label="Informasi Kit DIY / DIY Kit Teaser">
+      <div class="kit-teaser-text">
+        <p class="eyebrow" id="kit-soon-eyebrow">Segera menyusul</p>
+        <h4 class="kit-teaser-title" id="kit-soon-title">Kit DIY-nya masih kami siapkan</h4>
+        <p class="kit-teaser-body" id="kit-soon-body">Kami sedang menggambar panduannya dan menguji kemasannya, supaya
+          pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak
+          yang menunggu, makin cepat kami luncurkan.</p>
+      </div>
+      <div class="kit-teaser-actions">
+        <a href="#" class="btn-primary" id="kit-soon-cta" target="_blank" rel="noopener">Saya mau kitnya →</a>
+        <a href="#faq" class="btn-secondary" id="kit-soon-secondary">Baca FAQ</a>
+      </div>
+    </aside>
 
   </main>
 
@@ -739,7 +784,8 @@
     <div class="footer-main container">
       <div class="footer-col footer-col-brand">
         <span class="footer-brand">
-          <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32" height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
+          <img src="komorebi-logo-96.webp" srcset="komorebi-logo-96.webp 1x, komorebi-logo-192.webp 2x" width="32"
+            height="32" alt="Komorebi Logo" class="footer-logo" loading="lazy" decoding="async" />
           Komorebi
         </span>
         <p class="footer-tagline" id="footer-tagline">est. 2026</p>
@@ -796,7 +842,8 @@
        ======================================================================== -->
   <dialog id="image-modal" class="image-modal" aria-labelledby="image-modal-title" aria-modal="true">
     <div class="image-modal-content">
-      <button type="button" id="image-modal-close" class="image-modal-close" aria-label="Tutup pembesar gambar / Close image inspector">×</button>
+      <button type="button" id="image-modal-close" class="image-modal-close"
+        aria-label="Tutup pembesar gambar / Close image inspector">×</button>
       <img id="image-modal-img" src="" alt="" class="image-modal-img" />
       <div class="image-modal-info">
         <h3 id="image-modal-title" class="image-modal-title"></h3>
@@ -809,4 +856,5 @@
   <script src="site-content.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

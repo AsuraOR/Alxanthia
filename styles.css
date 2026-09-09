@@ -824,7 +824,6 @@ body.nav-open {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 10px;
   text-decoration: none;
   cursor: pointer;
   transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
@@ -838,41 +837,6 @@ body.nav-open {
 
 .btn-order-stem:active {
   transform: scale(0.98);
-}
-
-.btn-add-bouquet {
-  border: 1px solid var(--border-medium);
-  background: transparent;
-  padding: 10px 14px;
-  cursor: pointer;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--fs-button);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-green);
-  border-radius: 0;
-  min-height: 44px;
-  min-width: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
-              border-color var(--motion-duration-btn) var(--motion-ease-out),
-              color var(--motion-duration-btn) var(--motion-ease-out);
-}
-
-.btn-add-bouquet:hover {
-  border-color: var(--accent-green);
-  background: rgba(63, 85, 69, 0.08);
-  color: var(--accent-green-hover);
-}
-
-.btn-add-bouquet.btn-added-flash {
-  background: var(--accent-green) !important;
-  color: #FFF !important;
-  border-color: var(--accent-green) !important;
 }
 
 /* Category Filter Navigation Tabs */
@@ -1925,119 +1889,89 @@ body.nav-open {
   color: var(--bg-main);
 }
 
-.summary-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+.cart-lines {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
 }
 
-.summary-photo-frame {
-  position: relative;
-  width: 76px;
-  height: 76px;
+.cart-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  border-bottom: 1px solid var(--border-plate);
+  padding: 14px 0;
+}
+
+.cart-line:first-child {
+  padding-top: 0;
+}
+
+.cart-line-photo {
+  width: 56px;
+  height: 56px;
   aspect-ratio: 1 / 1;
-  border-radius: 0;
+  object-fit: cover;
   border: 1px solid var(--border-medium);
   background: var(--bg-main);
-  overflow: hidden;
   flex-shrink: 0;
 }
 
-.summary-photo-frame .summary-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border: none;
-  background: transparent;
-  transition: opacity var(--motion-duration-preview) var(--motion-ease-in-out);
+.cart-line-info {
+  /* Never shrink below a legible width — at that point the stepper and
+     remove button wrap onto their own row instead of squeezing the title
+     into character-by-character wrapping. */
+  flex: 1 1 140px;
+  min-width: 140px;
 }
 
-.summary-photo-frame .summary-photo-prev {
-  opacity: 1;
-  z-index: 1;
-}
-
-.summary-photo-frame .summary-photo-main {
-  opacity: 1;
-  z-index: 2;
-}
-
-.summary-photo-frame.is-crossfading .summary-photo-main {
-  opacity: 0;
-}
-
-.summary-photo-frame.is-loading {
-  opacity: 0.88;
-}
-
-.summary-photo-empty-icon {
-  display: none;
-  position: absolute;
-  inset: 0;
-  align-items: center;
-  justify-content: center;
-  color: var(--border-medium);
-  z-index: 3;
-  background: var(--bg-main);
-}
-
-.summary-photo-frame.is-empty .summary-photo {
-  opacity: 0;
-}
-
-.summary-photo-frame.is-empty .summary-photo-empty-icon {
-  display: flex;
-}
-
-.summary-photo-frame.has-error::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  background: var(--bg-card);
-  z-index: 3;
-}
-
-.summary-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.summary-selection-title {
+.cart-line-title {
+  margin: 0 0 2px;
   font-family: var(--font-serif);
   font-weight: 500;
-  font-size: clamp(21px, 2.4vw, 27px);
-  line-height: 1.18;
-  margin: 0 0 4px;
+  font-size: clamp(16px, 1.8vw, 19px);
+  line-height: 1.25;
   color: var(--text-dark);
+  overflow-wrap: break-word;
 }
 
-.summary-latin {
+.cart-line-price {
   margin: 0;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 15px;
-  color: var(--text-muted);
-  transition: opacity 180ms var(--motion-ease-in-out);
-}
-
-.summary-latin.fading-out {
-  opacity: 0;
-}
-
-.summary-photo-caption-note {
-  margin: 4px 0 0;
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: var(--fs-label);
   letter-spacing: 0.02em;
-  color: var(--accent-ochre);
+  color: var(--text-muted);
+}
+
+.cart-line-stepper {
+  flex: 0 0 auto;
+}
+
+.btn-remove-line {
+  width: 36px;
+  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  transition: color var(--motion-duration-btn) var(--motion-ease-out),
+              border-color var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.btn-remove-line:hover {
+  color: var(--text-dark);
+  border-color: var(--border-medium);
 }
 
 .summary-price-container {
@@ -3034,17 +2968,6 @@ details.is-closing > .faq-answer-wrapper {
     padding: 10px 8px;
     font-size: var(--fs-label);
     letter-spacing: 0.04em;
-    margin-bottom: 0;
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-  }
-
-  .btn-add-bouquet {
-    min-height: 44px;
-    padding: 10px 8px;
-    font-size: var(--fs-label);
-    letter-spacing: 0.04em;
     width: 100%;
     justify-content: center;
     text-align: center;
@@ -3489,15 +3412,6 @@ details.is-closing > .faq-answer-wrapper {
   /* Product cards and preview images */
   .flower-photo {
     transform: none !important;
-    transition: none !important;
-  }
-
-  .summary-photo-frame .summary-photo,
-  .summary-photo-frame .summary-photo-prev {
-    transition: none !important;
-  }
-
-  .summary-latin {
     transition: none !important;
   }
 

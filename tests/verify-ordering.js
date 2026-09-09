@@ -303,16 +303,12 @@ registerEl('span', 'sticky-order-price');
 registerEl('button', 'sticky-order-cta');
 
 // Order summary sub-elements
-registerEl('h3', 'summary-title');
-registerEl('p', 'summary-latin');
+registerEl('ul', 'cart-lines');
 registerEl('span', 'summary-price');
-registerEl('img', 'summary-photo');
-registerEl('p', 'summary-photo-caption-note');
 registerEl('span', 'summary-shipping-note');
 registerEl('p', 'includes-label');
 registerEl('ul', 'summary-includes-list');
 registerEl('div', 'stem-qty-card');
-registerEl('div', 'summary-photo-frame');
 registerEl('div', 'custom-min-warning-banner');
 registerEl('span', 'custom-min-warning-text');
 registerEl('p', 'order-note');
@@ -480,34 +476,56 @@ assert(app, 'FATAL: window.KomorebiApp must be exported by app.js');
 console.log('✔ Environment initialized: app.js loaded into high-fidelity DOM context\n');
 
 // ---------------------------------------------------------------------------
+// Cart-line DOM helpers (P1-06) — read the rendered #cart-lines list rather
+// than a single summary title, since the cart can now hold multiple lines.
+// ---------------------------------------------------------------------------
+function cartLineEls() {
+  return mockDocument.getElementById('cart-lines').children;
+}
+function cartLineTitle(index) {
+  const li = cartLineEls()[index];
+  return li ? li.querySelector('.cart-line-title').textContent : undefined;
+}
+function cartLinePrice(index) {
+  const li = cartLineEls()[index];
+  return li ? li.querySelector('.cart-line-price').textContent : undefined;
+}
+function cartLineQty(index) {
+  const li = cartLineEls()[index];
+  return li ? li.querySelector('.stepper-count').textContent : undefined;
+}
+function lastCartLineTitle() {
+  return cartLineTitle(cartLineEls().length - 1);
+}
+function formatRpForTest(n) {
+  return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+}
+
+// ---------------------------------------------------------------------------
 // Suite 1: R03 - Neutral Initial State (Before User Selection)
 // ---------------------------------------------------------------------------
 console.log('--- SUITE 1: Neutral Initial State (R03) ---');
 const state1 = app.getState();
 assert.strictEqual(state1.hasUserSelected, false, 'hasUserSelected must initialize to false');
 
-const summaryTitle = mockDocument.getElementById('summary-title');
+const cartLines = mockDocument.getElementById('cart-lines');
 const summaryPrice = mockDocument.getElementById('summary-price');
-const photoNote = mockDocument.getElementById('summary-photo-caption-note');
 const includesLabel = mockDocument.getElementById('includes-label');
 const includesList = mockDocument.getElementById('summary-includes-list');
 const shippingNote = mockDocument.getElementById('summary-shipping-note');
 const stemQtyCard = mockDocument.getElementById('stem-qty-card');
-const summaryPhotoFrame = mockDocument.getElementById('summary-photo-frame');
 const waBtn = mockDocument.getElementById('btn-whatsapp');
 const stickyTitle = mockDocument.getElementById('sticky-order-title');
 const stickyPrice = mockDocument.getElementById('sticky-order-price');
 const stickyCta = mockDocument.getElementById('sticky-order-cta');
 
-assert.strictEqual(summaryTitle.textContent, 'Belum ada bunga dipilih', 'Initial title must indicate no selection');
+assert.strictEqual(cartLines.children.length, 0, 'Cart must start with no lines (P1-06)');
 assert.strictEqual(summaryPrice.textContent, '—', 'Initial price must be neutral dash');
-assert.strictEqual(photoNote.style.display, 'none', 'Custom photo illustration note must be hidden');
 assert.strictEqual(includesList.children.length, 0, 'Includes list must stay empty rather than show instructions in place of inclusions (T2-8)');
 assert.strictEqual(includesLabel.style.display, 'none', '"Termasuk" label must be hidden when there is nothing to include yet (T2-8)');
 assert(!includesList.textContent.includes('Kartu ucapan'), 'Includes must not claim card was prepared when none chosen');
 assert.strictEqual(shippingNote.style.display, 'none', 'Shipping note must be hidden when there is no price to qualify (T2-8)');
 assert.strictEqual(stemQtyCard.style.display, 'none', 'Stem quantity stepper must stay hidden until a stem is actually selected (T2-8)');
-assert(summaryPhotoFrame.classList.contains('is-empty'), 'Summary photo frame must show the neutral empty state, not a specific product photo (T2-8)');
 
 // WhatsApp Button must be in disabled prompt state
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must be aria-disabled');
@@ -555,11 +573,13 @@ console.log('✔ Suite 2 Passed: User-supplied gift notes are strictly safely bo
 // Suite 3: Single Stem Selection & WhatsApp Message Composition
 // ---------------------------------------------------------------------------
 console.log('\n--- SUITE 3: Single Finished Stem Selection ---');
+app.resetToInitial();
 app.selectStem('Tulip', false);
 assert.strictEqual(app.getState().orderMode, 'stem');
 assert.strictEqual(app.getState().selectedFlower, 'Tulip');
 
-assert.strictEqual(summaryTitle.textContent, 'Tulip — tangkai jadi');
+assert.strictEqual(cartLineEls().length, 1, 'Selecting a stem from empty must yield exactly one cart line');
+assert.strictEqual(cartLineTitle(0), 'Tulip');
 assert.strictEqual(summaryPrice.textContent, 'Rp 50.000');
 
 // WhatsApp button must now be active
@@ -598,7 +618,7 @@ for (const [lang, mode, expected, total] of messageCases) {
   assert(!/[{}]/.test(readWaMessage()), `${lang}/${mode}: empty note must leave no braces`);
   if (mode === 'stem') {
     assert(!/\(\s*—/.test(readWaMessage()), `${lang}: stem suffix must not be parenthesized`);
-    assert.strictEqual(summaryTitle.textContent, lang === 'id' ? 'Mawar — tangkai jadi' : 'Rose — finished stem');
+    assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar' : 'Rose');
   }
   app.setOrderNote('Untuk {Alam}');
   assert(readWaMessage().includes('"Untuk {Alam}"'), `${lang}/${mode}: preserve greeting braces verbatim`);
@@ -647,7 +667,9 @@ console.log('✔ Suite 3 Passed: Tulip stem selected and correctly formatted in 
 console.log('\n--- SUITE 4: Single Stem Quantity Stepper ---');
 app.bumpStemQty(2); // 1 + 2 = 3 stems
 assert.strictEqual(app.getState().selectedStemQty, 3);
-assert.strictEqual(summaryTitle.textContent, '3 × Tulip — tangkai jadi');
+assert.strictEqual(cartLineEls().length, 1, 'Bumping qty must mutate the existing line, not add a new one');
+assert.strictEqual(cartLineTitle(0), 'Tulip');
+assert.strictEqual(cartLineQty(0), '3');
 assert.strictEqual(summaryPrice.textContent, 'Rp 150.000');
 
 const decodedWaQty = decodeURIComponent(waBtn.getAttribute('href'));
@@ -658,71 +680,88 @@ console.log('✔ Suite 4 Passed: 3x Tulip calculated exactly to Rp 150.000 in su
 // Suite 5: Florist Bouquet Packages (Tiers 0, 1, 2, 3)
 // ---------------------------------------------------------------------------
 console.log('\n--- SUITE 5: Florist Bouquet Packages ---');
+app.resetToInitial();
 // Package 0: Buket Mini (3 stems, Rp 195.000)
 app.selectPackage(0, false);
 assert.strictEqual(app.getState().orderMode, 'package');
-assert.strictEqual(summaryTitle.textContent, 'Buket Mini');
+assert.strictEqual(cartLineEls().length, 1);
+assert.strictEqual(cartLineTitle(0), 'Buket Mini');
 assert.strictEqual(summaryPrice.textContent, 'Rp 195.000');
 assert(decodeURIComponent(waBtn.getAttribute('href')).includes('Buket Mini (3 tangkai) — Rp 195.000'));
 
-// Package 2: Buket Besar (9 stems, Rp 465.000)
-app.selectPackage(2, false);
-assert.strictEqual(summaryTitle.textContent, 'Buket Besar');
-assert.strictEqual(summaryPrice.textContent, 'Rp 465.000');
-assert(decodeURIComponent(waBtn.getAttribute('href')).includes('Buket Besar (9 tangkai) — Rp 465.000'));
-console.log('✔ Suite 5 Passed: Florist packages correctly switch modes and calculate package prices');
+// Selecting the SAME package again must merge into one line with qty 2, not duplicate it (P1-06)
+app.selectPackage(0, false);
+assert.strictEqual(cartLineEls().length, 1, 'Re-selecting the same package must merge, not duplicate the line');
+assert.strictEqual(cartLineQty(0), '2');
+assert.strictEqual(summaryPrice.textContent, 'Rp 390.000');
+
+// Selecting a DIFFERENT package must add a second line, not replace the cart (P1-06)
+app.selectPackage(2, false); // Buket Besar: 9 stems, Rp 465.000
+assert.strictEqual(cartLineEls().length, 2, 'Selecting a different package must add a line, not replace the cart');
+assert.strictEqual(cartLineTitle(1), 'Buket Besar');
+assert.strictEqual(summaryPrice.textContent, 'Rp 855.000');
+
+const multiLineWaMsg = decodeURIComponent(waBtn.getAttribute('href'));
+assert(multiLineWaMsg.includes('2 × Buket Mini — Rp 390.000'), 'Multi-line WhatsApp message must enumerate the merged package line with its qty and subtotal');
+assert(multiLineWaMsg.includes('1 × Buket Besar — Rp 465.000'), 'Multi-line WhatsApp message must enumerate the second package line');
+assert(multiLineWaMsg.includes('Total Rp 855.000'), 'Multi-line WhatsApp message must show the cart total');
+console.log('✔ Suite 5 Passed: Florist packages merge on re-selection and add distinct lines otherwise');
 
 // ---------------------------------------------------------------------------
-// Suite 6: Custom Bouquet Builder State Transition (R03)
+// Suite 6: Custom Builder Draft Stays Out of the Cart Until Committed (P1-06)
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 6: Custom Builder State Transition (R03) ---');
+console.log('\n--- SUITE 6: Custom Builder Draft vs Committed Cart (P1-06) ---');
 app.resetToInitial();
 assert.strictEqual(app.getState().hasUserSelected, false);
 
-// Adjusting a stem counter in the builder must immediately switch mode to 'custom' and set hasUserSelected = true
+// Adjusting a stepper updates the builder's own draft estimate only — it
+// must NOT add a cart line (that was P1-04-era behaviour; P1-06 requires an
+// explicit "Gunakan buket ini" commit so multiple distinct bouquets are possible).
 app.bumpCustom('Sunflower', 1);
-assert.strictEqual(app.getState().orderMode, 'custom', 'Bumping stepper must immediately switch orderMode to custom');
-assert.strictEqual(app.getState().hasUserSelected, true, 'Bumping stepper must mark hasUserSelected = true');
+assert.strictEqual(app.getState().hasUserSelected, false, 'Bumping the builder draft must not touch the cart');
+assert.strictEqual(cartLineEls().length, 0, 'An in-progress draft must not appear as a cart line');
 
 const customTotals1 = app.getCustomTotals();
 assert.strictEqual(customTotals1.stems, 1);
 assert.strictEqual(customTotals1.isValid, false, '1 stem custom bouquet must be invalid');
 
-assert.strictEqual(summaryTitle.textContent, 'Buket custom (1 tangkai)');
-assert(summaryPrice.textContent.includes('—'), 'Price must display dash when stems < minStems');
-assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must be disabled for < 3 stems');
+assert.strictEqual(summaryPrice.textContent, '—', 'Cart-level price must stay neutral while only the draft is being built');
+assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must stay disabled — nothing has been committed yet');
 assert(waBtn.classList.contains('btn-disabled'));
-console.log('✔ Suite 6 Passed: Adjusting builder steppers switches orderMode to custom immediately');
+console.log('✔ Suite 6 Passed: Custom builder steppers only touch the draft until explicitly committed');
 
 // ---------------------------------------------------------------------------
-// Suite 7: Dynamic Count & Localization on Invalid Custom Sticky Bar (R04)
+// Suite 7: Custom Builder Draft Dynamic Count & Localization (R04)
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 7: Invalid Custom Sticky Bar Dynamic Count & Localization (R04) ---');
-// Add 1 Rose -> total 2 stems
+console.log('\n--- SUITE 7: Custom Builder Draft Dynamic Count & Localization (R04) ---');
+// Add 1 Rose -> total 2 stems in the draft (still below minStems, still uncommitted)
 app.bumpCustom('Rose', 1);
 assert.strictEqual(app.getCustomTotals().stems, 2);
+assert.strictEqual(cartLineEls().length, 0, 'A below-minimum draft must never reach the cart');
 
-// Indonesian Mode
-assert.strictEqual(stickyTitle.textContent, 'Buket custom (2)', 'Sticky title must reflect current count (2), not hardcoded (0)');
-assert.strictEqual(stickyPrice.textContent, 'Min. 3 tangkai', 'Sticky price must say Min. 3 tangkai dynamically formatted');
-assert.strictEqual(stickyCta.textContent, 'Atur bunga ↑', 'Sticky CTA must be localized');
+const customStemCount = mockDocument.getElementById('custom-stem-count');
+const customHint = mockDocument.getElementById('custom-hint');
 
-// English Mode
+// Indonesian
+assert.strictEqual(customStemCount.textContent, '2 tangkai', 'Draft stem count must update live as flowers are added');
+assert(customHint.textContent.includes('minimal 3 tangkai'), 'Draft hint must localize the minimum-stems message');
+assert(customHint.classList.contains('has-warning'));
+
+// English
 app.setLanguage('en');
-assert.strictEqual(stickyTitle.textContent, 'Custom bouquet (2)', 'EN: Sticky title must be Custom bouquet (2)');
-assert.strictEqual(stickyPrice.textContent, 'Min. 3 stems', 'EN: Sticky price must be Min. 3 stems');
-assert.strictEqual(stickyCta.textContent, 'Configure stems ↑', 'EN: Sticky CTA must be Configure stems ↑');
+assert.strictEqual(customStemCount.textContent, '2 stems', 'EN: Draft stem count must localize');
+assert(customHint.textContent.includes('at least 3 stems'), 'EN: Draft hint must localize the minimum-stems message');
 
 // Switch back to Indonesian
 app.setLanguage('id');
-assert.strictEqual(stickyTitle.textContent, 'Buket custom (2)');
-assert.strictEqual(stickyPrice.textContent, 'Min. 3 tangkai');
-console.log('✔ Suite 7 Passed: Invalid custom sticky bar dynamically reflects stems and localizes in ID and EN');
+assert.strictEqual(customStemCount.textContent, '2 tangkai');
+assert(customHint.textContent.includes('minimal 3 tangkai'));
+console.log('✔ Suite 7 Passed: Custom builder draft dynamically reflects stems and localizes in ID and EN');
 
 // ---------------------------------------------------------------------------
-// Suite 8: Valid Custom Bouquet (3 stems) & 10% Volume Discount (9+ stems)
+// Suite 8: Valid Custom Bouquet (3 stems), Commit to Cart & 10% Volume Discount (9+ stems)
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 8: Valid Custom Calculations & Volume Savings ---');
+console.log('\n--- SUITE 8: Valid Custom Calculations, Commit & Volume Savings ---');
 // Add 1 Tulip -> Total stems = 3 (1 Sunflower @ 55k, 1 Rose @ 60k, 1 Tulip @ 50k)
 app.bumpCustom('Tulip', 1);
 const tot3 = app.getCustomTotals();
@@ -732,14 +771,17 @@ assert.strictEqual(tot3.discount, 0);
 assert.strictEqual(tot3.wrapFee, 35000);
 assert.strictEqual(tot3.total, 200000);
 assert.strictEqual(tot3.isValid, true);
+assert.strictEqual(cartLineEls().length, 0, 'Still just a valid draft — committing is a separate, explicit step');
 
-assert.strictEqual(summaryTitle.textContent, 'Buket custom (3 tangkai)');
+// Commit the draft: "Gunakan buket ini" adds it as a cart line
+app.useCustom();
+assert.strictEqual(cartLineEls().length, 1, 'useCustom() must commit the draft as a cart line');
 assert.strictEqual(summaryPrice.textContent, 'Rp 200.000');
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), null);
 assert(!waBtn.classList.contains('btn-disabled'));
 assert(decodeURIComponent(waBtn.getAttribute('href')).includes('estimasi Rp 200.000'));
 
-// Volume Discount: 9 Stems (5 Sunflower @ 55k, 4 Tulip @ 50k)
+// Volume Discount: 9 Stems (5 Sunflower @ 55k, 4 Tulip @ 50k), committed as a second bouquet
 app.resetCustom();
 app.bumpCustom('Sunflower', 5);
 app.bumpCustom('Tulip', 4);
@@ -751,8 +793,16 @@ const expTot = expSub - expDisc + 35000; // 462500
 assert.strictEqual(tot9.flowersSubtotal, expSub);
 assert.strictEqual(tot9.discount, expDisc);
 assert.strictEqual(tot9.total, expTot);
-assert.strictEqual(summaryPrice.textContent, 'Rp 462.500');
-console.log('✔ Suite 8 Passed: 3-stem (Rp 200.000) and 9-stem volume discount (Rp 462.500) computed accurately');
+
+app.useCustom();
+assert.strictEqual(cartLineEls().length, 2, 'Two distinct committed bouquets must yield two separate cart lines (P1-06)');
+// Cart total combines both bouquets' flower subtotals and discounts, but the
+// wrap fee (Rp 35.000) is charged once for the whole cart, not once per line:
+// (165000 + 475000) - (0 + 47500) + 35000 = 627500 — Rp 27.500 less than the
+// naive sum of each bouquet's standalone total (200000 + 462500), which each
+// separately included their own wrap fee.
+assert.strictEqual(summaryPrice.textContent, 'Rp 627.500');
+console.log('✔ Suite 8 Passed: 3-stem (Rp 200.000) and 9-stem volume discount (Rp 462.500) committed as two distinct cart lines');
 
 // ---------------------------------------------------------------------------
 // Suite 9: Channel Visibility Flags & Honest Marketplace Reality (R01)
@@ -1044,9 +1094,9 @@ assert.deepStrictEqual(purityResult1, purityResult2, 'computeCartTotals must be 
 console.log('✔ Suite 16 Passed: computeCartTotals is pure, matches legacy pricing, and prices mixed carts correctly');
 
 // ---------------------------------------------------------------------------
-// Suite 17: Selections Route Through the Cart (P1-04)
+// Suite 17: Selections Route Through the Cart (P1-04, superseded by P1-06)
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 17: Selections Route Through the Cart (P1-04) ---');
+console.log('\n--- SUITE 17: Selections Route Through the Cart (P1-04/P1-06) ---');
 app.resetToInitial();
 assert.strictEqual(app.getCart().length, 0, 'Cart must start empty');
 assert.strictEqual(app.getState().hasUserSelected, false, 'hasUserSelected must be false when the cart is empty');
@@ -1061,9 +1111,10 @@ assert.strictEqual(app.getState().hasUserSelected, true, 'hasUserSelected must b
 
 app.selectPackage(2, false);
 const cartAfterPackage = app.getCart();
-assert.strictEqual(cartAfterPackage.length, 1, 'Selecting a package after a stem must replace the cart, not add to it');
-assert.strictEqual(cartAfterPackage[0].type, 'package');
-assert.strictEqual(cartAfterPackage[0].pkgIndex, 2);
+assert.strictEqual(cartAfterPackage.length, 2, 'Selecting a package after a stem must add a line, not replace the cart (P1-06)');
+assert.strictEqual(cartAfterPackage[0].type, 'stem', 'The earlier stem line must survive');
+assert.strictEqual(cartAfterPackage[1].type, 'package');
+assert.strictEqual(cartAfterPackage[1].pkgIndex, 2);
 
 app.resetToInitial();
 app.bumpCustom('Sunflower', 2);
@@ -1081,7 +1132,7 @@ app.resetToInitial();
 assert.strictEqual(app.getCart().length, 0, 'resetToInitial must empty the cart');
 assert.strictEqual(app.getState().hasUserSelected, false);
 
-console.log('✔ Suite 17 Passed: Stem, package and custom selections all route through the single-item cart');
+console.log('✔ Suite 17 Passed: Stem, package and custom selections all route through the cart, adding rather than replacing');
 
 // ---------------------------------------------------------------------------
 // Suite 18: Unified Commit Interaction & No Selected-Card Layout Shift (P1-05)
@@ -1114,8 +1165,100 @@ assert.strictEqual(activeCard.querySelector('.btn-pkg-continue'), null, 'Selecte
 console.log('✔ Suite 18 Passed: Package selection scrolls like stem selection and adds no second button');
 
 // ---------------------------------------------------------------------------
+// Suite 19: Multi-Item Cart — Merge, Distinctness & Enumeration (P1-06)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 19: Multi-Item Cart — Merge, Distinctness & Enumeration (P1-06) ---');
+app.resetToInitial();
+
+// addLine: two sunflowers + one rose, ordered directly through the exported API
+app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 1 });
+app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 1 }); // must merge, not duplicate
+app.addLine({ type: 'stem', flowerKey: 'Rose', qty: 1 });
+let cart19 = app.getCart();
+assert.strictEqual(cart19.length, 2, 'Two sunflowers must merge into one line; rose is a separate line');
+assert.strictEqual(cart19[0].flowerKey, 'Sunflower');
+assert.strictEqual(cart19[0].qty, 2, 'Re-adding the same stem must merge into the existing line');
+assert.strictEqual(cart19[1].flowerKey, 'Rose');
+assert.strictEqual(cartLineEls().length, 2, 'Rendered cart must show exactly two lines for three stems');
+assert.strictEqual(app.computeCartTotals(cart19).stems, 3, 'Two sunflowers and one rose must be orderable as three stems in one cart');
+
+// Custom lines never merge, even with identical counts
+app.addLine({ type: 'custom', counts: { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 }, qty: 1 });
+app.addLine({ type: 'custom', counts: { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 }, qty: 1 });
+cart19 = app.getCart();
+assert.strictEqual(cart19.length, 4, 'Two custom bouquets must yield two separate lines even with identical counts');
+assert.strictEqual(cart19[2].type, 'custom');
+assert.strictEqual(cart19[3].type, 'custom');
+assert.notStrictEqual(cart19[2].id, cart19[3].id, 'Distinct custom lines must have distinct ids');
+
+// wrapFee is charged exactly once for a cart made of exactly two custom lines
+const twoCustomOnly = [
+  { id: 101, type: 'custom', counts: { Sunflower: 3, Rose: 0, Tulip: 0, Gerbera: 0 }, qty: 1 },
+  { id: 102, type: 'custom', counts: { Sunflower: 0, Rose: 3, Tulip: 0, Gerbera: 0 }, qty: 1 }
+];
+assert.strictEqual(app.computeCartTotals(twoCustomOnly).wrapFee, 35000, 'wrapFee must be charged exactly once for two custom lines, not per line');
+
+// The WhatsApp message enumerates every line in a genuinely mixed cart (stem + package + custom)
+app.resetToInitial();
+app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 2 });
+app.selectPackage(0, false); // Buket Mini: 3 stems, Rp 195.000
+app.bumpCustom('Rose', 3);
+app.useCustom(); // Buket custom (3 tangkai): Rp 180.000, no discount, no line-level wrap fee
+const mixedMsg = decodeURIComponent(waBtn.getAttribute('href'));
+assert(mixedMsg.includes('2 × Bunga Matahari — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem line');
+assert(mixedMsg.includes('1 × Buket Mini — Rp 195.000'), 'Mixed-cart WhatsApp message must enumerate the package line');
+assert(mixedMsg.includes('Buket custom (3 tangkai) — Rp 180.000'), 'Mixed-cart WhatsApp message must enumerate the custom line');
+const mixedCartTotal = app.computeCartTotals(app.getCart());
+assert(mixedMsg.includes(`Total ${formatRpForTest(mixedCartTotal.total)}`), 'Mixed-cart WhatsApp message must show the cart total');
+
+// #cart-lines must never be built with innerHTML-assigned markup (source check)
+const appSrcForCheck = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+const renderCartLinesBody = appSrcForCheck.slice(
+  appSrcForCheck.indexOf('function renderCartLines('),
+  appSrcForCheck.indexOf('function ', appSrcForCheck.indexOf('function renderCartLines(') + 1)
+);
+assert(!renderCartLinesBody.includes('innerHTML'), 'renderCartLines() must build lines with createElement/textContent only, never innerHTML');
+
+console.log('✔ Suite 19 Passed: Cart lines merge on duplicate stems/packages, never merge custom bouquets, charge wrap fee once, and the WhatsApp message enumerates a mixed cart');
+
+// ---------------------------------------------------------------------------
+// Suite 20: Remove Line — Totals Update, Focus Management & Qty Floor (P1-06)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 20: Remove Line — Totals, Focus & Qty Floor (P1-06) ---');
+app.resetToInitial();
+app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 1 });
+app.addLine({ type: 'stem', flowerKey: 'Rose', qty: 1 });
+app.addLine({ type: 'stem', flowerKey: 'Tulip', qty: 1 });
+assert.strictEqual(cartLineEls().length, 3);
+assert.strictEqual(summaryPrice.textContent, formatRpForTest(55000 + 60000 + 50000));
+
+// Remove the middle line — totals must update and focus must land on a remove button
+const middleLineId = app.getCart()[1].id;
+app.removeLine(middleLineId);
+let cart20 = app.getCart();
+assert.strictEqual(cart20.length, 2, 'removeLine must remove exactly the targeted line');
+assert.strictEqual(cart20[0].flowerKey, 'Sunflower');
+assert.strictEqual(cart20[1].flowerKey, 'Tulip');
+assert.strictEqual(summaryPrice.textContent, formatRpForTest(55000 + 50000), 'removeLine must update the cart-level total');
+assert.strictEqual(mockDocument.activeElement && mockDocument.activeElement.className, 'btn-remove-line', 'Focus must move to a remove button after removal');
+
+// Removing the last line must move focus to #cart-lines itself
+app.removeLine(cart20[0].id);
+app.removeLine(cart20[1].id);
+assert.strictEqual(cartLineEls().length, 0);
+assert.strictEqual(mockDocument.activeElement, cartLines, 'Focus must move to #cart-lines when the cart becomes empty');
+
+// bumpLineQty at qty:1 with delta -1 removes the line (documented floor behaviour)
+app.addLine({ type: 'stem', flowerKey: 'Gerbera', qty: 1 });
+const onlyLineId = app.getCart()[0].id;
+app.bumpLineQty(onlyLineId, -1);
+assert.strictEqual(app.getCart().length, 0, 'bumpLineQty must remove a line whose quantity would drop to zero or below');
+
+console.log('✔ Suite 20 Passed: Removing a line updates totals and focus, and the quantity floor removes rather than clamps');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 18 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 20 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

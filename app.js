@@ -14,12 +14,12 @@
 
   // State
   let currentLang = 'id';
-  let orderMode = 'stem'; // 'stem' | 'package' | 'custom'
-  let hasUserSelected = false; // Tracks if user has explicitly picked an item
   let selectedFlower = 'Sunflower';
   let selectedStemQty = 1; // 1, 2, 3... stems
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
+  let cart = []; // line items: { id, type: 'stem'|'package'|'custom', ...type-specific fields, qty }
+  let nextLineId = 1;
   let selectedWrap = 'kraft';
   let orderNote = '';
   let siteData = null;
@@ -195,6 +195,72 @@
   }
 
   /**
+   * Pure cart pricing function — reads only its argument and siteData.
+   * Mirrors getCustomTotals()'s per-bouquet arithmetic exactly, generalized to a cart of lines.
+   */
+  function computeCartTotals(cartArg) {
+    const list = Array.isArray(cartArg) ? cartArg : [];
+    const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+    const bulkFrom = siteData.bulkFrom ?? 9;
+    const bulkRate = siteData.bulkRate ?? 0.10;
+    const wrapFeeCfg = siteData.wrapFee ?? 35000;
+    const minStems = siteData.minStems ?? 3;
+
+    let hasCustomLine = false;
+    let everyCustomLineValid = true;
+
+    const lines = list.map(line => {
+      let stems = 0;
+      let subtotal = 0;
+      let discount = 0;
+
+      if (line.type === 'stem') {
+        const flower = siteData.flowers[line.flowerKey];
+        const price = flower ? (flower.stemPrice || 55000) : 55000;
+        stems = line.qty;
+        subtotal = price * line.qty;
+      } else if (line.type === 'package') {
+        const pkg = siteData.packages[line.pkgIndex];
+        stems = (pkg ? pkg.stems : 0) * line.qty;
+        subtotal = (pkg ? pkg.price : 0) * line.qty;
+      } else if (line.type === 'custom') {
+        hasCustomLine = true;
+        let bouquetStems = 0;
+        let bouquetSubtotal = 0;
+        order.forEach(key => {
+          const qty = (line.counts && line.counts[key]) || 0;
+          const flower = siteData.flowers[key];
+          const price = flower ? (flower.stemPrice || 55000) : 55000;
+          bouquetStems += qty;
+          bouquetSubtotal += qty * price;
+        });
+        if (bouquetStems < minStems) everyCustomLineValid = false;
+        stems = bouquetStems * line.qty;
+        subtotal = bouquetSubtotal * line.qty;
+        discount = bouquetStems >= bulkFrom ? Math.round(subtotal * bulkRate) : 0;
+      }
+
+      return { id: line.id, type: line.type, stems, subtotal, discount, total: subtotal - discount };
+    });
+
+    const stemsTotal = lines.reduce((sum, l) => sum + l.stems, 0);
+    const subtotalTotal = lines.reduce((sum, l) => sum + l.subtotal, 0);
+    const discountTotal = lines.reduce((sum, l) => sum + l.discount, 0);
+    const wrapFee = hasCustomLine ? wrapFeeCfg : 0;
+    const total = subtotalTotal - discountTotal + wrapFee;
+
+    return {
+      lines,
+      stems: stemsTotal,
+      subtotal: subtotalTotal,
+      discount: discountTotal,
+      wrapFee,
+      total,
+      isValid: list.length > 0 && everyCustomLineValid
+    };
+  }
+
+  /**
    * Smoothly scroll to in-page section with sticky header offset compensation
    */
   function scrollToSection(selector, highlightTargetSelector = null) {
@@ -230,11 +296,10 @@
    * Order action: Choose a single finished stem
    */
   function selectStemOrder(flowerKey, scroll = true) {
-    orderMode = 'stem';
-    hasUserSelected = true;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
+    cart = [{ id: nextLineId++, type: 'stem', flowerKey: selectedFlower, qty: selectedStemQty }];
     renderBouquetsUI();
     renderOrderSection();
     if (scroll) {
@@ -258,9 +323,13 @@
    * Order action: Change single stem quantity
    */
   function bumpStemQty(delta) {
-    orderMode = 'stem';
     selectedStemQty = Math.max(1, Math.min(30, selectedStemQty + delta));
-    hasUserSelected = true;
+    const line = activeLine();
+    if (line && line.type === 'stem') {
+      line.qty = selectedStemQty;
+    } else {
+      cart = [{ id: nextLineId++, type: 'stem', flowerKey: selectedFlower, qty: selectedStemQty }];
+    }
     renderBouquetsUI();
     renderOrderSection();
   }
@@ -271,8 +340,7 @@
   function addFlowerToBouquet(flowerKey) {
     if (!customCounts[flowerKey]) customCounts[flowerKey] = 0;
     customCounts[flowerKey] += 1;
-    orderMode = 'custom';
-    hasUserSelected = true;
+    cart = [{ id: nextLineId++, type: 'custom', counts: { ...customCounts }, qty: 1 }];
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const fl = siteData.flowers[flowerKey];
@@ -293,10 +361,9 @@
   /**
    * Order action: Select a bouquet package
    */
-  function selectPackageOrder(pkgIndex, scroll = false, restoreFocus = true) {
-    orderMode = 'package';
-    hasUserSelected = true;
+  function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
+    cart = [{ id: nextLineId++, type: 'package', pkgIndex: selectedPackage, qty: 1 }];
     renderBouquetsUI();
     renderOrderSection();
     if (restoreFocus) {
@@ -326,8 +393,7 @@
   function useCustomBouquet() {
     const tot = getCustomTotals();
     if (tot.isValid) {
-      orderMode = 'custom';
-      hasUserSelected = true;
+      cart = [{ id: nextLineId++, type: 'custom', counts: { ...customCounts }, qty: 1 }];
       renderBouquetsUI();
       renderOrderSection();
       scrollToSection('#order', '.order-controls-col');
@@ -352,8 +418,7 @@
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
     customCounts[flowerKey] = Math.max(0, cur + delta);
-    orderMode = 'custom';
-    hasUserSelected = true;
+    cart = [{ id: nextLineId++, type: 'custom', counts: { ...customCounts }, qty: 1 }];
     renderCustomBuilder();
     renderBouquetsUI();
     renderOrderSection();
@@ -366,8 +431,7 @@
     (siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera']).forEach(k => {
       customCounts[k] = 0;
     });
-    orderMode = 'custom';
-    hasUserSelected = true;
+    cart = [{ id: nextLineId++, type: 'custom', counts: { ...customCounts }, qty: 1 }];
     renderCustomBuilder();
     renderBouquetsUI();
     renderOrderSection();
@@ -452,6 +516,13 @@
       modal.removeAttribute('open');
       restoreModalFocus();
     }
+  }
+
+  /**
+   * The cart's single active line (P1-06 will allow more than one).
+   */
+  function activeLine() {
+    return cart.length ? cart[cart.length - 1] : null;
   }
 
   /**
@@ -756,7 +827,7 @@
     const expectedCount = (siteData.packages || []).length;
     if (existingCards.length === expectedCount && existingCards[0].getAttribute('data-lang') === currentLang) {
       existingCards.forEach((card, index) => {
-        const active = orderMode === 'package' && index === selectedPackage;
+        const active = activeLine()?.type === 'package' && index === selectedPackage;
         const wasActive = card.classList.contains('active');
 
         if (active) {
@@ -793,38 +864,6 @@
             chooseBtn.classList.remove('is-active-pop');
           }
         }
-
-        const actionsCol = card.querySelector('.pkg-actions-col');
-        let contBtn = card.querySelector('.btn-pkg-continue');
-        if (active) {
-          if (!contBtn && actionsCol) {
-            contBtn = document.createElement('button');
-            contBtn.type = 'button';
-            contBtn.className = 'btn-pkg-continue';
-            contBtn.setAttribute('data-index', String(index));
-            contBtn.textContent = t.pkgContinueBtn || 'Lanjut ke sentuhan akhir ↓';
-            contBtn.addEventListener('click', () => {
-              scrollToSection('#order', '.order-controls-col');
-              const finishLabel = document.getElementById('finish-label');
-              if (finishLabel) {
-                finishLabel.focus({ preventScroll: true });
-                finishLabel.classList.remove('finish-label-pulse');
-                if (typeof finishLabel.offsetWidth === 'number') {
-                  void finishLabel.offsetWidth;
-                }
-                finishLabel.classList.add('finish-label-pulse');
-                setTimeout(() => {
-                  finishLabel.classList.remove('finish-label-pulse');
-                }, 1200);
-              }
-            });
-            actionsCol.appendChild(contBtn);
-          }
-        } else {
-          if (contBtn) {
-            contBtn.remove();
-          }
-        }
       });
 
       renderCustomBuilder();
@@ -835,7 +874,7 @@
     grid.innerHTML = '';
 
     (siteData.packages || []).forEach((pkg, index) => {
-      const active = orderMode === 'package' && index === selectedPackage;
+      const active = activeLine()?.type === 'package' && index === selectedPackage;
       const isPopular = index === 1; // Handful / 5-stem package is classic studio favorite
       const name = t.pkgNames[index] || `Package ${index + 1}`;
       const blurb = t.pkgBlurbs[index] || '';
@@ -859,7 +898,6 @@
             <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
               ${active ? t.pkgBtnActive : t.pkgBtn}
             </button>
-            ${active ? `<button type="button" class="btn-pkg-continue" data-index="${index}">${t.pkgContinueBtn || 'Lanjut ke sentuhan akhir ↓'}</button>` : ''}
           </div>
         </div>
       `;
@@ -867,26 +905,7 @@
       const chooseBtn = card.querySelector('.btn-choose-bouquet');
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => {
-          selectPackageOrder(index, false, true);
-        });
-      }
-
-      const contBtn = card.querySelector('.btn-pkg-continue');
-      if (contBtn) {
-        contBtn.addEventListener('click', () => {
-          scrollToSection('#order', '.order-controls-col');
-          const finishLabel = document.getElementById('finish-label');
-          if (finishLabel) {
-            finishLabel.focus({ preventScroll: true });
-            finishLabel.classList.remove('finish-label-pulse');
-            if (typeof finishLabel.offsetWidth === 'number') {
-              void finishLabel.offsetWidth;
-            }
-            finishLabel.classList.add('finish-label-pulse');
-            setTimeout(() => {
-              finishLabel.classList.remove('finish-label-pulse');
-            }, 1200);
-          }
+          selectPackageOrder(index);
         });
       }
 
@@ -1195,6 +1214,8 @@
    */
   function renderOrderSection() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
+    const curLine = activeLine();
+    const cartHasSelection = cart.length > 0;
 
     setText('#order-eyebrow', t.orderEyebrow);
     setText('#order-title', t.orderTitle);
@@ -1211,7 +1232,7 @@
     // 1. Single stem quantity stepper (visible only once a stem is actually selected)
     const stemQtyCard = document.getElementById('stem-qty-card');
     if (stemQtyCard) {
-      if (hasUserSelected && orderMode === 'stem') {
+      if (cartHasSelection && curLine?.type === 'stem') {
         stemQtyCard.style.display = 'block';
         setText('#stem-qty-label', t.stemQtyLabel || 'Jumlah tangkai');
         setText('#stem-qty-count', selectedStemQty);
@@ -1295,7 +1316,7 @@
     const editBtn = document.getElementById('btn-edit-selection');
     if (editBtn) {
       editBtn.onclick = () => {
-        if (orderMode === 'custom') {
+        if (curLine?.type === 'custom') {
           const customBody = document.getElementById('custom-builder-body');
           const toggleCustomBtn = document.getElementById('btn-toggle-custom');
           const customPanel = document.getElementById('custom-builder');
@@ -1316,7 +1337,7 @@
           scrollToSection('#custom-builder', '#custom-builder');
           const firstStepper = document.querySelector('#custom-rows-list .btn-inc');
           if (firstStepper) firstStepper.focus({ preventScroll: true });
-        } else if (orderMode === 'package') {
+        } else if (curLine?.type === 'package') {
           scrollToSection('#bouquets', `.bouquet-card[data-index="${selectedPackage}"]`);
           const activePkgBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
           if (activePkgBtn) activePkgBtn.focus({ preventScroll: true });
@@ -1340,7 +1361,7 @@
 
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
 
-    if (!hasUserSelected) {
+    if (!cartHasSelection) {
       selTitle = t.emptySummaryTitle || (currentLang === 'en' ? 'No flower selected yet' : 'Belum ada bunga dipilih');
       selSub = t.emptySummarySub || (currentLang === 'en' ? 'Choose a stem or bouquet above' : 'Pilih bunga satuan atau buket di atas');
       selPrice = t.emptySummaryPrice || '—';
@@ -1348,7 +1369,7 @@
       photoAlt = selTitle;
       baseIncludes = [];
       isCustomInvalid = false;
-    } else if (orderMode === 'package') {
+    } else if (curLine?.type === 'package') {
       const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
       const pkg = siteData.packages[pkgIdx];
       selTitle = t.pkgNames[pkgIdx];
@@ -1357,8 +1378,8 @@
       photoSrc = pkg.photoWebp || pkg.photo;
       photoAlt = `${selTitle} — ${pkg.stems} ${t.pkgStemLine}`;
       baseIncludes = t.pkgIncludes.map(l => l.replace('{n}', pkg.stems));
-    } else if (orderMode === 'custom') {
-      const tot = getCustomTotals();
+    } else if (curLine?.type === 'custom') {
+      const tot = computeCartTotals(cart);
       selTitle = `${t.customTitleShort} (${tot.stems} ${t.stemsWord})`;
       selSub = `${tot.stems} ${t.stemsWord}`;
       isCustomInvalid = !tot.isValid;
@@ -1400,18 +1421,18 @@
 
     setText('#summary-title', selTitle);
     updateSummaryLatin(selSub);
-    if (hasUserSelected) {
+    if (cartHasSelection) {
       updateSummaryPhoto(photoSrc, photoAlt);
     }
     const summaryPhotoFrame = document.getElementById('summary-photo-frame');
     if (summaryPhotoFrame) {
-      summaryPhotoFrame.classList.toggle('is-empty', !hasUserSelected);
+      summaryPhotoFrame.classList.toggle('is-empty', !cartHasSelection);
     }
 
     // Custom illustration photo note
     const photoNote = document.getElementById('summary-photo-caption-note');
     if (photoNote) {
-      if (hasUserSelected && orderMode === 'custom') {
+      if (cartHasSelection && curLine?.type === 'custom') {
         photoNote.style.display = 'block';
         photoNote.textContent = t.customIllustrativeNote || 'Foto ilustrasi buket';
       } else {
@@ -1433,13 +1454,13 @@
     // Shipping note only makes sense once there's an actual price to qualify
     const shippingNoteEl = document.getElementById('summary-shipping-note');
     if (shippingNoteEl) {
-      shippingNoteEl.style.display = (hasUserSelected && siteData.store.showPrices) ? '' : 'none';
+      shippingNoteEl.style.display = (cartHasSelection && siteData.store.showPrices) ? '' : 'none';
     }
 
     // Custom minimum warning banner (interpolated - A2)
     const minWarningEl = document.getElementById('custom-min-warning-banner');
     if (minWarningEl) {
-      if (hasUserSelected && orderMode === 'custom' && isCustomInvalid) {
+      if (cartHasSelection && curLine?.type === 'custom' && isCustomInvalid) {
         minWarningEl.style.display = 'block';
         setText('#custom-min-warning-text', interpolateRules(t.customMinErrorSummary || t.minHint));
       } else {
@@ -1452,12 +1473,12 @@
       const includesListEl = document.getElementById('summary-includes-list');
       const includesLabelEl = document.getElementById('includes-label');
       if (includesLabelEl) {
-        includesLabelEl.style.display = hasUserSelected ? '' : 'none';
+        includesLabelEl.style.display = cartHasSelection ? '' : 'none';
       }
       if (includesListEl) {
         includesListEl.innerHTML = '';
         const allIncludes = [...baseIncludes];
-        if (hasUserSelected) {
+        if (cartHasSelection) {
           allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
           if (orderNote.trim()) {
             allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
@@ -1579,7 +1600,7 @@
         return;
       }
 
-      if (!hasUserSelected) {
+      if (!cartHasSelection) {
         btnWhatsapp.removeAttribute('href');
         btnWhatsapp.setAttribute('aria-disabled', 'true');
         btnWhatsapp.classList.add('btn-disabled');
@@ -1590,7 +1611,7 @@
         return;
       }
 
-      if (orderMode === 'custom' && isCustomInvalid) {
+      if (curLine?.type === 'custom' && isCustomInvalid) {
         btnWhatsapp.removeAttribute('href');
         btnWhatsapp.setAttribute('aria-disabled', 'true');
         btnWhatsapp.classList.add('btn-disabled');
@@ -1609,11 +1630,11 @@
       const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
       const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
-      const template = siteData.store.whatsappTemplates?.[currentLang]?.[orderMode];
+      const template = siteData.store.whatsappTemplates?.[currentLang]?.[curLine?.type];
       const hasTemplate = typeof template === 'string' && template.trim() !== '';
       let waMsg = '';
-      if (orderMode === 'custom') {
-        const tot = getCustomTotals();
+      if (curLine?.type === 'custom') {
+        const tot = computeCartTotals(cart);
         const flowerList = customFlowerSummaryList.map(item => `• ${item}`).join('\n');
         const vars = {
           items: customFlowerSummaryList.join(', '), total: formatRp(tot.total),
@@ -1626,7 +1647,7 @@
         } else {
           waMsg = `Halo Komorebi! Saya ingin memesan Buket Custom (${tot.stems} tangkai, estimasi ${formatRp(tot.total)}, belum termasuk ongkir):\n${flowerList}\n${wrapTxt}${cardTxt}Apakah bisa dibuatkan?`;
         }
-      } else if (orderMode === 'package') {
+      } else if (curLine?.type === 'package') {
         const pkgIdx = Math.min(Math.max(selectedPackage, 0), siteData.packages.length - 1);
         const pkg = siteData.packages[pkgIdx];
         const items = `${selTitle} (${pkg.stems} ${currentLang === 'en' ? 'stems' : 'tangkai'})`;
@@ -1678,13 +1699,13 @@
     }
 
     // 7. Update sticky mobile order bar (R04)
-    if (!hasUserSelected) {
+    if (!cartHasSelection) {
       setText('#sticky-order-title', 'Komorebi Creations');
       setText('#sticky-order-price', t.stickyPrompt || (currentLang === 'en' ? 'Choose flowers' : 'Pilih bunga'));
       setText('#sticky-order-cta', `${t.ctaBrowse || (currentLang === 'en' ? 'Browse' : 'Lihat bunga')} ↓`);
     } else {
-      if (orderMode === 'custom' && isCustomInvalid) {
-        const tot = getCustomTotals();
+      if (curLine?.type === 'custom' && isCustomInvalid) {
+        const tot = computeCartTotals(cart);
         const minStemsCount = siteData.minStems ?? 3;
         const minPrompt = (t.minStemsRequired || (currentLang === 'en' ? 'Min. {n} stems' : 'Min. {n} tangkai')).replace('{n}', minStemsCount);
         setText('#sticky-order-title', `${t.customTitleShort} (${tot.stems})`);
@@ -2003,9 +2024,9 @@
     if (cta) {
       cta.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!hasUserSelected) {
+        if (cart.length === 0) {
           scrollToSection('#collection');
-        } else if (orderMode === 'custom' && !getCustomTotals().isValid) {
+        } else if (activeLine()?.type === 'custom' && !computeCartTotals(cart).isValid) {
           scrollToSection('#custom-builder');
         } else {
           scrollToSection('#order');
@@ -2214,9 +2235,9 @@
       btnWhatsapp.addEventListener('click', (e) => {
         if (btnWhatsapp.getAttribute('aria-disabled') === 'true') {
           e.preventDefault();
-          if (!hasUserSelected) {
+          if (cart.length === 0) {
             scrollToSection('#collection');
-          } else if (orderMode === 'custom' && !getCustomTotals().isValid) {
+          } else if (activeLine()?.type === 'custom' && !computeCartTotals(cart).isValid) {
             scrollToSection('#custom-builder');
           }
         }
@@ -2362,8 +2383,8 @@
         renderOrderSection();
       },
       resetToInitial: () => {
-        hasUserSelected = false;
-        orderMode = 'stem';
+        cart = [];
+        nextLineId = 1;
         selectedFlower = 'Sunflower';
         selectedStemQty = 1;
         selectedPackage = 1;
@@ -2374,21 +2395,25 @@
         renderAll();
       },
       getCustomTotals: getCustomTotals,
+      computeCartTotals: computeCartTotals,
+      getCart: () => cart.map(l => ({ ...l })),
+      _setCartForTest: (c) => { cart = c; },
       isWhatsAppReady: isWhatsAppReady,
       isShopeeReady: isShopeeReady,
       setCategory: setCategory,
       interpolateRules: interpolateRules,
       getState: () => ({
         currentLang,
-        orderMode,
-        hasUserSelected,
+        orderMode: activeLine()?.type || 'stem',
+        hasUserSelected: cart.length > 0,
         selectedFlower,
         selectedStemQty,
         selectedPackage,
         customCounts: { ...customCounts },
         selectedWrap,
         orderNote,
-        activeCategory
+        activeCategory,
+        cart: cart.map(l => ({ ...l }))
       })
     };
   }

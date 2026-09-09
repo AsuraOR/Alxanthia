@@ -1195,43 +1195,6 @@ body.nav-open {
   transform: translateY(-1px);
 }
 
-.btn-pkg-continue {
-  background: none;
-  border: 0;
-  color: var(--accent-green);
-  font-family: var(--font-sans);
-  font-size: var(--fs-button);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 6px 4px 2px;
-  text-align: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 4px;
-  transition: color 0.2s ease, transform 0.2s ease;
-  animation: pkgContinueSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes pkgContinueSlideIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.btn-pkg-continue:hover {
-  color: var(--text-dark);
-  transform: translateY(1px);
-}
-
 /* ==========================================================================
    CUSTOM BOUQUET BUILDER PANEL
    ========================================================================== */
@@ -3128,14 +3091,6 @@ details.is-closing > .faq-answer-wrapper {
     letter-spacing: 0.04em;
     width: 100%;
     justify-content: center;
-    text-align: center;
-  }
-
-  .btn-pkg-continue {
-    min-height: 44px;
-    padding: 10px 8px;
-    font-size: var(--fs-label);
-    width: 100%;
     text-align: center;
   }
 

@@ -1185,7 +1185,6 @@
     setText('#mat-eyebrow', t.matEyebrow);
     setText('#mat-title', t.matTitle);
     setText('#mat-body', t.matBody);
-    setText('#mat-caption', t.matCaption);
     setAttr('#material-image', 'src', siteData.images.macro);
     setAttr('#material-image', 'alt', currentLang === 'en'
       ? 'Close-up of chenille stems showing the soft pile over a twisted wire core'

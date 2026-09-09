@@ -1667,14 +1667,6 @@ body.nav-open {
   background: var(--bg-card);
 }
 
-.material-caption {
-  margin-top: 10px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.16em;
-  color: var(--text-muted);
-}
-
 .material-body {
   font-size: 16px;
   line-height: 1.7;

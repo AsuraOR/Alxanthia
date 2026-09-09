@@ -374,7 +374,6 @@ window.KOMOREBI_DATA = {
 
       matEyebrow: "Bahannya",
       matTitle: "Mengapa chenille bergerak seperti kelopak",
-      matCaption: "Gbr. 1 — serat chenille pada inti kawat berpuntir",
       matBody: "Serat chenille yang lembut di atas inti kawat berpuntir: ia menerima lengkungan seperti kelopak sungguhan, lalu menahannya. Itulah yang membuat bunga ini terasa tumbuh, bukan sekadar dilipat.",
       matPoints: [
         ["Bisa dibentuk ulang dengan tangan.", "Kalau kelopak tertekan di perjalanan, cukup lengkungkan kembali mengikuti lentur kawat intinya."],
@@ -584,7 +583,6 @@ window.KOMOREBI_DATA = {
 
       matEyebrow: "The material",
       matTitle: "Why chenille behaves like a petal",
-      matCaption: "Fig. 1 — chenille pile on a twisted wire core",
       matBody: "A soft chenille pile over a twisted wire core: it takes a curve the way a petal does, and then it holds it. That is what makes these flowers read as grown rather than folded.",
       matPoints: [
         ["Reshapes with your fingers.", "If a petal flattens in transit, gently curve it back along its flexible wire core."],

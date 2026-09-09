@@ -20,7 +20,7 @@
 > [!IMPORTANT]
 > **Pemberitahuan untuk Pemilik / Store Owner:**  
 > Seluruh sistem situs web dan kalkulator pemesanan telah siap pakai dan lolos uji integrasi otomatis. Namun, demi integritas dan kejujuran operasional, beberapa parameter operasional sengaja diset ke status tunggu (placeholder/kosong) dan **tidak dikarang-karang oleh sistem**.  
-> Silakan periksa tabel berikut dan perbarui nilai di [`site-content.js`](site-content.js) saat data resmi sudah tersedia:
+> Silakan periksa tabel berikut dan perbarui nilai di [`site-content.js`](site-content.js) saat data resmi sudah tersedia. Untuk panduan lengkap mengedit setiap teks, harga, tautan, dan foto di situs (bukan hanya parameter operasional di tabel ini), lihat [`PANDUAN-KONTEN.md`](PANDUAN-KONTEN.md).
 
 | # | Parameter Operasional | Nilai Saat Ini di `site-content.js` | Status | Petunjuk Pembaruan untuk Pemilik |
 | :--- | :--- | :--- | :--- | :--- |

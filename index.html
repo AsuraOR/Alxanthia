@@ -873,11 +873,42 @@
         </div>
       </section>
       <section id="checkout-form-step" hidden>
-        <p class="eyebrow" id="checkout-form-eyebrow">Detail pengiriman</p>
-        <h2 id="checkout-form-title">Lengkapi formulir pesanan</h2>
+        <p class="eyebrow" id="checkout-form-eyebrow">Formulir pesanan</p>
+        <h2 id="checkout-form-title">Lengkapi detail pesanan</h2>
         <p id="checkout-form-summary"></p>
-        <iframe id="tally-frame" title="Formulir pemesanan Komorebi" loading="lazy"></iframe>
-        <p id="tally-load-error" class="checkout-error" role="alert"></p>
+        <form id="checkout-form" class="checkout-form" novalidate>
+          <fieldset><legend id="buyer-legend">Data pemesan</legend>
+            <label><span id="buyer-name-label">Nama pemesan</span><input name="buyer_name" autocomplete="name" required></label>
+            <label><span id="buyer-phone-label">Nomor WhatsApp pemesan</span><input name="buyer_whatsapp" type="tel" autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" required></label>
+            <p class="form-help" id="buyer-help">Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.</p>
+            <label><span>Email <small id="optional-email">(opsional)</small></span><input name="buyer_email" type="email" autocomplete="email"></label>
+          </fieldset>
+          <fieldset><legend id="recipient-legend">Penerima</legend>
+            <label><span id="order-for-label">Pesanan ini untuk siapa?</span><select name="order_for" required><option value="self">Untuk saya sendiri</option><option value="gift">Untuk orang lain atau hadiah</option></select></label>
+            <div id="gift-fields" hidden>
+              <label><span id="recipient-name-label">Nama penerima</span><input name="recipient_name" autocomplete="name"></label>
+              <label><span id="recipient-phone-label">Nomor WhatsApp penerima</span><input name="recipient_whatsapp" type="tel" autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}"></label>
+              <label><span id="recipient-permission-label">Bolehkah kami menghubungi penerima?</span><select name="recipient_contact_permission"><option value="">Pilih satu</option><option value="yes">Ya, boleh</option><option value="buyer_first">Hubungi saya terlebih dahulu</option><option value="surprise">Jangan hubungi penerima; ini kejutan</option></select></label>
+              <p class="form-help" id="recipient-help">Detail penerima hanya digunakan untuk koordinasi pengiriman.</p>
+            </div>
+          </fieldset>
+          <fieldset><legend id="delivery-legend">Pengiriman</legend>
+            <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3" autocomplete="street-address" required></textarea></label>
+            <div class="form-row"><label><span id="city-label">Kota atau kabupaten</span><input name="city" autocomplete="address-level2" required></label><label><span id="postal-label">Kode pos</span><input name="postal_code" autocomplete="postal-code" inputmode="numeric" required></label></div>
+            <label><span id="directions-label">Patokan atau petunjuk lokasi (opsional)</span><input name="location_directions"></label>
+            <div class="form-row"><label><span id="date-label">Tanggal yang diinginkan</span><input name="preferred_date" type="date" required></label><label><span id="window-label">Waktu (opsional)</span><select name="preferred_window"><option value="">Fleksibel</option><option value="morning">Pagi</option><option value="afternoon">Siang</option><option value="evening">Sore</option></select></label></div>
+            <p class="form-help" id="delivery-help">Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.</p>
+          </fieldset>
+          <fieldset><legend id="details-legend">Detail hadiah dan catatan</legend>
+            <label><span id="sender-label">Nama pengirim pada kartu (opsional)</span><input name="card_sender_name"></label>
+            <label class="check-label"><input name="anonymous_gift" type="checkbox"><span id="anonymous-label">Kirim secara anonim</span></label>
+            <label><span id="notes-label">Catatan tambahan (opsional)</span><textarea name="additional_notes" rows="3"></textarea></label>
+            <p class="form-help" id="price-note">Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.</p>
+          </fieldset>
+          <label class="check-label acknowledgement"><input name="acknowledgement" type="checkbox" required><span id="ack-label">Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.</span></label>
+          <p id="form-error" class="checkout-error" role="alert"></p>
+          <button id="save-order" type="submit" class="btn-checkout-primary">Simpan pesanan</button>
+        </form>
       </section>
       <section id="checkout-success" hidden>
         <p class="eyebrow">Pesanan dicatat</p>

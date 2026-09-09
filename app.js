@@ -311,30 +311,6 @@
     return `KMR-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
   }
 
-  function buildTallyUrl(reference, state = normalizedCheckoutState()) {
-    const configured = String(siteData.store.tallyFormUrl || '').trim();
-    if (!configured || /FORM_ID/.test(configured)) return null;
-    const url = new URL(configured, window.location.href);
-    const values = {
-      order_reference: reference,
-      submitted_language: state.language,
-      order_mode: state.orderMode,
-      order_summary: state.items.join('; '),
-      item_data: JSON.stringify(state.itemData),
-      total_stems: String(state.totalStemCount),
-      wrap: state.wrapId,
-      gift_message: state.giftMessage,
-      product_subtotal: String(state.productSubtotal),
-      discount_amount: String(state.discountAmount),
-      estimated_product_total: String(state.estimatedProductTotal),
-      currency: state.currency,
-      source: 'website'
-    };
-    Object.entries(values).forEach(([key, value]) => url.searchParams.set(key, value));
-    url.searchParams.set('transparentBackground', '1');
-    return url.toString();
-  }
-
   function buildPostSubmissionWhatsApp(reference, buyerName = '', preferredDate = '', state = normalizedCheckoutState()) {
     const url = new URL(`https://wa.me/${String(siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '')}`);
     const name = buyerName || (state.language === 'en' ? '—' : '—');
@@ -343,6 +319,27 @@
       ? `Hello Komorebi! I have just submitted order request ${reference}.\n\nName: ${name}\nOrder: ${state.items.join('; ')}\nProduct subtotal: ${formatRp(state.estimatedProductTotal)}\nPreferred date: ${date}\n\nPlease confirm availability, timing, and delivery cost. Thank you!`
       : `Halo Komorebi! Saya baru mengirim permintaan pesanan ${reference}.\n\nNama: ${name}\nPesanan: ${state.items.join('; ')}\nSubtotal produk: ${formatRp(state.estimatedProductTotal)}\nTanggal yang diinginkan: ${date}\n\nMohon konfirmasi ketersediaan, tanggal, dan ongkos kirimnya. Terima kasih!`);
     return url.toString();
+  }
+
+  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState()) {
+    const customer = {};
+    formData.forEach((value, key) => { customer[key] = String(value); });
+    return {
+      order_reference: reference,
+      submitted_language: state.language,
+      order_mode: state.orderMode,
+      order_summary: state.items.join('; '),
+      item_data: state.itemData,
+      total_stems: state.totalStemCount,
+      wrap: state.wrapId,
+      gift_message: state.giftMessage,
+      product_subtotal: state.productSubtotal,
+      discount_amount: state.discountAmount,
+      estimated_product_total: state.estimatedProductTotal,
+      currency: state.currency,
+      source: 'website',
+      ...customer
+    };
   }
 
   /**
@@ -2546,7 +2543,7 @@
       scrollToSection(cart.length ? '#custom-builder' : '#collection');
       return;
     }
-    if (!checkoutAttempt) checkoutAttempt = { reference: generateOrderReference() };
+    if (!checkoutAttempt || checkoutAttempt.submitted) checkoutAttempt = { reference: generateOrderReference() };
     checkoutAttempt.state = state;
     const en = currentLang === 'en';
     const modal = document.getElementById('checkout-modal');
@@ -2582,6 +2579,7 @@
 
   function showRecordedOrder(payload) {
     if (!checkoutAttempt) return;
+    checkoutAttempt.submitted = true;
     document.getElementById('checkout-review').hidden = true;
     document.getElementById('checkout-form-step').hidden = true;
     document.getElementById('checkout-success').hidden = false;
@@ -2590,12 +2588,77 @@
     setText('#checkout-success-copy', en ? 'Continue to WhatsApp so our studio can confirm availability, delivery, and payment.' : 'Lanjutkan ke WhatsApp agar studio kami dapat mengonfirmasi ketersediaan, pengiriman, dan pembayaran.');
     setText('#success-reference-label', en ? 'Order reference' : 'Referensi pesanan');
     setText('#success-reference', checkoutAttempt.reference);
-    const fields = payload && payload.payload && payload.payload.fields;
-    const findField = name => Array.isArray(fields) ? fields.find(field => String(field.label || field.key || '').toLowerCase().includes(name)) : null;
-    const buyer = findField('buyer name') || findField('nama pemesan');
-    const date = findField('preferred date') || findField('tanggal yang diinginkan');
     const wa = document.getElementById('checkout-whatsapp');
-    if (wa) wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, buyer && String(buyer.value || ''), date && String(date.value || ''), checkoutAttempt.state);
+    if (wa) wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+  }
+
+  function localizeCheckoutForm() {
+    const en = currentLang === 'en';
+    const copy = en ? {
+      '#checkout-form-eyebrow': 'Order form', '#checkout-form-title': 'Complete your order details', '#buyer-legend': 'Buyer',
+      '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
+      '#optional-email': '(optional)', '#recipient-legend': 'Recipient', '#order-for-label': 'Who is this order for?', '#recipient-name-label': 'Recipient name',
+      '#recipient-phone-label': 'Recipient WhatsApp number', '#recipient-permission-label': 'May we contact the recipient?', '#recipient-help': 'Recipient details are used only to coordinate delivery.',
+      '#delivery-legend': 'Delivery', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
+      '#directions-label': 'Location directions (optional)', '#date-label': 'Preferred date', '#window-label': 'Time (optional)',
+      '#delivery-help': 'The date and time are preferences and will be confirmed through WhatsApp.', '#details-legend': 'Gift details and notes',
+      '#sender-label': 'Sender name on card (optional)', '#anonymous-label': 'Send anonymously', '#notes-label': 'Additional notes (optional)',
+      '#price-note': 'Requests that affect the price will be confirmed before payment.',
+      '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
+    } : {
+      '#checkout-form-eyebrow': 'Formulir pesanan', '#checkout-form-title': 'Lengkapi detail pesanan', '#buyer-legend': 'Data pemesan',
+      '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
+      '#optional-email': '(opsional)', '#recipient-legend': 'Penerima', '#order-for-label': 'Pesanan ini untuk siapa?', '#recipient-name-label': 'Nama penerima',
+      '#recipient-phone-label': 'Nomor WhatsApp penerima', '#recipient-permission-label': 'Bolehkah kami menghubungi penerima?', '#recipient-help': 'Detail penerima hanya digunakan untuk koordinasi pengiriman.',
+      '#delivery-legend': 'Pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
+      '#directions-label': 'Patokan atau petunjuk lokasi (opsional)', '#date-label': 'Tanggal yang diinginkan', '#window-label': 'Waktu (opsional)',
+      '#delivery-help': 'Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.', '#details-legend': 'Detail hadiah dan catatan',
+      '#sender-label': 'Nama pengirim pada kartu (opsional)', '#anonymous-label': 'Kirim secara anonim', '#notes-label': 'Catatan tambahan (opsional)',
+      '#price-note': 'Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.',
+      '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
+    };
+    Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
+    const form = document.getElementById('checkout-form');
+    const setOptions = (name, options) => {
+      const select = form.elements[name];
+      options.forEach((label, index) => { select.options[index].textContent = label; });
+    };
+    setOptions('order_for', en ? ['For myself', 'Someone else or a gift'] : ['Untuk saya sendiri', 'Untuk orang lain atau hadiah']);
+    setOptions('recipient_contact_permission', en ? ['Choose one', 'Yes', 'Contact me first', 'Do not contact the recipient; it is a surprise'] : ['Pilih satu', 'Ya, boleh', 'Hubungi saya terlebih dahulu', 'Jangan hubungi penerima; ini kejutan']);
+    setOptions('preferred_window', en ? ['Flexible', 'Morning', 'Afternoon', 'Evening'] : ['Fleksibel', 'Pagi', 'Siang', 'Sore']);
+  }
+
+  async function submitWebsiteOrder(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = document.getElementById('form-error');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      error.textContent = currentLang === 'en' ? 'Please complete the required fields.' : 'Mohon lengkapi semua kolom wajib.';
+      return;
+    }
+    const endpoint = String(siteData.store.orderSubmissionUrl || '').trim();
+    if (!endpoint) {
+      error.textContent = currentLang === 'en' ? 'Order saving is not configured yet. Please contact the studio.' : 'Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.';
+      return;
+    }
+    const button = document.getElementById('save-order');
+    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state);
+    button.disabled = true;
+    button.textContent = currentLang === 'en' ? 'Saving…' : 'Menyimpan…';
+    error.textContent = '';
+    try {
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      if (result.ok !== true || (result.order_reference && result.order_reference !== checkoutAttempt.reference)) throw new Error('Invalid acknowledgement');
+      showRecordedOrder(payload);
+    } catch (e) {
+      error.textContent = currentLang === 'en' ? `We could not verify that the order was saved. Please contact the studio with reference ${checkoutAttempt.reference} before trying again.` : `Kami belum dapat memastikan pesanan tersimpan. Hubungi studio dengan referensi ${checkoutAttempt.reference} sebelum mencoba lagi.`;
+    } finally {
+      button.disabled = false;
+      button.textContent = currentLang === 'en' ? 'Save order' : 'Simpan pesanan';
+    }
   }
 
   function initCheckout() {
@@ -2606,19 +2669,22 @@
     document.getElementById('checkout-close').addEventListener('click', () => modal.close());
     document.getElementById('checkout-edit').addEventListener('click', () => { modal.close(); scrollToSection('#order'); });
     document.getElementById('checkout-continue').addEventListener('click', () => {
-      const url = buildTallyUrl(checkoutAttempt.reference, checkoutAttempt.state);
-      const error = document.getElementById('checkout-error');
-      if (!url) {
-        error.textContent = currentLang === 'en' ? 'The order form is not configured yet. Please contact the studio.' : 'Formulir pesanan belum dikonfigurasi. Silakan hubungi studio.';
-        return;
-      }
       document.getElementById('checkout-review').hidden = true;
       document.getElementById('checkout-form-step').hidden = false;
-      setText('#checkout-form-eyebrow', currentLang === 'en' ? 'Delivery details' : 'Detail pengiriman');
-      setText('#checkout-form-title', currentLang === 'en' ? 'Complete the order form' : 'Lengkapi formulir pesanan');
+      localizeCheckoutForm();
       setText('#checkout-form-summary', `${checkoutAttempt.reference} · ${checkoutAttempt.state.items.join('; ')} · ${formatRp(checkoutAttempt.state.estimatedProductTotal)}`);
-      document.getElementById('tally-frame').src = url;
+      document.querySelector('#checkout-form input')?.focus();
     });
+    const orderFor = document.querySelector('#checkout-form [name="order_for"]');
+    const giftFields = document.getElementById('gift-fields');
+    const toggleGiftFields = () => {
+      const isGift = orderFor.value === 'gift';
+      giftFields.hidden = !isGift;
+      giftFields.querySelectorAll('input, select').forEach(field => { field.required = isGift; });
+      if (isGift) giftFields.querySelector('input')?.focus();
+    };
+    orderFor.addEventListener('change', toggleGiftFields);
+    document.getElementById('checkout-form').addEventListener('submit', submitWebsiteOrder);
     document.getElementById('copy-reference').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(checkoutAttempt.reference);
@@ -2626,11 +2692,6 @@
       } catch (e) {
         setText('#copy-status', checkoutAttempt.reference);
       }
-    });
-    window.addEventListener('message', event => {
-      if (event.origin !== 'https://tally.so') return;
-      const data = typeof event.data === 'string' ? (() => { try { return JSON.parse(event.data); } catch (e) { return null; } })() : event.data;
-      if (data && data.event === 'Tally.FormSubmitted') showRecordedOrder(data);
     });
   }
 
@@ -2759,6 +2820,7 @@
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
         selectedWrap = 'kraft';
         orderNote = '';
+        checkoutAttempt = null;
         activeCategory = 'all';
         renderAll();
       },
@@ -2766,8 +2828,8 @@
       computeCartTotals: computeCartTotals,
       normalizedCheckoutState: normalizedCheckoutState,
       generateOrderReference: generateOrderReference,
-      buildTallyUrl: buildTallyUrl,
       buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
+      buildOrderSubmission: buildOrderSubmission,
       getCart: () => cart.map(l => ({ ...l })),
       _setCartForTest: (c) => { cart = c; },
       addLine: addLine,

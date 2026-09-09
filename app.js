@@ -397,28 +397,6 @@
   }
 
   /**
-   * Order action: Add flower to the custom bouquet draft (not yet in the cart)
-   */
-  function addFlowerToBouquet(flowerKey) {
-    if (!customCounts[flowerKey]) customCounts[flowerKey] = 0;
-    customCounts[flowerKey] += 1;
-
-    const t = siteData.translations[currentLang] || siteData.translations.id;
-    const fl = siteData.flowers[flowerKey];
-    const name = fl ? (fl[currentLang] || fl.en).name : flowerKey;
-    const tot = getCustomTotals();
-
-    // Announce addition to screen reader
-    const announcer = document.getElementById('order-announcer');
-    if (announcer) {
-      announcer.textContent = `${name} ditambahkan ke buket. Total ${tot.stems} tangkai.`;
-    }
-
-    renderCustomBuilder();
-    renderBouquetsUI();
-  }
-
-  /**
    * Order action: Select a bouquet package
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
@@ -809,9 +787,6 @@
             <button type="button" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
               ${t.orderStemLabel}
             </button>
-            <button type="button" class="btn-add-bouquet" data-flower="${key}">
-              ${t.addToBouquetLabel}
-            </button>
           </div>
         </div>
       `;
@@ -838,24 +813,6 @@
         orderBtn.addEventListener('click', (e) => {
           e.preventDefault();
           selectStemOrder(key, true);
-        });
-      }
-
-      // Button: Add to bouquet + with instant feedback
-      const addBtn = card.querySelector('.btn-add-bouquet');
-      if (addBtn) {
-        addBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          addFlowerToBouquet(key);
-
-          // Inline visual badge feedback
-          const originalText = addBtn.textContent;
-          addBtn.textContent = `✓ +1 (${customCounts[key]})`;
-          addBtn.classList.add('btn-added-flash');
-          setTimeout(() => {
-            addBtn.textContent = originalText;
-            addBtn.classList.remove('btn-added-flash');
-          }, 900);
         });
       }
 
@@ -1081,7 +1038,12 @@
     const useBtn = document.getElementById('btn-use-custom');
 
     if (hintEl) {
-      hintEl.textContent = tot.isValid ? t.okHint : interpolateRules(t.minHint);
+      const hasExistingCustomLine = cart.some(l => l.type === 'custom');
+      if (tot.isValid) {
+        hintEl.textContent = hasExistingCustomLine ? `${t.okHint} ${t.customAddAnotherHint}` : t.okHint;
+      } else {
+        hintEl.textContent = interpolateRules(t.minHint);
+      }
       hintEl.classList.toggle('has-warning', !tot.isValid);
     }
 

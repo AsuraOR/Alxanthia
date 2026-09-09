@@ -824,7 +824,6 @@ body.nav-open {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 10px;
   text-decoration: none;
   cursor: pointer;
   transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
@@ -838,41 +837,6 @@ body.nav-open {
 
 .btn-order-stem:active {
   transform: scale(0.98);
-}
-
-.btn-add-bouquet {
-  border: 1px solid var(--border-medium);
-  background: transparent;
-  padding: 10px 14px;
-  cursor: pointer;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--fs-button);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-green);
-  border-radius: 0;
-  min-height: 44px;
-  min-width: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
-              border-color var(--motion-duration-btn) var(--motion-ease-out),
-              color var(--motion-duration-btn) var(--motion-ease-out);
-}
-
-.btn-add-bouquet:hover {
-  border-color: var(--accent-green);
-  background: rgba(63, 85, 69, 0.08);
-  color: var(--accent-green-hover);
-}
-
-.btn-add-bouquet.btn-added-flash {
-  background: var(--accent-green) !important;
-  color: #FFF !important;
-  border-color: var(--accent-green) !important;
 }
 
 /* Category Filter Navigation Tabs */
@@ -3000,17 +2964,6 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .btn-order-stem {
-    min-height: 44px;
-    padding: 10px 8px;
-    font-size: var(--fs-label);
-    letter-spacing: 0.04em;
-    margin-bottom: 0;
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-  }
-
-  .btn-add-bouquet {
     min-height: 44px;
     padding: 10px 8px;
     font-size: var(--fs-label);

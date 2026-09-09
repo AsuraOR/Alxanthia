@@ -73,12 +73,12 @@ Situs Komorebi dibangun dengan mematuhi prinsip **Zero-Dependency Architecture**
 - **Pure Web Standards**: Dibangun murni dengan semantik HTML5 modern, Vanilla CSS3 (Custom Properties & Fluid Typography), dan Vanilla ES6+ JavaScript.
 - **Zero Build Tools & No node_modules**: Tidak memerlukan Webpack, Vite, Babel, Tailwind, atau bundler rumit di runtime. File dapat langsung dibuka di browser apa pun atau dideploy ke web server statis (GitHub Pages, Cloudflare Pages, Nginx, Apache).
 - **Unidirectional State Machine (`app.js`)**:
-  - State terpusat mengatur: `currentLang` ('id' | 'en'), `orderMode` ('stem' | 'package' | 'custom'), `hasUserSelected` (boolean), `selectedFlower`, `selectedStemQty`, `selectedPackage`, `customCounts`, `selectedWrap`, dan `orderNote`.
-  - Transisi status instan: Memilih tangkai bunga satuan, mengklik paket buket, atau menggeser tombol stepper custom builder seketika memperbarui mode pesanan, kalkulasi harga, pratinjau foto, dan draf WhatsApp tanpa desinkronisasi.
+  - State terpusat mengatur: `currentLang` ('id' | 'en'), `cart` (larik multi-item berisi tangkai satuan, paket, dan buket custom), `selectedWrap`, dan `orderNote`. `orderMode`/`hasUserSelected` kini merupakan nilai turunan dari `cart` untuk kompatibilitas API, bukan state tersimpan.
+  - Transisi status instan: Memilih tangkai bunga satuan atau paket buket menambahkan baris ke keranjang (menggabung jika produk yang sama dipilih ulang); menekan "Gunakan buket ini" mengunci draf custom builder sebagai baris tersendiri. Setiap perubahan seketika memperbarui kalkulasi harga per baris dan total, daftar keranjang, serta draf WhatsApp tanpa desinkronisasi.
 - **Keamanan Input Pengguna (XSS Prevention - R02)**:
   - Input kartu ucapan (`orderNote`) dan data dinamis dimasukkan ke DOM menggunakan `textContent` pada elemen `span` terisolasi dengan bullet dot terpisah (`<span class="bullet-dot" aria-hidden="true">·</span>`). Tidak ada kode HTML atau karakter berbahaya yang dapat tereksekusi.
 - **Aksesibilitas & Ergonomi (WCAG 2.5.5 - R05, R07, A3, B2)**:
-  - Seluruh tombol aksi interaktif (`.btn-order-stem`, `.btn-add-bouquet`, `.btn-choose-bouquet`, `.btn-pkg-continue`, `.btn-channel`, `.btn-stepper`, `.chip-wrap`) memiliki ukuran touch target minimal **44px × 44px**.
+  - Seluruh tombol aksi interaktif (`.btn-order-stem`, `.btn-add-bouquet`, `.btn-choose-bouquet`, `.btn-channel`, `.btn-stepper`, `.btn-remove-line`, `.chip-wrap`) memiliki ukuran touch target minimal **44px × 44px**.
   - Tipografi seluruh badge dan teks penjelas diangkat menjadi minimal **11.5px–12px** (seluruh `font-size: 10px` telah dieliminasi).
   - WAI-ARIA Radio Group pattern pada pilihan pembungkus (`#wrap-chips`) dengan navigasi tombol panah (Arrow Left/Right/Up/Down) dan roving tabindex (`tabindex="0"` pada item aktif, `-1` pada lainnya).
   - Dialog inspektor foto (`<dialog id="image-modal">`) mengembalikan fokus keyboard secara mulus ke elemen pemicu (`modalReturnElement`) saat ditutup.
@@ -162,11 +162,11 @@ Ketika pemilik studio siap mempublikasikan toko secara resmi:
 ## 🧪 Menjalankan Verifikasi & Server Lokal
 
 ### 1. Menjalankan Tes Integrasi Otomatis (R11)
-Tes ini memvalidasi 18 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
+Tes ini memvalidasi 20 skenario kritis langsung terhadap kode `app.js` dan `site-content.js`:
 ```bash
 node tests/verify-ordering.js
 ```
-*Hasil yang diharapkan: 18 suite lulus (✔ ALL 18 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
+*Hasil yang diharapkan: 20 suite lulus (✔ ALL 20 INTEGRATION TEST SUITES PASSED SUCCESSFULLY).*
 
 ### 2. Menjalankan Server Pratinjau Lokal
 Karena situs tidak menggunakan dependensi eksternal, Anda dapat menggunakan server HTTP bawaan:

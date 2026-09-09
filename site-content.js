@@ -412,6 +412,9 @@ window.KOMOREBI_DATA = {
       btnEditSelection: "Ubah pilihan ↑",
       customMinErrorSummary: "Tambahkan minimal {minStems} tangkai untuk melanjutkan pesanan buket custom.",
       customMinHint: "Minimal {n} tangkai",
+      removeLineLabel: "Hapus {item} dari keranjang",
+      decreaseLineLabel: "Kurangi jumlah {item}",
+      increaseLineLabel: "Tambah jumlah {item}",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Pembungkus",
@@ -613,6 +616,9 @@ window.KOMOREBI_DATA = {
       btnEditSelection: "Edit selection ↑",
       customMinErrorSummary: "Add at least {minStems} stems to proceed with a custom bouquet.",
       customMinHint: "Minimum {n} stems",
+      removeLineLabel: "Remove {item} from cart",
+      decreaseLineLabel: "Decrease {item} quantity",
+      increaseLineLabel: "Increase {item} quantity",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Wrap",

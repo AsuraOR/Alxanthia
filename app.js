@@ -22,6 +22,7 @@
   let selectedWrap = 'kraft';
   let orderNote = '';
   let siteData = null;
+  let checkoutAttempt = null;
 
   /**
    * Currency formatter helper (Indonesian Rupiah standard)
@@ -253,6 +254,91 @@
       wrapFee,
       total,
       isValid: list.length > 0 && everyCustomLineValid
+    };
+  }
+
+  function checkoutLineLabel(line, lang = currentLang) {
+    const t = siteData.translations[lang] || siteData.translations.id;
+    if (line.type === 'stem') {
+      const flower = siteData.flowers[line.flowerKey];
+      return `${line.qty} × ${(flower && (flower[lang] || flower.en).name) || line.flowerKey}`;
+    }
+    if (line.type === 'package') {
+      const pkg = siteData.packages[line.pkgIndex];
+      const variety = line.varietyKey && line.varietyKey !== 'mix'
+        ? ` — ${((siteData.flowers[line.varietyKey] || {})[lang] || {}).name || line.varietyKey}` : '';
+      return `${line.qty} × ${t.pkgNames[line.pkgIndex]} (${pkg ? pkg.stems : 0} ${t.stemsWord})${variety}`;
+    }
+    const parts = (siteData.flowerOrder || []).filter(key => line.counts && line.counts[key] > 0).map(key => {
+      const flower = siteData.flowers[key];
+      return `${line.counts[key]} × ${(flower[lang] || flower.en).name}`;
+    });
+    return `${line.qty > 1 ? `${line.qty} × ` : ''}${lang === 'en' ? 'Custom bouquet' : 'Buket custom'} (${parts.join(', ')})`;
+  }
+
+  function normalizedCheckoutState() {
+    const totals = computeCartTotals(cart);
+    const types = [...new Set(cart.map(line => line.type))];
+    const itemData = cart.map(line => {
+      if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
+      if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty, variety: line.varietyKey || 'mix' };
+      return { type: 'custom', qty: line.qty, stems: siteData.flowerOrder.reduce((out, key) => {
+        const qty = (line.counts && line.counts[key]) || 0;
+        if (qty) out[key] = qty;
+        return out;
+      }, {}) };
+    });
+    return {
+      orderMode: types.length === 1 ? types[0] : 'custom',
+      items: cart.map(line => checkoutLineLabel(line)),
+      itemData,
+      totalStemCount: totals.stems,
+      wrapId: selectedWrap,
+      giftMessage: orderNote,
+      productSubtotal: totals.subtotal + totals.wrapFee,
+      discountAmount: totals.discount,
+      estimatedProductTotal: totals.total,
+      currency: 'IDR', language: currentLang, isValid: totals.isValid
+    };
+  }
+
+  function generateOrderReference(now = new Date()) {
+    const date = [String(now.getFullYear()).slice(-2), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = new Uint8Array(4);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    return `KMR-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
+  }
+
+  function buildPostSubmissionWhatsApp(reference, buyerName = '', preferredDate = '', state = normalizedCheckoutState()) {
+    const url = new URL(`https://wa.me/${String(siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '')}`);
+    const name = buyerName || (state.language === 'en' ? '—' : '—');
+    const date = preferredDate || (state.language === 'en' ? 'To be confirmed' : 'Akan dikonfirmasi');
+    url.searchParams.set('text', state.language === 'en'
+      ? `Hello Komorebi! I have just submitted order request ${reference}.\n\nName: ${name}\nOrder: ${state.items.join('; ')}\nProduct subtotal: ${formatRp(state.estimatedProductTotal)}\nPreferred date: ${date}\n\nPlease confirm availability, timing, and delivery cost. Thank you!`
+      : `Halo Komorebi! Saya baru mengirim permintaan pesanan ${reference}.\n\nNama: ${name}\nPesanan: ${state.items.join('; ')}\nSubtotal produk: ${formatRp(state.estimatedProductTotal)}\nTanggal yang diinginkan: ${date}\n\nMohon konfirmasi ketersediaan, tanggal, dan ongkos kirimnya. Terima kasih!`);
+    return url.toString();
+  }
+
+  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState()) {
+    const customer = {};
+    formData.forEach((value, key) => { customer[key] = String(value); });
+    return {
+      order_reference: reference,
+      submitted_language: state.language,
+      order_mode: state.orderMode,
+      order_summary: state.items.join('; '),
+      item_data: state.itemData,
+      total_stems: state.totalStemCount,
+      wrap: state.wrapId,
+      gift_message: state.giftMessage,
+      product_subtotal: state.productSubtotal,
+      discount_amount: state.discountAmount,
+      estimated_product_total: state.estimatedProductTotal,
+      currency: state.currency,
+      source: 'website',
+      ...customer
     };
   }
 
@@ -1596,6 +1682,20 @@
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
 
+    const checkoutButton = document.getElementById('btn-checkout');
+    if (checkoutButton) {
+      const enabled = cartHasSelection && !cartInvalid;
+      checkoutButton.disabled = !enabled;
+      checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      checkoutButton.classList.toggle('btn-disabled', !enabled);
+      const name = checkoutButton.querySelector('.channel-name');
+      const action = checkoutButton.querySelector('.channel-action');
+      if (name) name.textContent = enabled
+        ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
+        : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
+      if (action) action.textContent = currentLang === 'en' ? 'continue →' : 'lanjut →';
+    }
+
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
       if (siteData.store.showPrices && cartHasSelection) {
@@ -2435,6 +2535,166 @@
     }
   }
 
+  function openCheckoutReview() {
+    const state = normalizedCheckoutState();
+    const error = document.getElementById('checkout-error');
+    if (!state.isValid) {
+      if (error) error.textContent = currentLang === 'en' ? 'Choose a valid product before continuing.' : 'Pilih produk yang valid sebelum melanjutkan.';
+      scrollToSection(cart.length ? '#custom-builder' : '#collection');
+      return;
+    }
+    if (!checkoutAttempt || checkoutAttempt.submitted) checkoutAttempt = { reference: generateOrderReference() };
+    checkoutAttempt.state = state;
+    const en = currentLang === 'en';
+    const modal = document.getElementById('checkout-modal');
+    if (!modal) return;
+    document.getElementById('checkout-review').hidden = false;
+    document.getElementById('checkout-form-step').hidden = true;
+    document.getElementById('checkout-success').hidden = true;
+    setText('#checkout-eyebrow', en ? 'Order review' : 'Tinjau pesanan');
+    setText('#checkout-title', en ? 'Check your order details' : 'Periksa detail pesanan Anda');
+    setText('#checkout-reference-label', en ? 'Order reference' : 'Referensi pesanan');
+    setText('#checkout-reference', checkoutAttempt.reference);
+    const list = document.getElementById('checkout-items');
+    if (list) {
+      list.textContent = '';
+      state.items.forEach(item => { const li = document.createElement('li'); li.textContent = item; list.appendChild(li); });
+    }
+    setText('#checkout-subtotal-label', en ? 'Product subtotal' : 'Subtotal produk');
+    setText('#checkout-subtotal', formatRp(state.productSubtotal));
+    setText('#checkout-discount-label', en ? 'Discount' : 'Potongan');
+    setText('#checkout-discount', `− ${formatRp(state.discountAmount)}`);
+    const discountRow = document.getElementById('checkout-discount-row');
+    if (discountRow) discountRow.hidden = state.discountAmount === 0;
+    setText('#checkout-total-label', en ? 'Estimated product total' : 'Estimasi total produk');
+    setText('#checkout-total', formatRp(state.estimatedProductTotal));
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}. ${en ? 'Card message' : 'Pesan kartu'}: ${orderNote.trim() || (en ? 'No card message' : 'Tidak ada pesan kartu')}`);
+    setText('#checkout-notice', en ? 'No payment is required at this stage. We will confirm your address, delivery fee, and final total through WhatsApp.' : 'Belum ada pembayaran pada tahap ini. Kami akan mengonfirmasi alamat, ongkos kirim, dan total akhir melalui WhatsApp.');
+    setText('#checkout-edit', en ? 'Edit order' : 'Ubah pesanan');
+    setText('#checkout-continue', en ? 'Continue order' : 'Lanjutkan pemesanan');
+    if (error) error.textContent = '';
+    if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+  }
+
+  function showRecordedOrder(payload) {
+    if (!checkoutAttempt) return;
+    checkoutAttempt.submitted = true;
+    document.getElementById('checkout-review').hidden = true;
+    document.getElementById('checkout-form-step').hidden = true;
+    document.getElementById('checkout-success').hidden = false;
+    const en = checkoutAttempt.state.language === 'en';
+    setText('#checkout-success-title', en ? 'Your order request has been recorded.' : 'Pesanan Anda sudah dicatat.');
+    setText('#checkout-success-copy', en ? 'Continue to WhatsApp so our studio can confirm availability, delivery, and payment.' : 'Lanjutkan ke WhatsApp agar studio kami dapat mengonfirmasi ketersediaan, pengiriman, dan pembayaran.');
+    setText('#success-reference-label', en ? 'Order reference' : 'Referensi pesanan');
+    setText('#success-reference', checkoutAttempt.reference);
+    const wa = document.getElementById('checkout-whatsapp');
+    if (wa) wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+  }
+
+  function localizeCheckoutForm() {
+    const en = currentLang === 'en';
+    const copy = en ? {
+      '#checkout-form-eyebrow': 'Order form', '#checkout-form-title': 'Complete your order details', '#buyer-legend': 'Buyer',
+      '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
+      '#optional-email': '(optional)', '#recipient-legend': 'Recipient', '#order-for-label': 'Who is this order for?', '#recipient-name-label': 'Recipient name',
+      '#recipient-phone-label': 'Recipient WhatsApp number', '#recipient-permission-label': 'May we contact the recipient?', '#recipient-help': 'Recipient details are used only to coordinate delivery.',
+      '#delivery-legend': 'Delivery', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
+      '#directions-label': 'Location directions (optional)', '#date-label': 'Preferred date', '#window-label': 'Time (optional)',
+      '#delivery-help': 'The date and time are preferences and will be confirmed through WhatsApp.', '#details-legend': 'Gift details and notes',
+      '#sender-label': 'Sender name on card (optional)', '#anonymous-label': 'Send anonymously', '#notes-label': 'Additional notes (optional)',
+      '#price-note': 'Requests that affect the price will be confirmed before payment.',
+      '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
+    } : {
+      '#checkout-form-eyebrow': 'Formulir pesanan', '#checkout-form-title': 'Lengkapi detail pesanan', '#buyer-legend': 'Data pemesan',
+      '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
+      '#optional-email': '(opsional)', '#recipient-legend': 'Penerima', '#order-for-label': 'Pesanan ini untuk siapa?', '#recipient-name-label': 'Nama penerima',
+      '#recipient-phone-label': 'Nomor WhatsApp penerima', '#recipient-permission-label': 'Bolehkah kami menghubungi penerima?', '#recipient-help': 'Detail penerima hanya digunakan untuk koordinasi pengiriman.',
+      '#delivery-legend': 'Pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
+      '#directions-label': 'Patokan atau petunjuk lokasi (opsional)', '#date-label': 'Tanggal yang diinginkan', '#window-label': 'Waktu (opsional)',
+      '#delivery-help': 'Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.', '#details-legend': 'Detail hadiah dan catatan',
+      '#sender-label': 'Nama pengirim pada kartu (opsional)', '#anonymous-label': 'Kirim secara anonim', '#notes-label': 'Catatan tambahan (opsional)',
+      '#price-note': 'Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.',
+      '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
+    };
+    Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
+    const form = document.getElementById('checkout-form');
+    const setOptions = (name, options) => {
+      const select = form.elements[name];
+      options.forEach((label, index) => { select.options[index].textContent = label; });
+    };
+    setOptions('order_for', en ? ['For myself', 'Someone else or a gift'] : ['Untuk saya sendiri', 'Untuk orang lain atau hadiah']);
+    setOptions('recipient_contact_permission', en ? ['Choose one', 'Yes', 'Contact me first', 'Do not contact the recipient; it is a surprise'] : ['Pilih satu', 'Ya, boleh', 'Hubungi saya terlebih dahulu', 'Jangan hubungi penerima; ini kejutan']);
+    setOptions('preferred_window', en ? ['Flexible', 'Morning', 'Afternoon', 'Evening'] : ['Fleksibel', 'Pagi', 'Siang', 'Sore']);
+  }
+
+  async function submitWebsiteOrder(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = document.getElementById('form-error');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      error.textContent = currentLang === 'en' ? 'Please complete the required fields.' : 'Mohon lengkapi semua kolom wajib.';
+      return;
+    }
+    const endpoint = String(siteData.store.orderSubmissionUrl || '').trim();
+    if (!endpoint) {
+      error.textContent = currentLang === 'en' ? 'Order saving is not configured yet. Please contact the studio.' : 'Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.';
+      return;
+    }
+    const button = document.getElementById('save-order');
+    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state);
+    button.disabled = true;
+    button.textContent = currentLang === 'en' ? 'Saving…' : 'Menyimpan…';
+    error.textContent = '';
+    try {
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      if (result.ok !== true || (result.order_reference && result.order_reference !== checkoutAttempt.reference)) throw new Error('Invalid acknowledgement');
+      showRecordedOrder(payload);
+    } catch (e) {
+      error.textContent = currentLang === 'en' ? `We could not verify that the order was saved. Please contact the studio with reference ${checkoutAttempt.reference} before trying again.` : `Kami belum dapat memastikan pesanan tersimpan. Hubungi studio dengan referensi ${checkoutAttempt.reference} sebelum mencoba lagi.`;
+    } finally {
+      button.disabled = false;
+      button.textContent = currentLang === 'en' ? 'Save order' : 'Simpan pesanan';
+    }
+  }
+
+  function initCheckout() {
+    const modal = document.getElementById('checkout-modal');
+    const trigger = document.getElementById('btn-checkout');
+    if (!modal || !trigger) return;
+    trigger.addEventListener('click', openCheckoutReview);
+    document.getElementById('checkout-close').addEventListener('click', () => modal.close());
+    document.getElementById('checkout-edit').addEventListener('click', () => { modal.close(); scrollToSection('#order'); });
+    document.getElementById('checkout-continue').addEventListener('click', () => {
+      document.getElementById('checkout-review').hidden = true;
+      document.getElementById('checkout-form-step').hidden = false;
+      localizeCheckoutForm();
+      setText('#checkout-form-summary', `${checkoutAttempt.reference} · ${checkoutAttempt.state.items.join('; ')} · ${formatRp(checkoutAttempt.state.estimatedProductTotal)}`);
+      document.querySelector('#checkout-form input')?.focus();
+    });
+    const orderFor = document.querySelector('#checkout-form [name="order_for"]');
+    const giftFields = document.getElementById('gift-fields');
+    const toggleGiftFields = () => {
+      const isGift = orderFor.value === 'gift';
+      giftFields.hidden = !isGift;
+      giftFields.querySelectorAll('input, select').forEach(field => { field.required = isGift; });
+      if (isGift) giftFields.querySelector('input')?.focus();
+    };
+    orderFor.addEventListener('change', toggleGiftFields);
+    document.getElementById('checkout-form').addEventListener('submit', submitWebsiteOrder);
+    document.getElementById('copy-reference').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(checkoutAttempt.reference);
+        setText('#copy-status', currentLang === 'en' ? 'Order reference copied.' : 'Referensi pesanan disalin.');
+      } catch (e) {
+        setText('#copy-status', checkoutAttempt.reference);
+      }
+    });
+  }
+
   /**
    * Section Entrances with IntersectionObserver
    */
@@ -2502,6 +2762,7 @@
     setupReducedMotionListener();
     setupAuth();
     renderAll();
+    initCheckout();
     initScrollReveals();
 
     try {
@@ -2559,11 +2820,16 @@
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
         selectedWrap = 'kraft';
         orderNote = '';
+        checkoutAttempt = null;
         activeCategory = 'all';
         renderAll();
       },
       getCustomTotals: getCustomTotals,
       computeCartTotals: computeCartTotals,
+      normalizedCheckoutState: normalizedCheckoutState,
+      generateOrderReference: generateOrderReference,
+      buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
+      buildOrderSubmission: buildOrderSubmission,
       getCart: () => cart.map(l => ({ ...l })),
       _setCartForTest: (c) => { cart = c; },
       addLine: addLine,

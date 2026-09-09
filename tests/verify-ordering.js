@@ -454,6 +454,8 @@ const sandbox = {
   },
   setTimeout: (fn) => { fn(); },
   clearTimeout: () => {},
+  URL: URL,
+  URLSearchParams: URLSearchParams,
   console: console,
   location: { hash: '' },
   innerWidth: 1280,
@@ -1391,8 +1393,38 @@ assert(orderAnnouncer.textContent.includes('4'), 'A rapid burst must still end w
 console.log('✔ Suite 23 Passed: Adding, incrementing and removing a cart line each announce via the existing #order-announcer live region');
 
 // ---------------------------------------------------------------------------
+// Suite 24: Native checkout payload, reference, and privacy boundaries
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 24: Native Checkout Payload & Privacy ---');
+app.resetToInitial();
+app.selectStem('Rose', false);
+app.setOrderNote('<img src=x onerror=alert(1)> & selamat 🎉');
+const normalized24 = app.normalizedCheckoutState();
+assert.strictEqual(normalized24.orderMode, 'stem');
+assert.strictEqual(normalized24.estimatedProductTotal, 60000);
+assert(normalized24.items[0].includes('Mawar'));
+const reference24 = app.generateOrderReference(new Date('2026-09-09T12:00:00Z'));
+assert(/^KMR-260909-[A-HJ-NP-Z2-9]{4}$/.test(reference24), 'Reference must use the non-sensitive KMR date/random format');
+const customerValues24 = new Map([['buyer_name', 'Ayu'], ['buyer_whatsapp', '081234567890'], ['address', 'Jl. Aman 1'], ['preferred_date', '2026-09-14']]);
+customerValues24.forEach = Map.prototype.forEach;
+const submission24 = app.buildOrderSubmission(customerValues24, reference24, normalized24);
+['order_reference', 'submitted_language', 'order_mode', 'order_summary', 'item_data', 'total_stems', 'wrap', 'gift_message', 'product_subtotal', 'discount_amount', 'estimated_product_total', 'currency', 'source'].forEach(key => {
+  assert(Object.hasOwn(submission24, key), `Submission must include operational field ${key}`);
+});
+assert.strictEqual(submission24.gift_message, '<img src=x onerror=alert(1)> & selamat 🎉', 'Special text must remain literal submission data');
+assert.strictEqual(submission24.buyer_name, 'Ayu');
+assert(!Object.hasOwn(submission24, 'midtrans_key'), 'Submission must never contain a payment credential');
+const submittedWa24 = new URL(app.buildPostSubmissionWhatsApp(reference24, 'Ayu', '2026-09-14', normalized24));
+const submittedMessage24 = submittedWa24.searchParams.get('text');
+assert(submittedMessage24.includes(reference24));
+assert(submittedMessage24.includes('Rp 60.000'));
+assert(!submittedMessage24.includes(normalized24.giftMessage), 'Private gift message must not enter post-submission WhatsApp URL');
+assert.deepStrictEqual(app.buildOrderSubmission(customerValues24, reference24, { ...normalized24 }), submission24, 'Review and submission must use the same normalized checkout state');
+console.log('✔ Suite 24 Passed: Native checkout uses shared totals, literal gift text, complete operational data, and privacy-safe WhatsApp content');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 23 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 24 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

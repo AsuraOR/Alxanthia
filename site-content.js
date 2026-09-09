@@ -37,6 +37,9 @@ window.KOMOREBI_DATA = {
     address: "",
     // WhatsApp phone number with country code (e.g. 6281234567890 for Indonesia)
     whatsappNumber: "6281234567890",
+    // Public HTTPS endpoint that stores an order and returns JSON. Keep API keys
+    // server-side; see CHECKOUT-SETUP.md. Leave blank until it is deployed.
+    orderSubmissionUrl: "",
     whatsappTemplates: {
       id: {
         stem:    "Halo Komorebi! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",

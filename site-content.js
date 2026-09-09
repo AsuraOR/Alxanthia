@@ -70,6 +70,14 @@ window.KOMOREBI_DATA = {
     macroSizes: "(max-width: 768px) 90vw, 540px"
   },
 
+  // "How It's Made" step photos, in step order (01 Potong / 02 Bentuk / 03 Rangkai / 04 Bungkus & kirim)
+  stepPhotos: [
+    { src: "img/step-1-potong-480.webp", srcset: "img/step-1-potong-480.webp 480w, img/step-1-potong-800.webp 800w" },
+    { src: "img/step-2-bentuk-480.webp", srcset: "img/step-2-bentuk-480.webp 480w, img/step-2-bentuk-800.webp 800w" },
+    { src: "img/step-3-rangkai-480.webp", srcset: "img/step-3-rangkai-480.webp 480w, img/step-3-rangkai-800.webp 800w" },
+    { src: "img/step-4-bungkus-480.webp", srcset: "img/step-4-bungkus-480.webp 480w, img/step-4-bungkus-800.webp 800w" }
+  ],
+
   // Pricing & Builder Rules (editable without modifying app.js)
   wrapFee: 35000,
   bulkFrom: 9,
@@ -356,6 +364,7 @@ window.KOMOREBI_DATA = {
 
       howEyebrow: "Cara dibuat",
       howTitle: "Dikerjakan tangan, lalu dikirim ke Anda",
+      stepPhotoLabel: "Foto proses segera hadir",
       steps: [
         ["01 — Potong", "Kelopak dipotong sesuai pola", "Setiap bunga punya polanya sendiri. Chenille dipotong dan disortir per bagian sebelum dirangkai."],
         ["02 — Bentuk", "Setiap kelopak dilengkungkan tangan", "Inti kawat di dalam chenille menerima lengkungan lalu menahannya. Itulah yang membuat kelopaknya terasa tumbuh, bukan sekadar dilipat."],
@@ -565,6 +574,7 @@ window.KOMOREBI_DATA = {
 
       howEyebrow: "How they're made",
       howTitle: "Made by hand, then sent to you",
+      stepPhotoLabel: "Process photo coming soon",
       steps: [
         ["01 — Cut", "Petals cut to pattern", "Each flower has its own drawn pattern. Chenille is cut and sorted by part before anything is assembled."],
         ["02 — Shape", "Every petal curved by hand", "The wire core inside the chenille takes a curve and holds it. That is what makes a petal read as grown rather than folded."],

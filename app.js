@@ -1134,6 +1134,13 @@
   /**
    * Render How They're Made Section
    */
+  const STEP_ICON_PATHS = [
+    '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line>',
+    '<path d="M12 3C8 7 8 14 12 21C16 14 16 7 12 3Z"></path>',
+    '<path d="M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3"></path><line x1="8" y1="12" x2="16" y2="12"></line>',
+    '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>'
+  ];
+
   function renderHowTo(t) {
     setText('#how-eyebrow', t.howEyebrow);
     setText('#how-title', t.howTitle);
@@ -1141,10 +1148,27 @@
     const stepsEl = document.getElementById('steps-grid');
     if (stepsEl && t.steps) {
       stepsEl.innerHTML = '';
-      t.steps.forEach(step => {
+      const stepPhotos = siteData.stepPhotos || [];
+      t.steps.forEach((step, index) => {
         const div = document.createElement('div');
         div.className = 'step-card';
+        const photo = stepPhotos[index];
+        let photoHtml;
+        if (photo && photo.src) {
+          photoHtml = `
+            <img class="step-photo" src="${photo.src}" ${photo.srcset ? `srcset="${photo.srcset}" sizes="(max-width: 600px) 45vw, 280px"` : ''} alt="${step[1]}" loading="lazy" width="480" height="480" />
+          `;
+        } else {
+          const iconPath = STEP_ICON_PATHS[index] || STEP_ICON_PATHS[0];
+          photoHtml = `
+            <div class="step-photo-placeholder" role="img" aria-label="${step[1]}">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>
+              <span class="step-photo-label">${t.stepPhotoLabel || ''}</span>
+            </div>
+          `;
+        }
         div.innerHTML = `
+          ${photoHtml}
           <p class="step-kicker">${step[0]}</p>
           <h3 class="step-title">${step[1]}</h3>
           <p class="step-desc">${step[2]}</p>

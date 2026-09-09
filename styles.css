@@ -1725,6 +1725,64 @@ body.nav-open {
   flex-direction: column;
 }
 
+/* Inline Order Picker — shown only while the cart is empty (P1-08) */
+.order-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.picker-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  padding: 8px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 0;
+  min-height: 44px;
+  transition: border-color var(--motion-duration-btn) var(--motion-ease-out),
+              transform var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.picker-tile:hover {
+  border-color: var(--accent-green);
+  transform: translateY(-1px);
+}
+
+.picker-tile-photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+  background: var(--bg-main);
+}
+
+.picker-tile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.picker-tile-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--text-dark);
+}
+
+.picker-tile-price {
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .wrap-intro {
   margin: 0 0 16px;
   font-size: 14px;
@@ -1941,6 +1999,37 @@ body.nav-open {
 .btn-remove-line:hover {
   color: var(--text-dark);
   border-color: var(--border-medium);
+}
+
+/* Package Variety Chooser — one radio per flower plus studio mix (P1-07) */
+.cart-line-variety {
+  flex: 1 1 100%;
+  order: 10;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-plate);
+}
+
+.cart-line-variety-label {
+  margin: 0 0 8px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cart-line-variety-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-variety {
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
 }
 
 .summary-price-container {

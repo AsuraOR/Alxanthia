@@ -323,6 +323,8 @@ window.KOMOREBI_DATA = {
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
+      pkgVarietyLabel: "Pilih varietas",
+      pkgVarietyMix: "Campuran studio",
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
@@ -373,6 +375,7 @@ window.KOMOREBI_DATA = {
 
       orderEyebrow: "Pesan",
       orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
+      orderPickerLabel: "Pilih produk",
       finishLabel: "Sentuhan akhir",
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
@@ -414,6 +417,9 @@ window.KOMOREBI_DATA = {
       removeLineLabel: "Hapus {item} dari keranjang",
       decreaseLineLabel: "Kurangi jumlah {item}",
       increaseLineLabel: "Tambah jumlah {item}",
+      announceLineAdded: "{item} ditambahkan. {n} item di keranjang.",
+      announceLineRemoved: "{item} dihapus. {n} item di keranjang.",
+      announceQtyChanged: "{item} diperbarui menjadi {qty}. {n} item di keranjang.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Pembungkus",
@@ -526,6 +532,8 @@ window.KOMOREBI_DATA = {
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
+      pkgVarietyLabel: "Choose a variety",
+      pkgVarietyMix: "Studio mix",
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
@@ -576,6 +584,7 @@ window.KOMOREBI_DATA = {
 
       orderEyebrow: "Order",
       orderTitle: "Finish your order, then confirm via chat",
+      orderPickerLabel: "Choose a product",
       finishLabel: "Finishing",
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
@@ -617,6 +626,9 @@ window.KOMOREBI_DATA = {
       removeLineLabel: "Remove {item} from cart",
       decreaseLineLabel: "Decrease {item} quantity",
       increaseLineLabel: "Increase {item} quantity",
+      announceLineAdded: "{item} added. {n} item(s) in cart.",
+      announceLineRemoved: "{item} removed. {n} item(s) in cart.",
+      announceQtyChanged: "{item} updated to {qty}. {n} item(s) in cart.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
       wrapLinePrefix: "Wrap",

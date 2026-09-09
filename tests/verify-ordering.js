@@ -304,6 +304,10 @@ registerEl('button', 'sticky-order-cta');
 
 // Order summary sub-elements
 registerEl('ul', 'cart-lines');
+registerEl('div', 'order-picker');
+registerEl('p', 'order-picker-label');
+registerEl('div', 'order-picker-flowers');
+registerEl('div', 'order-picker-packages');
 registerEl('span', 'summary-price');
 registerEl('span', 'summary-shipping-note');
 registerEl('p', 'includes-label');
@@ -518,7 +522,7 @@ const stickyPrice = mockDocument.getElementById('sticky-order-price');
 const stickyCta = mockDocument.getElementById('sticky-order-cta');
 
 assert.strictEqual(cartLines.children.length, 0, 'Cart must start with no lines (P1-06)');
-assert.strictEqual(summaryPrice.textContent, '—', 'Initial price must be neutral dash');
+assert.strictEqual(summaryPrice.style.display, 'none', 'Price must be hidden (not a "—" placeholder) while the cart is empty (P1-08)');
 assert.strictEqual(includesList.children.length, 0, 'Includes list must stay empty rather than show instructions in place of inclusions (T2-8)');
 assert.strictEqual(includesLabel.style.display, 'none', '"Termasuk" label must be hidden when there is nothing to include yet (T2-8)');
 assert(!includesList.textContent.includes('Kartu ucapan'), 'Includes must not claim card was prepared when none chosen');
@@ -722,7 +726,7 @@ const customTotals1 = app.getCustomTotals();
 assert.strictEqual(customTotals1.stems, 1);
 assert.strictEqual(customTotals1.isValid, false, '1 stem custom bouquet must be invalid');
 
-assert.strictEqual(summaryPrice.textContent, '—', 'Cart-level price must stay neutral while only the draft is being built');
+assert.strictEqual(summaryPrice.style.display, 'none', 'Cart-level price must stay hidden while only the draft is being built');
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must stay disabled — nothing has been committed yet');
 assert(waBtn.classList.contains('btn-disabled'));
 console.log('✔ Suite 6 Passed: Custom builder steppers only touch the draft until explicitly committed');
@@ -1254,8 +1258,141 @@ assert.strictEqual(app.getCart().length, 0, 'bumpLineQty must remove a line whos
 console.log('✔ Suite 20 Passed: Removing a line updates totals and focus, and the quantity floor removes rather than clamps');
 
 // ---------------------------------------------------------------------------
+// Suite 21: Inline Order Picker Eliminates the Empty-State Dead End (P1-08)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 21: Inline Order Picker (P1-08) ---');
+app.resetToInitial();
+
+const orderPicker = mockDocument.getElementById('order-picker');
+assert.notStrictEqual(orderPicker.style.display, 'none', '#order-picker must be visible while the cart is empty');
+assert.strictEqual(summaryPrice.style.display, 'none', '#summary-price must stay hidden, not show a "—" placeholder, while empty');
+assert.strictEqual(shippingNote.style.display, 'none');
+assert.strictEqual(includesList.children.length, 0);
+
+const pickerFlowers = mockDocument.getElementById('order-picker-flowers');
+const pickerPackages = mockDocument.getElementById('order-picker-packages');
+assert.strictEqual(pickerFlowers.children.length, 4, 'Picker must render one tile per flower');
+assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
+
+// Clicking a picker tile adds a line without scrolling the page — the
+// customer is already at #order, so re-scrolling would be jarring.
+let pickerScrollCalls = [];
+const originalScrollToForPicker = sandbox.scrollTo;
+sandbox.scrollTo = (opts) => { pickerScrollCalls.push(opts); };
+
+pickerFlowers.children[0].click();
+assert.strictEqual(pickerScrollCalls.length, 0, 'Selecting from the inline picker must not scroll the page');
+assert.strictEqual(app.getCart().length, 1, 'Clicking a picker tile must add a cart line');
+
+sandbox.scrollTo = originalScrollToForPicker;
+
+// Once the cart holds something, the picker gives way to the real cart summary
+assert.strictEqual(orderPicker.style.display, 'none', '#order-picker must hide once the cart is non-empty');
+assert.notStrictEqual(summaryPrice.style.display, 'none', '#summary-price must reappear once the cart has a line');
+
+console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and never scrolls on selection');
+
+// ---------------------------------------------------------------------------
+// Suite 22: Package Variety Chooser (P1-07)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 22: Package Variety Chooser (P1-07) ---');
+app.resetToInitial();
+app.selectPackage(1, false); // Buket Sedang
+let pkgCart = app.getCart();
+assert.strictEqual(pkgCart[0].variety, 'mix', 'Package line must default to studio mix variety');
+
+let varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
+assert(varietyOptionsEl, 'Package cart line must render a variety chooser');
+assert.strictEqual(varietyOptionsEl.getAttribute('role'), 'radiogroup');
+let varietyChips = varietyOptionsEl.children;
+assert.strictEqual(varietyChips.length, 5, 'Chooser must offer studio mix + one option per flower');
+assert.strictEqual(varietyChips[0].getAttribute('role'), 'radio');
+assert.strictEqual(varietyChips[0].getAttribute('aria-checked'), 'true', 'Studio mix must be checked by default');
+assert.strictEqual(varietyChips[0].getAttribute('tabindex'), '0', 'Only the checked option is in the tab order');
+assert.strictEqual(varietyChips[1].getAttribute('tabindex'), '-1');
+
+assert.strictEqual(cartLineTitle(0), 'Buket Sedang', 'Title omits variety while it is still studio mix');
+const preVarietyHref = decodeURIComponent(waBtn.getAttribute('href'));
+assert(!preVarietyHref.includes('Tulip'), 'WhatsApp text must not mention a variety before one is chosen');
+const preVarietyTotal = app.computeCartTotals(app.getCart()).total;
+
+// Choose "Tulip" — flowerOrder index 2, so chip index 3 after "studio mix"
+varietyChips[3].click();
+
+pkgCart = app.getCart();
+assert.strictEqual(pkgCart[0].variety, 'Tulip', "Clicking a variety chip must set the line's variety");
+assert.strictEqual(cartLineTitle(0), 'Buket Sedang — Tulip', 'Cart-line title must reflect the chosen variety');
+
+varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
+varietyChips = varietyOptionsEl.children;
+assert.strictEqual(varietyChips[3].getAttribute('aria-checked'), 'true', 'aria-checked must move to the newly chosen option');
+assert.strictEqual(varietyChips[3].getAttribute('tabindex'), '0');
+assert.strictEqual(varietyChips[0].getAttribute('aria-checked'), 'false', 'Previously checked option must be unchecked');
+assert.strictEqual(varietyChips[0].getAttribute('tabindex'), '-1');
+
+const postVarietyHref = decodeURIComponent(waBtn.getAttribute('href'));
+assert(postVarietyHref.includes('Tulip'), 'WhatsApp message must mention the chosen variety');
+assert.strictEqual(app.computeCartTotals(app.getCart()).total, preVarietyTotal, 'Choosing a variety must never change the price');
+
+// Arrow-key navigation moves the checked option (same roving-tabindex pattern as #wrap-chips)
+varietyChips[3].dispatchEvent({ type: 'keydown', key: 'ArrowRight', preventDefault: () => {} });
+varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
+varietyChips = varietyOptionsEl.children;
+assert.strictEqual(varietyChips[4].getAttribute('aria-checked'), 'true', 'ArrowRight must move the checked option forward');
+assert.strictEqual(varietyChips[4].getAttribute('tabindex'), '0');
+assert.strictEqual(varietyChips[3].getAttribute('aria-checked'), 'false');
+assert.strictEqual(app.getCart()[0].variety, 'Gerbera');
+
+// Both languages render correct labels
+app.setLanguage('en');
+varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
+varietyChips = varietyOptionsEl.children;
+assert(varietyChips[0].textContent.includes('Studio mix'), 'EN label for the mix option must localize');
+assert.strictEqual(cartLineTitle(0), 'The Handful — Gerbera', 'EN cart-line title must localize the package name');
+app.setLanguage('id');
+varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
+assert(varietyOptionsEl.children[0].textContent.includes('Campuran studio'), 'ID label for the mix option must localize');
+
+console.log('✔ Suite 22 Passed: Package variety chooser defaults to studio mix, updates the summary and WhatsApp text without changing price, and supports arrow-key navigation');
+
+// ---------------------------------------------------------------------------
+// Suite 23: Cart Mutations Are Announced (P2-02)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 23: Cart Mutations Are Announced (P2-02) ---');
+app.resetToInitial();
+const orderAnnouncer = mockDocument.getElementById('order-announcer');
+orderAnnouncer.textContent = '';
+
+app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 1 });
+assert(orderAnnouncer.textContent.includes('Bunga Matahari'), 'Adding a line must announce the item name');
+assert(orderAnnouncer.textContent.includes('1'), 'Announcement must include the cart line count');
+
+const addedLineId = app.getCart()[0].id;
+app.bumpLineQty(addedLineId, 1);
+assert(orderAnnouncer.textContent.includes('2'), 'Bumping quantity must announce the new quantity');
+assert(orderAnnouncer.textContent.includes('Bunga Matahari'), 'Quantity-change announcement must name the item');
+
+app.addLine({ type: 'stem', flowerKey: 'Rose', qty: 1 });
+assert(orderAnnouncer.textContent.includes('Mawar'), 'Adding a second, distinct line must announce that item');
+
+app.removeLine(addedLineId);
+assert(orderAnnouncer.textContent.includes('Bunga Matahari'), 'Removing a line must announce the removed item');
+assert(orderAnnouncer.textContent.includes('1'), 'Removal announcement must reflect the updated cart line count');
+
+// A rapid burst of stepper presses must not flood the queue — the mock's
+// synchronous timers mean every call still lands, but exercising the same
+// throttling code path here guards against it throwing or losing the final state.
+const remainingLineId = app.getCart()[0].id;
+app.bumpLineQty(remainingLineId, 1);
+app.bumpLineQty(remainingLineId, 1);
+app.bumpLineQty(remainingLineId, 1);
+assert(orderAnnouncer.textContent.includes('4'), 'A rapid burst must still end with an announcement reflecting the final quantity');
+
+console.log('✔ Suite 23 Passed: Adding, incrementing and removing a cart line each announce via the existing #order-announcer live region');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 20 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 23 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

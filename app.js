@@ -15,7 +15,6 @@
   // State
   let currentLang = 'id';
   let selectedFlower = 'Sunflower';
-  let selectedStemQty = 1; // 1, 2, 3... stems
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let cart = []; // line items: { id, type: 'stem'|'package'|'custom', ...type-specific fields, qty }
@@ -380,20 +379,6 @@
         }, 1200);
       }
     }
-  }
-
-  /**
-   * Order action: Change quantity of the most recently touched stem line
-   */
-  function bumpStemQty(delta) {
-    const line = activeLine();
-    if (line && line.type === 'stem') {
-      bumpLineQty(line.id, delta);
-    } else {
-      addLine({ type: 'stem', flowerKey: selectedFlower, qty: 1 });
-    }
-    const updated = activeLine();
-    selectedStemQty = (updated && updated.type === 'stem') ? updated.qty : 1;
   }
 
   /**
@@ -1255,7 +1240,6 @@
    */
   function renderOrderSection() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    const curLine = activeLine();
     const cartHasSelection = cart.length > 0;
 
     setText('#order-eyebrow', t.orderEyebrow);
@@ -1269,29 +1253,6 @@
     setText('#step3-label', t.continueLabel);
     setText('#btn-edit-selection', t.btnEditSelection || 'Ubah pilihan ↑');
     setText('#summary-shipping-note', t.shippingExcl || '(belum termasuk ongkir)');
-
-    // 1. Single stem quantity stepper (visible only once a stem is actually selected)
-    const stemQtyCard = document.getElementById('stem-qty-card');
-    if (stemQtyCard) {
-      if (cartHasSelection && curLine?.type === 'stem') {
-        stemQtyCard.style.display = 'block';
-        setText('#stem-qty-label', t.stemQtyLabel || 'Jumlah tangkai');
-        setText('#stem-qty-count', selectedStemQty);
-        setText('#stem-qty-unit', t.stemsWord || 'tangkai');
-
-        const decBtn = document.getElementById('btn-stem-dec');
-        const incBtn = document.getElementById('btn-stem-inc');
-        if (decBtn) {
-          decBtn.onclick = () => bumpStemQty(-1);
-          decBtn.disabled = selectedStemQty <= 1;
-        }
-        if (incBtn) {
-          incBtn.onclick = () => bumpStemQty(1);
-        }
-      } else {
-        stemQtyCard.style.display = 'none';
-      }
-    }
 
     // 2. Wrap colour selection chips (WAI-ARIA Radio Group pattern - A3)
     const wrapChipsEl = document.getElementById('wrap-chips');
@@ -2322,7 +2283,6 @@
         renderAll();
       },
       selectStem: selectStemOrder,
-      bumpStemQty: bumpStemQty,
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
       resetCustom: resetCustomCounts,
@@ -2336,7 +2296,6 @@
         cart = [];
         nextLineId = 1;
         selectedFlower = 'Sunflower';
-        selectedStemQty = 1;
         selectedPackage = 1;
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
         selectedWrap = 'kraft';
@@ -2360,7 +2319,6 @@
         orderMode: activeLine()?.type || 'stem',
         hasUserSelected: cart.length > 0,
         selectedFlower,
-        selectedStemQty,
         selectedPackage,
         customCounts: { ...customCounts },
         selectedWrap,

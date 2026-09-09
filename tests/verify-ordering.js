@@ -308,7 +308,6 @@ registerEl('span', 'summary-price');
 registerEl('span', 'summary-shipping-note');
 registerEl('p', 'includes-label');
 registerEl('ul', 'summary-includes-list');
-registerEl('div', 'stem-qty-card');
 registerEl('div', 'custom-min-warning-banner');
 registerEl('span', 'custom-min-warning-text');
 registerEl('p', 'order-note');
@@ -513,7 +512,6 @@ const summaryPrice = mockDocument.getElementById('summary-price');
 const includesLabel = mockDocument.getElementById('includes-label');
 const includesList = mockDocument.getElementById('summary-includes-list');
 const shippingNote = mockDocument.getElementById('summary-shipping-note');
-const stemQtyCard = mockDocument.getElementById('stem-qty-card');
 const waBtn = mockDocument.getElementById('btn-whatsapp');
 const stickyTitle = mockDocument.getElementById('sticky-order-title');
 const stickyPrice = mockDocument.getElementById('sticky-order-price');
@@ -525,7 +523,6 @@ assert.strictEqual(includesList.children.length, 0, 'Includes list must stay emp
 assert.strictEqual(includesLabel.style.display, 'none', '"Termasuk" label must be hidden when there is nothing to include yet (T2-8)');
 assert(!includesList.textContent.includes('Kartu ucapan'), 'Includes must not claim card was prepared when none chosen');
 assert.strictEqual(shippingNote.style.display, 'none', 'Shipping note must be hidden when there is no price to qualify (T2-8)');
-assert.strictEqual(stemQtyCard.style.display, 'none', 'Stem quantity stepper must stay hidden until a stem is actually selected (T2-8)');
 
 // WhatsApp Button must be in disabled prompt state
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), 'true', 'WhatsApp button must be aria-disabled');
@@ -664,9 +661,9 @@ console.log('✔ Suite 3 Passed: Tulip stem selected and correctly formatted in 
 // ---------------------------------------------------------------------------
 // Suite 4: Single Stem Quantity Stepper Calculation
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 4: Single Stem Quantity Stepper ---');
-app.bumpStemQty(2); // 1 + 2 = 3 stems
-assert.strictEqual(app.getState().selectedStemQty, 3);
+console.log('\n--- SUITE 4: Cart-Line Quantity Stepper ---');
+const tulipLineId = app.getCart()[0].id;
+app.bumpLineQty(tulipLineId, 2); // 1 + 2 = 3 stems
 assert.strictEqual(cartLineEls().length, 1, 'Bumping qty must mutate the existing line, not add a new one');
 assert.strictEqual(cartLineTitle(0), 'Tulip');
 assert.strictEqual(cartLineQty(0), '3');

@@ -1725,37 +1725,6 @@ body.nav-open {
   flex-direction: column;
 }
 
-/* Single Stem Quantity Card */
-.stem-qty-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 0;
-  padding: 16px 20px;
-  margin-bottom: 24px;
-}
-
-.stem-stepper-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.stem-qty-count {
-  font-family: var(--font-sans);
-  font-size: 18px;
-  font-weight: 700;
-  min-width: 32px;
-  text-align: center;
-  color: var(--text-dark);
-}
-
-.stem-qty-unit {
-  font-size: 14px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-}
-
 .wrap-intro {
   margin: 0 0 16px;
   font-size: 14px;
@@ -3103,12 +3072,6 @@ details.is-closing > .faq-answer-wrapper {
     padding: 24px 20px;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  .order-controls-col .stem-qty-card {
-    background: var(--bg-main);
-    padding: 14px 16px;
-    margin-bottom: 20px;
   }
 
   .order-actions-card-inner {

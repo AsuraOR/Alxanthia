@@ -302,7 +302,6 @@ window.KOMOREBI_DATA = {
 
       orderStemLabel: "Pesan tangkai ini",
       perStemPrefix: "per tangkai",
-      stemQtyLabel: "Jumlah tangkai",
       shippingExcl: "(belum termasuk ongkir)",
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
@@ -506,7 +505,6 @@ window.KOMOREBI_DATA = {
 
       orderStemLabel: "Order this stem",
       perStemPrefix: "per stem",
-      stemQtyLabel: "Stem quantity",
       shippingExcl: "(excludes delivery fee)",
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],

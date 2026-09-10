@@ -49,7 +49,13 @@
           assert('Stem pick elements present', false, 'stemBtn or finishLabel missing');
         }
 
-        // Test 2: Real Textarea typing & safe binding (C1, R02)
+        // Test 2: Real Textarea typing & safe binding (C1, R02) — the message
+        // card note is a paid, checkbox-gated add-on, so it must be enabled
+        // before its textarea appears in the order summary.
+        const cardToggle = doc.getElementById('card-note-toggle');
+        if (cardToggle && !cardToggle.checked) {
+          cardToggle.click();
+        }
         const noteInput = doc.getElementById('card-note-input');
         const includesList = doc.getElementById('summary-includes-list');
         if (noteInput && includesList) {
@@ -84,22 +90,27 @@
           assert('Second radio has aria-checked="true"', currentRadios[1].getAttribute('aria-checked') === 'true');
         }
 
-        // Test 4: Package selection focus preservation (A3)
-        const pkgBtns = Array.from(doc.querySelectorAll('.btn-choose-bouquet'));
-        if (pkgBtns.length > 1) {
+        // Test 4: Package selection moves focus to #finish-label (A3), the
+        // same pattern used for a stem pick (Test 1) — DEV-24: the handler
+        // intentionally scrolls to and focuses #finish-label to draw
+        // attention to the next step, so that (not the clicked button) is
+        // where focus should land.
+        // Scoped to #packages-grid: mini-pot "add" buttons also carry the
+        // shared .btn-choose-bouquet class for styling, so an unscoped
+        // selector can pick one of those up instead of a real package button.
+        const pkgBtns = Array.from(doc.querySelectorAll('#packages-grid .btn-choose-bouquet'));
+        if (pkgBtns.length > 1 && finishLabel) {
           const targetBtn = pkgBtns[1];
-          const pkgIndex = targetBtn.getAttribute('data-index');
           targetBtn.focus();
           targetBtn.click();
-          
-          const newActive = doc.activeElement;
+
           assert(
-            'Package select preserves active button focus',
-            newActive && newActive.classList.contains('btn-choose-bouquet') && newActive.getAttribute('data-index') === pkgIndex,
-            `active: ${newActive ? newActive.className + ' idx=' + newActive.getAttribute('data-index') : 'none'}`
+            'Package pick transfers focus to #finish-label',
+            doc.activeElement === finishLabel,
+            `active: ${doc.activeElement ? (doc.activeElement.id || doc.activeElement.className) : 'none'}`
           );
         } else {
-          assert('Package choose buttons present', false);
+          assert('Package choose buttons and #finish-label present', false);
         }
 
         // Test 5: Modal Open, Close, and Focus Return (R05, C1)

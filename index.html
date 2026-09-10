@@ -614,6 +614,14 @@
 
       <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+      <div id="recent-order-banner" class="recent-order-banner" hidden>
+        <p id="recent-order-text"></p>
+        <div class="recent-order-actions">
+          <button type="button" id="recent-order-view">Lihat lagi</button>
+          <button type="button" id="recent-order-dismiss" aria-label="Tutup">Tutup</button>
+        </div>
+      </div>
+
       <div class="order-grid">
         <!-- Left Column: Finishing Options -->
         <div class="order-controls-col">
@@ -901,10 +909,14 @@
 
   <dialog id="checkout-modal" class="checkout-modal" aria-labelledby="checkout-title" aria-modal="true">
     <div class="checkout-panel">
-      <button type="button" id="checkout-close" class="image-modal-close" aria-label="Tutup / Close">×</button>
+      <div class="checkout-panel-header">
+        <p class="checkout-step-indicator" id="checkout-step-indicator"></p>
+        <button type="button" id="checkout-close" class="image-modal-close" aria-label="Tutup / Close">×</button>
+      </div>
+      <div class="checkout-panel-scroll">
       <section id="checkout-review">
         <p class="eyebrow" id="checkout-eyebrow">Tinjau pesanan</p>
-        <h2 id="checkout-title">Periksa detail pesanan Anda</h2>
+        <h2 id="checkout-title" tabindex="-1">Periksa detail pesanan Anda</h2>
         <p class="checkout-reference"><span id="checkout-reference-label">Referensi pesanan</span>: <strong
             id="checkout-reference"></strong></p>
         <ul id="checkout-items" class="checkout-items"></ul>
@@ -912,6 +924,10 @@
           <div>
             <dt id="checkout-subtotal-label">Subtotal produk</dt>
             <dd id="checkout-subtotal"></dd>
+          </div>
+          <div id="checkout-wrap-fee-row" hidden>
+            <dt id="checkout-wrap-fee-label">Biaya bungkus custom</dt>
+            <dd id="checkout-wrap-fee"></dd>
           </div>
           <div id="checkout-card-fee-row">
             <dt id="checkout-card-fee-label">Kartu ucapan</dt>
@@ -921,40 +937,40 @@
             <dt id="checkout-total-label">Estimasi total produk</dt>
             <dd id="checkout-total"></dd>
           </div>
+          <div class="checkout-delivery-row">
+            <dt id="checkout-delivery-row-label">Ongkos kirim</dt>
+            <dd id="checkout-delivery-row-value">Dihitung terpisah</dd>
+          </div>
         </dl>
         <p id="checkout-finish"></p>
         <p id="checkout-notice" class="checkout-notice"></p>
         <p id="checkout-error" class="checkout-error" role="alert"></p>
-        <div class="checkout-actions">
-          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
-          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
-        </div>
       </section>
       <section id="checkout-form-step" hidden>
         <p class="eyebrow" id="checkout-form-eyebrow">Formulir pesanan</p>
-        <h2 id="checkout-form-title">Lengkapi detail pesanan</h2>
+        <h2 id="checkout-form-title" tabindex="-1">Lengkapi detail pesanan</h2>
         <p id="checkout-form-summary"></p>
         <form id="checkout-form" class="checkout-form" novalidate>
           <fieldset>
             <legend id="buyer-legend">Data pemesan</legend>
-            <label><span id="buyer-name-label">Nama pemesan</span><input name="buyer_name" autocomplete="name"
+            <label><span id="buyer-name-label">Nama pemesan <span class="required-mark" id="buyer-name-required">(wajib)</span></span><input name="buyer_name" autocomplete="name"
                 required></label>
-            <label><span id="buyer-phone-label">Nomor WhatsApp pemesan</span><input name="buyer_whatsapp" type="tel"
-                autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" required></label>
+            <label><span id="buyer-phone-label">Nomor WhatsApp pemesan <span class="required-mark" id="buyer-phone-required">(wajib)</span></span><input name="buyer_whatsapp" type="tel"
+                autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" aria-describedby="buyer-help" required></label>
             <p class="form-help" id="buyer-help">Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan
-              pembayaran.</p>
+              pembayaran. Contoh: 081234567890</p>
           </fieldset>
           <fieldset>
             <legend id="location-legend">Lokasi & pengiriman</legend>
-            <label><span id="location-type-label">Lokasi Anda</span><select name="location_type" required>
+            <label><span id="location-type-label">Lokasi Anda <span class="required-mark" id="location-type-required">(wajib)</span></span><select name="location_type" required>
                 <option value="bali">Di Bali</option>
                 <option value="luar_bali">Luar Bali</option>
               </select></label>
             <div id="bali-fields">
-              <label><span id="regency-label">Kabupaten/kota</span><select name="regency">
+              <label><span id="regency-label">Kabupaten/kota <span class="required-mark" id="regency-required">(wajib)</span></span><select name="regency">
                   <option value="">Pilih satu</option>
                 </select></label>
-              <label><span id="delivery-method-label">Metode pengiriman</span><select name="delivery_method">
+              <label><span id="delivery-method-label">Metode pengiriman</span><select name="delivery_method" aria-describedby="pickup-help">
                   <option value="grab_gojek">Grab/Gojek (saya pesan sendiri)</option>
                   <option value="self_pickup">Ambil sendiri di studio</option>
                 </select></label>
@@ -962,36 +978,56 @@
                 WhatsApp.</p>
             </div>
             <div id="outside-bali-fields" hidden>
-              <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3"
-                  autocomplete="street-address"></textarea></label>
-              <div class="form-row"><label><span id="city-label">Kota atau kabupaten</span><input name="city"
-                    autocomplete="address-level2"></label><label><span id="postal-label">Kode pos</span><input
-                    name="postal_code" autocomplete="postal-code" inputmode="numeric"></label></div>
+              <label><span id="address-label">Alamat lengkap pengiriman <span class="required-mark" id="address-required">(wajib)</span></span><textarea name="address" rows="3"
+                  autocomplete="street-address" aria-describedby="outside-bali-help"></textarea></label>
+              <div class="form-row"><label><span id="city-label">Kota atau kabupaten <span class="required-mark" id="city-required">(wajib)</span></span><input name="city"
+                    autocomplete="address-level2"></label><label><span id="postal-label">Kode pos <span class="required-mark" id="postal-required">(wajib)</span></span><input
+                    name="postal_code" autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"></label></div>
               <p class="form-help" id="outside-bali-help">Pengiriman akan dikirim sesuai dengan alamat yang ditulis,
                 mohon diperhatikan dengan benar.</p>
             </div>
-            <label><span id="date-label">Tanggal yang diinginkan</span><input name="preferred_date" type="date"
-                required></label>
+            <label><span id="date-label">Tanggal yang diinginkan <span class="required-mark" id="date-required">(wajib)</span></span><input name="preferred_date" type="date"
+                aria-describedby="delivery-help" required></label>
             <p class="form-help" id="delivery-help">Tanggal merupakan preferensi dan akan dikonfirmasi melalui
               WhatsApp.</p>
           </fieldset>
+          <p id="checkout-privacy-notice" class="form-help checkout-privacy-notice"></p>
+          <div id="turnstile-widget" class="cf-turnstile"></div>
           <label class="check-label acknowledgement"><input name="acknowledgement" type="checkbox" required><span
               id="ack-label">Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman
               akan diperiksa melalui WhatsApp.</span></label>
           <p id="form-error" class="checkout-error" role="alert"></p>
-          <button id="save-order" type="submit" class="btn-checkout-primary">Simpan pesanan</button>
         </form>
       </section>
       <section id="checkout-success" hidden>
-        <p class="eyebrow">Pesanan dicatat</p>
-        <h2 id="checkout-success-title">Pesanan Anda sudah dicatat.</h2>
+        <p class="eyebrow" id="checkout-success-eyebrow">Pesanan dicatat</p>
+        <h2 id="checkout-success-title" tabindex="-1">Pesanan Anda sudah dicatat.</h2>
         <p id="checkout-success-copy"></p>
         <p class="checkout-reference"><span id="success-reference-label">Referensi pesanan</span>: <strong
             id="success-reference"></strong></p>
-        <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
-        <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>
+        <div class="checkout-success-actions">
+          <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
+          <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>
+        </div>
         <p id="copy-status" role="status"></p>
+        <p id="copy-fallback-text" class="copy-fallback-text" role="status" hidden tabindex="-1"></p>
+        <button type="button" id="checkout-start-new" class="btn-checkout-tertiary">Mulai pesanan baru</button>
       </section>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-review-footer">
+        <strong class="checkout-footer-total" id="checkout-review-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
+          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
+        </div>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-form-footer" hidden>
+        <strong class="checkout-footer-total" id="checkout-form-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-back-to-review" class="btn-checkout-secondary">← Kembali ke tinjauan</button>
+          <button id="save-order" type="submit" form="checkout-form" class="btn-checkout-primary">Simpan pesanan</button>
+        </div>
+      </div>
     </div>
   </dialog>
 

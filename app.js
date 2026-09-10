@@ -30,6 +30,29 @@
   let siteData = null;
   let checkoutAttempt = null;
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
+  let turnstileToken = ''; // DEV-07: current Cloudflare Turnstile token, if the widget is configured
+  let turnstileWidgetId = null;
+
+  /**
+   * Resets every piece of in-memory ordering state to its startup default.
+   * Shared by the test harness's resetToInitial() and the checkout dialog's
+   * "Start a new order" action (DEV-10) so both stay in sync.
+   */
+  function resetAllState() {
+    cart = [];
+    nextLineId = 1;
+    selectedFlower = 'Sunflower';
+    selectedPackage = 1;
+    customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
+    customAdditions = { rounded: 0, fern: 0 };
+    selectedWrap = 'kraft';
+    orderNote = '';
+    messageCardEnabled = false;
+    orderRecipientName = '';
+    orderCardSenderName = '';
+    checkoutAttempt = null;
+    activeCategory = 'all';
+  }
 
   /**
    * Currency formatter helper (Indonesian Rupiah standard)
@@ -173,6 +196,19 @@
       .replace(/\{minStems\}/g, minStems)
       .replace(/\{wrapFeeUnitStems\}/g, wrapFeeUnitStems)
       .replace(/\{wrapFeePerUnit\}/g, wrapFeePerUnitFormatted);
+  }
+
+  /**
+   * Generic {placeholder} substitution for checkout copy (DEV-13). Unlike
+   * interpolateRules() above (fixed pricing-rule tokens only), this fills
+   * whatever keys the caller supplies, e.g. ck('checkoutFieldsIncomplete', { count: 2 }).
+   */
+  function ck(key, vars) {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    let template = t[key];
+    if (template === undefined) template = (siteData.translations.id || {})[key] || '';
+    if (!vars) return template;
+    return String(template).replace(/\{(\w+)\}/g, (match, name) => (Object.hasOwn(vars, name) ? String(vars[name]) : match));
   }
 
   /**
@@ -408,7 +444,10 @@
       }, {}) };
     });
     return {
-      orderMode: types.length === 1 ? types[0] : 'custom',
+      // DEV-01: a cart mixing more than one product type is `mixed`, distinct from a
+      // single custom bouquet. `itemData` (not this label) is the authoritative product
+      // list — the server must reprice from itemData, never trust orderMode for pricing.
+      orderMode: types.length > 1 ? 'mixed' : (types[0] || 'custom'),
       items: cart.map(line => checkoutLineLabel(line)),
       itemData,
       totalStemCount: totals.stems,
@@ -433,6 +472,23 @@
     return `ALX-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
   }
 
+  /**
+   * DEV-04: a real deduplication key, separate from the human-readable reference
+   * above (which only has 4 random characters and is not safe to deduplicate on).
+   * Kept on checkoutAttempt and reused across every retry of the same attempt;
+   * only "Start a new order" clears it.
+   */
+  function generateIdempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   function buildPostSubmissionWhatsApp(reference, buyerName = '', preferredDate = '', state = normalizedCheckoutState()) {
     const url = new URL(`https://wa.me/${String(siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '')}`);
     const name = buyerName || (state.language === 'en' ? '—' : '—');
@@ -443,11 +499,18 @@
     return url.toString();
   }
 
-  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState()) {
+  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState(), idempotencyKey = '') {
     const customer = {};
     formData.forEach((value, key) => { customer[key] = String(value); });
+    // DEV-06: the browser checkbox becomes the HTML string "on" (or is simply absent
+    // when unchecked) inside FormData — normalize it to a real Boolean before it ever
+    // reaches the server, which must still enforce that it is exactly `true`.
+    customer.acknowledgement = customer.acknowledgement === 'on' || customer.acknowledgement === 'true';
     return {
       order_reference: reference,
+      idempotency_key: idempotencyKey,
+      catalog_version: siteData.catalogVersion ?? 1,
+      cf_turnstile_token: turnstileToken,
       submitted_language: state.language,
       order_mode: state.orderMode,
       order_summary: state.items.join('; '),
@@ -2843,32 +2906,146 @@
     }
   }
 
+  /**
+   * DEV-10: safe (no address/phone/email/card-text) recent-order record so a
+   * customer who reloads or closes the tab can still find their reference and
+   * the WhatsApp link. Never store anything the acknowledgement/privacy notice
+   * doesn't already cover as "kept for this order".
+   */
+  const RECENT_ORDER_KEY = 'alxanthia_recent_order_v1';
+
+  function saveRecentOrder() {
+    if (!checkoutAttempt || !checkoutAttempt.submitted) return;
+    try {
+      localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify({
+        reference: checkoutAttempt.reference,
+        idempotencyKey: checkoutAttempt.idempotencyKey,
+        timestamp: Date.now(),
+        orderSummary: checkoutAttempt.state.items.join('; '),
+        total: checkoutAttempt.state.estimatedProductTotal,
+        language: checkoutAttempt.state.language,
+        waUrl: checkoutAttempt.waUrl || ''
+      }));
+    } catch (e) {}
+  }
+
+  function loadRecentOrder() {
+    try {
+      const raw = localStorage.getItem(RECENT_ORDER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !parsed.reference) return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearRecentOrder() {
+    try { localStorage.removeItem(RECENT_ORDER_KEY); } catch (e) {}
+  }
+
+  function renderRecentOrderBanner() {
+    const banner = document.getElementById('recent-order-banner');
+    if (!banner) return;
+    const record = loadRecentOrder();
+    if (!record || (checkoutAttempt && checkoutAttempt.submitted)) {
+      banner.hidden = true;
+      return;
+    }
+    setText('#recent-order-text', ck('checkoutRecentOrderBanner', { reference: record.reference }));
+    setText('#recent-order-view', ck('checkoutRecentOrderLink'));
+    setAttr('#recent-order-dismiss', 'aria-label', ck('checkoutRecentOrderDismiss'));
+    banner.hidden = false;
+  }
+
+  /**
+   * DEV-14: a single map from visible dialog step to its focusable heading and
+   * the modal's aria-labelledby target — used on every review/form/success
+   * transition so the dialog's accessible name always matches what's on screen.
+   */
+  const CHECKOUT_STEPS = {
+    'checkout-review': { headingId: 'checkout-title', stepNumber: 1, footerId: 'checkout-review-footer' },
+    'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2, footerId: 'checkout-form-footer' },
+    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2, footerId: null }
+  };
+  // DEV-16: each step's total+actions bar is a real, non-scrolling footer
+  // region (see .checkout-dialog-footer) rather than position:sticky inside
+  // the scrollable content, which used to render on top of later fields.
+  const CHECKOUT_FOOTER_IDS = ['checkout-review-footer', 'checkout-form-footer'];
+
+  function showCheckoutStep(stepId) {
+    Object.keys(CHECKOUT_STEPS).forEach(id => {
+      const section = document.getElementById(id);
+      if (section) section.hidden = id !== stepId;
+    });
+    const meta = CHECKOUT_STEPS[stepId];
+    CHECKOUT_FOOTER_IDS.forEach(footerId => {
+      const footer = document.getElementById(footerId);
+      if (footer) footer.hidden = !meta || meta.footerId !== footerId;
+    });
+    const modal = document.getElementById('checkout-modal');
+    if (modal && meta) modal.setAttribute('aria-labelledby', meta.headingId);
+    const indicator = document.getElementById('checkout-step-indicator');
+    if (indicator) {
+      indicator.textContent = stepId === 'checkout-success'
+        ? ck('checkoutStepSuccess')
+        : ck('checkoutStepIndicator', { step: meta.stepNumber, total: 2 });
+    }
+    const heading = meta ? document.getElementById(meta.headingId) : null;
+    if (heading && typeof heading.focus === 'function') heading.focus();
+  }
+
+  /**
+   * DEV-09: while a submission is in flight, close/edit/back controls are
+   * disabled and the dialog's native `cancel` event (Esc key) is suppressed so
+   * an order can't be silently orphaned mid-request.
+   */
+  function setCheckoutSubmitGuard(isSubmitting) {
+    if (checkoutAttempt) checkoutAttempt.isSubmitting = isSubmitting;
+    ['checkout-close', 'checkout-edit', 'checkout-back-to-review', 'checkout-continue'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = isSubmitting;
+    });
+    const notice = document.getElementById('form-error');
+    if (isSubmitting && notice && !notice.textContent) notice.textContent = '';
+  }
+
   function openCheckoutReview() {
     const state = normalizedCheckoutState();
-    const error = document.getElementById('checkout-error');
     if (!state.isValid) {
-      if (error) error.textContent = currentLang === 'en' ? 'Choose a valid product before continuing.' : 'Pilih produk yang valid sebelum melanjutkan.';
+      // DEV-19: this message used to be written into #checkout-error inside a
+      // dialog that this path never opens, so nobody ever saw it. Route it
+      // through the order section's existing live region instead.
+      announceToScreenReader(ck('checkoutInvalidCart'));
       scrollToSection(cart.length ? '#custom-builder' : '#collection');
       return;
     }
-    if (!checkoutAttempt || checkoutAttempt.submitted) checkoutAttempt = { reference: generateOrderReference() };
-    checkoutAttempt.state = state;
-    const en = currentLang === 'en';
     const modal = document.getElementById('checkout-modal');
     if (!modal) return;
-    document.getElementById('checkout-review').hidden = false;
-    document.getElementById('checkout-form-step').hidden = true;
-    document.getElementById('checkout-success').hidden = true;
-    setText('#checkout-eyebrow', en ? 'Order review' : 'Tinjau pesanan');
-    setText('#checkout-title', en ? 'Check your order details' : 'Periksa detail pesanan Anda');
-    setText('#checkout-reference-label', en ? 'Order reference' : 'Referensi pesanan');
+
+    // DEV-04: reuse the same reference + idempotency key across repeated
+    // reviews of an unsubmitted, unchanged order (so a retry stays one
+    // attempt); only start a fresh attempt once the order has actually
+    // changed, or the previous attempt already succeeded.
+    const fingerprint = JSON.stringify({
+      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
+      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
+    });
+    if (!checkoutAttempt || checkoutAttempt.submitted || checkoutAttempt.fingerprint !== fingerprint) {
+      checkoutAttempt = { reference: generateOrderReference(), idempotencyKey: generateIdempotencyKey(), fingerprint };
+    }
+    checkoutAttempt.state = state;
+
+    setText('#checkout-eyebrow', ck('checkoutReviewEyebrow'));
+    setText('#checkout-reference-label', ck('checkoutReferenceLabel'));
     setText('#checkout-reference', checkoutAttempt.reference);
     const list = document.getElementById('checkout-items');
+    const cartTotals = computeCartTotals(cart);
     if (list) {
       list.textContent = '';
       // Show a per-line price here (UX-13) — richer than state.items, which
       // stays plain text for the WhatsApp/submission summaries that reuse it.
-      const cartTotals = computeCartTotals(cart);
       cart.forEach((line, idx) => {
         const li = document.createElement('li');
         const lineTotal = cartTotals.lines[idx] ? cartTotals.lines[idx].total : 0;
@@ -2876,75 +3053,135 @@
         list.appendChild(li);
       });
     }
-    setText('#checkout-subtotal-label', en ? 'Product subtotal' : 'Subtotal produk');
-    setText('#checkout-subtotal', formatRp(state.productSubtotal));
-    setText('#checkout-card-fee-label', en ? 'Message card' : 'Kartu ucapan');
+    setText('#checkout-subtotal-label', ck('checkoutSubtotalLabel'));
+    // DEV-17: the wrap/ribbon fee gets its own row instead of being folded
+    // silently into the subtotal — only custom bouquets carry a wrap fee.
+    setText('#checkout-subtotal', formatRp(cartTotals.subtotal));
+    setText('#checkout-wrap-fee-label', ck('checkoutWrapFeeLabel'));
+    setText('#checkout-wrap-fee', formatRp(cartTotals.wrapFee));
+    const wrapFeeRow = document.getElementById('checkout-wrap-fee-row');
+    if (wrapFeeRow) wrapFeeRow.hidden = !(cartTotals.wrapFee > 0);
+    setText('#checkout-card-fee-label', ck('checkoutCardFeeLabel'));
     setText('#checkout-card-fee', formatRp(state.messageCardFee));
     const cardFeeRow = document.getElementById('checkout-card-fee-row');
     if (cardFeeRow) cardFeeRow.hidden = !state.messageCardEnabled;
-    setText('#checkout-total-label', en ? 'Estimated product total' : 'Estimasi total produk');
+    setText('#checkout-total-label', ck('checkoutTotalLabel'));
     setText('#checkout-total', formatRp(state.estimatedProductTotal));
+    setText('#checkout-delivery-row-label', ck('checkoutDeliveryRowLabel'));
+    setText('#checkout-delivery-row-value', ck('checkoutDeliveryRowValue'));
     const t = siteData.translations[currentLang] || siteData.translations.id;
+    const en = currentLang === 'en';
     const cardNoteText = state.messageCardEnabled && orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
     setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
-    setText('#checkout-notice', en ? 'No payment is required at this stage. We will confirm your address, delivery fee, and final total through WhatsApp.' : 'Belum ada pembayaran pada tahap ini. Kami akan mengonfirmasi alamat, ongkos kirim, dan total akhir melalui WhatsApp.');
-    setText('#checkout-edit', en ? 'Edit order' : 'Ubah pesanan');
-    setText('#checkout-continue', en ? 'Continue order' : 'Lanjutkan pemesanan');
+    setText('#checkout-notice', ck('checkoutNotice'));
+    setText('#checkout-edit', ck('checkoutEditOrder'));
+    setText('#checkout-continue', ck('checkoutContinueOrder'));
+    setText('#checkout-review-footer-total', formatRp(state.estimatedProductTotal));
+    const error = document.getElementById('checkout-error');
     if (error) error.textContent = '';
+    setCheckoutSubmitGuard(false);
+    // DEV-14: showModal() itself moves focus to the dialog's first focusable
+    // element (the close button) as part of opening — call it BEFORE setting
+    // our own heading focus, or the browser's native focus would win.
     if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+    showCheckoutStep('checkout-review');
   }
 
-  function showRecordedOrder(payload) {
+  /**
+   * Reopen the dialog on an already-submitted attempt (DEV-10): the success
+   * screen, not a brand-new review, since the order is already recorded.
+   */
+  function reopenCheckoutSuccess() {
+    const modal = document.getElementById('checkout-modal');
+    if (!modal || !checkoutAttempt || !checkoutAttempt.submitted) return;
+    renderSuccessStep();
+    if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+    showCheckoutStep('checkout-success');
+  }
+
+  function openCheckoutDialog() {
+    if (checkoutAttempt && checkoutAttempt.submitted) {
+      reopenCheckoutSuccess();
+      return;
+    }
+    openCheckoutReview();
+  }
+
+  function renderSuccessStep() {
+    if (!checkoutAttempt) return;
+    setText('#checkout-success-eyebrow', ck('checkoutSuccessEyebrow'));
+    setText('#checkout-success-title', ck('checkoutSuccessTitle'));
+    setText('#checkout-success-copy', checkoutAttempt.duplicate ? ck('checkoutDuplicateCopy') : ck('checkoutSuccessCopy'));
+    setText('#success-reference-label', ck('checkoutReferenceLabel'));
+    setText('#success-reference', checkoutAttempt.reference);
+    setText('#checkout-whatsapp', ck('checkoutWhatsappButton'));
+    setText('#copy-reference', ck('checkoutCopyReference'));
+    setText('#checkout-start-new', ck('checkoutStartNewOrder'));
+    const wa = document.getElementById('checkout-whatsapp');
+    if (wa) {
+      if (checkoutAttempt.lastPayload) {
+        // Fresh submission — rebuild with the real buyer name/date just entered.
+        const payload = checkoutAttempt.lastPayload;
+        const url = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+        wa.href = url;
+        checkoutAttempt.waUrl = url;
+      } else if (checkoutAttempt.waUrl) {
+        // Recovered from the recent-order banner — reuse the URL saved at
+        // submit time rather than rebuilding one without a buyer name.
+        wa.href = checkoutAttempt.waUrl;
+      }
+    }
+    const copyStatus = document.getElementById('copy-status');
+    if (copyStatus) copyStatus.textContent = '';
+    const fallback = document.getElementById('copy-fallback-text');
+    if (fallback) fallback.hidden = true;
+  }
+
+  function showRecordedOrder(payload, isDuplicate = false) {
     if (!checkoutAttempt) return;
     checkoutAttempt.submitted = true;
-    document.getElementById('checkout-review').hidden = true;
-    document.getElementById('checkout-form-step').hidden = true;
-    document.getElementById('checkout-success').hidden = false;
-    const en = checkoutAttempt.state.language === 'en';
-    setText('#checkout-success-title', en ? 'Your order request has been recorded.' : 'Pesanan Anda sudah dicatat.');
-    setText('#checkout-success-copy', en ? 'Continue to WhatsApp so our studio can confirm availability, delivery, and payment.' : 'Lanjutkan ke WhatsApp agar studio kami dapat mengonfirmasi ketersediaan, pengiriman, dan pembayaran.');
-    setText('#success-reference-label', en ? 'Order reference' : 'Referensi pesanan');
-    setText('#success-reference', checkoutAttempt.reference);
-    const wa = document.getElementById('checkout-whatsapp');
-    if (wa) wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+    checkoutAttempt.duplicate = isDuplicate;
+    checkoutAttempt.lastPayload = payload;
+    renderSuccessStep();
+    setCheckoutSubmitGuard(false);
+    showCheckoutStep('checkout-success');
+    saveRecentOrder();
+    renderRecentOrderBanner();
   }
 
   function localizeCheckoutForm() {
-    const en = currentLang === 'en';
-    const copy = en ? {
-      '#checkout-form-eyebrow': 'Order form', '#checkout-form-title': 'Complete your order details', '#buyer-legend': 'Buyer',
-      '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
-      '#location-legend': 'Location & delivery', '#location-type-label': 'Your location', '#regency-label': 'City/regency',
-      '#delivery-method-label': 'Delivery method', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
-      '#pickup-help': 'The pickup address will be confirmed and sent via WhatsApp.',
-      '#outside-bali-help': 'Delivery will be sent to the address you write — please make sure it is correct.',
-      '#date-label': 'Preferred date', '#delivery-help': 'The date is a preference and will be confirmed through WhatsApp.',
-      '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
-    } : {
-      '#checkout-form-eyebrow': 'Formulir pesanan', '#checkout-form-title': 'Lengkapi detail pesanan', '#buyer-legend': 'Data pemesan',
-      '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
-      '#location-legend': 'Lokasi & pengiriman', '#location-type-label': 'Lokasi Anda', '#regency-label': 'Kabupaten/kota',
-      '#delivery-method-label': 'Metode pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
-      '#pickup-help': 'Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui WhatsApp.',
-      '#outside-bali-help': 'Pengiriman akan dikirim sesuai dengan alamat yang ditulis, mohon diperhatikan dengan benar.',
-      '#date-label': 'Tanggal yang diinginkan', '#delivery-help': 'Tanggal merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.',
-      '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
+    const copy = {
+      '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
+      '#buyer-name-label': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
+      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label': `${ck('checkoutLocationTypeLabel')} `, '#regency-label': `${ck('checkoutRegencyLabel')} `,
+      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label': `${ck('checkoutAddressLabel')} `, '#city-label': `${ck('checkoutCityLabel')} `, '#postal-label': `${ck('checkoutPostalLabel')} `,
+      '#pickup-help': ck('checkoutPickupHelp'),
+      '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
+      '#date-label': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
+      '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
+      '#checkout-back-to-review': ck('checkoutBackToReview'),
+      '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
+      '#buyer-name-required': ck('checkoutRequiredMark'), '#buyer-phone-required': ck('checkoutRequiredMark'),
+      '#location-type-required': ck('checkoutRequiredMark'), '#regency-required': ck('checkoutRequiredMark'),
+      '#address-required': ck('checkoutRequiredMark'), '#city-required': ck('checkoutRequiredMark'),
+      '#postal-required': ck('checkoutRequiredMark'), '#date-required': ck('checkoutRequiredMark')
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
     const form = document.getElementById('checkout-form');
+    const en = currentLang === 'en';
     const setOptions = (name, options) => {
       const select = form.elements[name];
       options.forEach((label, index) => { if (select.options[index]) select.options[index].textContent = label; });
     };
-    setOptions('location_type', en ? ['In Bali', 'Outside Bali'] : ['Di Bali', 'Luar Bali']);
-    setOptions('delivery_method', en ? ['Grab/Gojek (you book it yourself)', 'Self pickup at the studio'] : ['Grab/Gojek (saya pesan sendiri)', 'Ambil sendiri di studio']);
+    setOptions('location_type', [ck('checkoutLocationBali'), ck('checkoutLocationOutsideBali')]);
+    setOptions('delivery_method', [ck('checkoutDeliveryGrabGojek'), ck('checkoutDeliverySelfPickup')]);
 
     const regencySelect = form.elements['regency'];
     if (regencySelect) {
       const regencies = siteData.baliRegencies || [];
       const currentValue = regencySelect.value;
       while (regencySelect.options.length > 1) regencySelect.remove(1);
-      regencySelect.options[0].textContent = en ? 'Choose one' : 'Pilih satu';
+      regencySelect.options[0].textContent = ck('checkoutRegencyChoose');
       regencies.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
@@ -2954,12 +3191,16 @@
       if (regencies.includes(currentValue)) regencySelect.value = currentValue;
     }
 
+    // DEV-11: the date picker enforces today + the owner-configured production
+    // lead time, not just "today" — mirrored server-side (see
+    // CONFIGURE-SUBMISSION-ENDPOINT.md's MINIMUM_LEAD_DAYS).
     const dateInput = form.elements['preferred_date'];
     if (dateInput) {
-      const today = new Date();
-      const minDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      dateInput.min = minDate;
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() + (siteData.minimumLeadDays ?? 0));
+      dateInput.min = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
     }
+    setText('#checkout-form-footer-total', checkoutAttempt ? formatRp(checkoutAttempt.state.estimatedProductTotal) : '');
   }
 
   /**
@@ -2988,22 +3229,18 @@
   }
 
   function fieldValidationMessage(field) {
-    const en = currentLang === 'en';
     if (field.validity.valueMissing) {
-      if (field.type === 'checkbox') return en ? 'Please check this box to continue.' : 'Centang kotak ini untuk melanjutkan.';
-      if (field.tagName === 'SELECT') return en ? 'Please choose an option.' : 'Silakan pilih salah satu.';
-      return en ? 'This field is required.' : 'Kolom ini wajib diisi.';
+      if (field.type === 'checkbox') return ck('checkoutErrCheckbox');
+      if (field.tagName === 'SELECT') return ck('checkoutErrSelect');
+      return ck('checkoutErrRequired');
     }
     if (field.validity.patternMismatch) {
-      return en ? 'Enter a valid WhatsApp number.' : 'Masukkan nomor WhatsApp yang valid.';
-    }
-    if (field.validity.typeMismatch) {
-      return en ? 'Enter a valid email address.' : 'Masukkan alamat email yang valid.';
+      return field.name === 'postal_code' ? ck('checkoutErrPostalPattern') : ck('checkoutErrPattern');
     }
     if (field.validity.rangeUnderflow && field.type === 'date') {
-      return en ? 'Choose today or a later date.' : 'Pilih hari ini atau tanggal setelahnya.';
+      return ck('checkoutErrDateRange');
     }
-    return en ? 'This field needs attention.' : 'Kolom ini perlu diperiksa.';
+    return ck('checkoutErrGeneric');
   }
 
   function setFieldError(field, message) {
@@ -3035,41 +3272,137 @@
     return invalidFields;
   }
 
+  /**
+   * DEV-07: load and render the Cloudflare Turnstile widget only once a
+   * public site key is configured (OWNER-05) — the checkout form works
+   * without it, so setup can proceed before Turnstile is ready.
+   */
+  function initTurnstile() {
+    const siteKey = String((siteData.store && siteData.store.turnstileSiteKey) || '').trim();
+    const container = document.getElementById('turnstile-widget');
+    if (!siteKey || !container || typeof document.createElement !== 'function') return;
+    window.__alxanthiaTurnstileReady = function () {
+      if (!window.turnstile) return;
+      turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: siteKey,
+        callback: (token) => { turnstileToken = token; },
+        'expired-callback': () => { turnstileToken = ''; },
+        'error-callback': () => { turnstileToken = ''; }
+      });
+    };
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__alxanthiaTurnstileReady&render=explicit';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
+  function resetTurnstile() {
+    turnstileToken = '';
+    if (window.turnstile && turnstileWidgetId !== null) {
+      try { window.turnstile.reset(turnstileWidgetId); } catch (e) {}
+    }
+  }
+
+  /**
+   * DEV-08: a submission gets at most 20 seconds before we treat it as
+   * ambiguous rather than leaving the customer staring at "Saving..." forever.
+   */
+  const CHECKOUT_TIMEOUT_MS = 20000;
+
   async function submitWebsiteOrder(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
     const invalidFields = validateCheckoutForm(form);
     if (invalidFields.length > 0) {
-      const en = currentLang === 'en';
-      error.textContent = en
-        ? `${invalidFields.length} field${invalidFields.length === 1 ? '' : 's'} need${invalidFields.length === 1 ? 's' : ''} to be completed.`
-        : `${invalidFields.length} kolom perlu dilengkapi.`;
+      error.textContent = ck('checkoutFieldsIncomplete', { count: invalidFields.length });
       invalidFields[0].focus();
       return;
     }
     error.textContent = '';
     const endpoint = String(siteData.store.orderSubmissionUrl || '').trim();
     if (!endpoint) {
-      error.textContent = currentLang === 'en' ? 'Order saving is not configured yet. Please contact the studio.' : 'Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.';
+      error.textContent = ck('checkoutNotConfigured');
       return;
     }
+    // DEV-04: a prior 409 means this exact attempt (same idempotency key) is
+    // stuck in a genuine conflict — stop instead of hammering the endpoint.
+    if (checkoutAttempt.conflicted) {
+      error.textContent = ck('checkoutConflictFailure', { reference: checkoutAttempt.reference });
+      return;
+    }
+    const turnstileConfigured = !!String((siteData.store && siteData.store.turnstileSiteKey) || '').trim();
+    if (turnstileConfigured && !turnstileToken) {
+      error.textContent = ck('checkoutTurnstileRequired');
+      return;
+    }
+
     const button = document.getElementById('save-order');
-    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state);
+    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state, checkoutAttempt.idempotencyKey);
+    setCheckoutSubmitGuard(true);
     button.disabled = true;
-    button.textContent = currentLang === 'en' ? 'Saving…' : 'Menyimpan…';
+    button.textContent = ck('checkoutSaving');
     error.textContent = '';
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS) : null;
+
+    // Every branch below sets `outcome` to one of: success | duplicate |
+    // conflict | ambiguous | connection | rejected (DEV-08's typed failures).
+    let outcome;
+    let response = null;
     try {
-      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      if (result.ok !== true || (result.order_reference && result.order_reference !== checkoutAttempt.reference)) throw new Error('Invalid acknowledgement');
-      showRecordedOrder(payload);
-    } catch (e) {
-      error.textContent = currentLang === 'en' ? `We could not verify that the order was saved. Please contact the studio with reference ${checkoutAttempt.reference} before trying again.` : `Kami belum dapat memastikan pesanan tersimpan. Hubungi studio dengan referensi ${checkoutAttempt.reference} sebelum mencoba lagi.`;
-    } finally {
-      button.disabled = false;
-      button.textContent = currentLang === 'en' ? 'Save order' : 'Simpan pesanan';
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller ? controller.signal : undefined
+      });
+    } catch (networkError) {
+      outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
+    }
+    if (timeoutId) clearTimeout(timeoutId);
+
+    if (!outcome) {
+      if (response.status === 409) {
+        outcome = 'conflict';
+      } else if (response.status >= 500) {
+        outcome = 'ambiguous';
+      } else if (!response.ok) {
+        outcome = 'rejected';
+      } else {
+        try {
+          const result = await response.json();
+          // DEV-06: both the success flag and the exact matching reference
+          // are required — `{ "ok": true }` alone is no longer accepted.
+          if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
+            outcome = result.duplicate === true ? 'duplicate' : 'success';
+          } else {
+            outcome = 'ambiguous';
+          }
+        } catch (parseError) {
+          outcome = 'ambiguous';
+        }
+      }
+    }
+
+    setCheckoutSubmitGuard(false);
+    button.disabled = false;
+    button.textContent = ck('checkoutSaveOrder');
+    resetTurnstile(); // a Turnstile token is single-use regardless of outcome
+
+    if (outcome === 'success' || outcome === 'duplicate') {
+      showRecordedOrder(payload, outcome === 'duplicate');
+    } else if (outcome === 'conflict') {
+      checkoutAttempt.conflicted = true;
+      error.textContent = ck('checkoutConflictFailure', { reference: checkoutAttempt.reference });
+    } else if (outcome === 'connection') {
+      error.textContent = ck('checkoutConnectionFailure');
+    } else if (outcome === 'rejected') {
+      error.textContent = ck('checkoutRejectedFailure');
+    } else {
+      error.textContent = ck('checkoutAmbiguousFailure', { reference: checkoutAttempt.reference });
     }
   }
 
@@ -3077,15 +3410,38 @@
     const modal = document.getElementById('checkout-modal');
     const trigger = document.getElementById('btn-checkout');
     if (!modal || !trigger) return;
-    trigger.addEventListener('click', openCheckoutReview);
-    document.getElementById('checkout-close').addEventListener('click', () => modal.close());
-    document.getElementById('checkout-edit').addEventListener('click', () => { modal.close(); scrollToSection('#order'); });
+    trigger.addEventListener('click', openCheckoutDialog);
+    document.getElementById('checkout-close').addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      modal.close();
+    });
+    // DEV-09: suppress Esc-to-close (the dialog's native `cancel` event)
+    // while a submission is in flight.
+    modal.addEventListener('cancel', (e) => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) e.preventDefault();
+    });
+    document.getElementById('checkout-edit').addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      modal.close();
+      scrollToSection('#order');
+    });
     document.getElementById('checkout-continue').addEventListener('click', () => {
-      document.getElementById('checkout-review').hidden = true;
-      document.getElementById('checkout-form-step').hidden = false;
       localizeCheckoutForm();
       setText('#checkout-form-summary', `${checkoutAttempt.reference} · ${checkoutAttempt.state.items.join('; ')} · ${formatRp(checkoutAttempt.state.estimatedProductTotal)}`);
-      document.querySelector('#checkout-form input')?.focus();
+      showCheckoutStep('checkout-form-step');
+    });
+    document.getElementById('checkout-back-to-review')?.addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      openCheckoutReview();
+    });
+    document.getElementById('checkout-start-new')?.addEventListener('click', () => {
+      modal.close();
+      resetAllState();
+      persistCart();
+      clearRecentOrder();
+      renderAll();
+      renderRecentOrderBanner();
+      scrollToSection('#order');
     });
     const locationType = document.querySelector('#checkout-form [name="location_type"]');
     const baliFields = document.getElementById('bali-fields');
@@ -3094,17 +3450,26 @@
       const isBali = locationType.value !== 'luar_bali';
       baliFields.hidden = !isBali;
       outsideBaliFields.hidden = isBali;
+      // DEV-12: the inactive branch is disabled (excluded from FormData) and
+      // cleared — the server must still enforce the branch independently,
+      // since client-side disabling is not security.
       baliFields.querySelectorAll('input, select').forEach(field => {
         field.required = isBali;
-        if (document.getElementById(fieldErrorId(field))) {
+        field.disabled = !isBali;
+        if (!isBali) {
+          field.value = field.tagName === 'SELECT' ? field.options[0].value : '';
+          setFieldError(field, '');
+        } else if (document.getElementById(fieldErrorId(field))) {
           setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
         }
       });
       outsideBaliFields.querySelectorAll('input, textarea').forEach(field => {
         field.required = !isBali;
-        // A field that was invalid while required must not keep showing
-        // a stale error once toggling makes it optional again.
-        if (document.getElementById(fieldErrorId(field))) {
+        field.disabled = isBali;
+        if (isBali) {
+          field.value = '';
+          setFieldError(field, '');
+        } else if (document.getElementById(fieldErrorId(field))) {
           setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
         }
       });
@@ -3132,12 +3497,43 @@
     checkoutFormEl.addEventListener('input', revalidateOnInteraction);
     checkoutFormEl.addEventListener('change', revalidateOnInteraction);
     document.getElementById('copy-reference').addEventListener('click', async () => {
+      const fallback = document.getElementById('copy-fallback-text');
       try {
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(checkoutAttempt.reference);
-        setText('#copy-status', currentLang === 'en' ? 'Order reference copied.' : 'Referensi pesanan disalin.');
+        setText('#copy-status', ck('checkoutCopySuccess'));
+        if (fallback) fallback.hidden = true;
       } catch (e) {
-        setText('#copy-status', checkoutAttempt.reference);
+        // DEV-18: clipboard permission denied — show a selectable fallback
+        // with the reference, instead of a bare, unexplained value.
+        setText('#copy-status', '');
+        if (fallback) {
+          fallback.textContent = ck('checkoutCopyFallback', { reference: checkoutAttempt.reference });
+          fallback.hidden = false;
+          if (typeof fallback.focus === 'function') fallback.focus();
+        }
       }
+    });
+    document.getElementById('recent-order-view')?.addEventListener('click', () => {
+      const record = loadRecentOrder();
+      if (!record) return;
+      checkoutAttempt = {
+        reference: record.reference,
+        idempotencyKey: record.idempotencyKey,
+        submitted: true,
+        duplicate: false,
+        state: { language: record.language || currentLang, items: record.orderSummary ? record.orderSummary.split('; ') : [], estimatedProductTotal: record.total || 0 },
+        lastPayload: null,
+        waUrl: record.waUrl
+      };
+      renderSuccessStep();
+      setCheckoutSubmitGuard(false);
+      if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+      showCheckoutStep('checkout-success');
+    });
+    document.getElementById('recent-order-dismiss')?.addEventListener('click', () => {
+      const banner = document.getElementById('recent-order-banner');
+      if (banner) banner.hidden = true;
     });
   }
 
@@ -3210,6 +3606,8 @@
     setupAuth();
     renderAll();
     initCheckout();
+    initTurnstile();
+    renderRecentOrderBanner();
     initScrollReveals();
 
     try {
@@ -3277,19 +3675,7 @@
         persistCart();
       },
       resetToInitial: () => {
-        cart = [];
-        nextLineId = 1;
-        selectedFlower = 'Sunflower';
-        selectedPackage = 1;
-        customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
-        customAdditions = { rounded: 0, fern: 0 };
-        selectedWrap = 'kraft';
-        orderNote = '';
-        messageCardEnabled = false;
-        orderRecipientName = '';
-        orderCardSenderName = '';
-        checkoutAttempt = null;
-        activeCategory = 'all';
+        resetAllState();
         renderAll();
       },
       getCustomTotals: getCustomTotals,

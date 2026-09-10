@@ -20,11 +20,13 @@
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let customAdditions = { rounded: 0, fern: 0 }; // quantity per addition, not a boolean toggle
-  let customMessageCard = false;
   let cart = []; // line items: { id, type: 'stem'|'pot'|'package'|'custom', ...type-specific fields, qty }
   let nextLineId = 1;
   let selectedWrap = 'kraft';
   let orderNote = '';
+  let messageCardEnabled = false; // order-level: gates the card textarea & its fee, decided in the finishing section
+  let orderRecipientName = '';
+  let orderCardSenderName = '';
   let siteData = null;
   let checkoutAttempt = null;
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
@@ -54,7 +56,8 @@
   function persistCart() {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify({
-        cart, wrapKey: selectedWrap, orderNote, customCounts
+        cart, wrapKey: selectedWrap, orderNote, customCounts,
+        messageCardEnabled, orderRecipientName, orderCardSenderName
       }));
     } catch (e) {}
   }
@@ -98,7 +101,7 @@
             const c = Math.floor(Number(line.additions && line.additions[addition.key]));
             if (c > 0) additions[addition.key] = c;
           });
-          restoredLines.push({ type: 'custom', counts, additions, messageCard: !!line.messageCard, qty, _id: line.id });
+          restoredLines.push({ type: 'custom', counts, additions, qty, _id: line.id });
         }
       });
 
@@ -133,6 +136,9 @@
           customCounts[key] = c > 0 ? c : 0;
         });
       }
+      messageCardEnabled = !!parsed.messageCardEnabled;
+      if (typeof parsed.orderRecipientName === 'string') orderRecipientName = parsed.orderRecipientName.slice(0, 120);
+      if (typeof parsed.orderCardSenderName === 'string') orderCardSenderName = parsed.orderCardSenderName.slice(0, 120);
     } catch (e) {
       cart = [];
     }
@@ -161,14 +167,12 @@
   function interpolateRules(template) {
     if (!template || typeof template !== 'string') return template;
     const minStems = siteData?.minStems ?? 3;
-    const bulkFrom = siteData?.bulkFrom ?? 9;
-    const bulkPercent = Math.round((siteData?.bulkRate ?? 0.10) * 100);
-    const wrapFeeFormatted = formatRp(siteData?.wrapFee ?? 35000);
+    const wrapFeeUnitStems = siteData?.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnitFormatted = formatRp(siteData?.wrapFeePerUnit ?? 35000);
     return template
       .replace(/\{minStems\}/g, minStems)
-      .replace(/\{bulkFrom\}/g, bulkFrom)
-      .replace(/\{bulkPercent\}/g, bulkPercent)
-      .replace(/\{wrapFee\}/g, wrapFeeFormatted);
+      .replace(/\{wrapFeeUnitStems\}/g, wrapFeeUnitStems)
+      .replace(/\{wrapFeePerUnit\}/g, wrapFeePerUnitFormatted);
   }
 
   /**
@@ -270,22 +274,20 @@
       flowersSubtotal += qty * price;
     });
 
-    const bulkFrom = siteData.bulkFrom ?? 9;
-    const bulkRate = siteData.bulkRate ?? 0.10;
-    const wrapFee = siteData.wrapFee ?? 35000;
+    const wrapFeeUnitStems = siteData.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnit = siteData.wrapFeePerUnit ?? 35000;
     const minStems = siteData.minStems ?? 3;
     const additionsSubtotal = (siteData.customAdditions || []).reduce((sum, addition) =>
       sum + (customAdditions[addition.key] || 0) * (addition.price || 0), 0);
 
-    const discount = stems >= bulkFrom ? Math.round(flowersSubtotal * bulkRate) : 0;
-    const total = flowersSubtotal - discount + wrapFee + additionsSubtotal;
+    const wrapFee = stems > 0 ? Math.ceil(stems / wrapFeeUnitStems) * wrapFeePerUnit : 0;
+    const total = flowersSubtotal + wrapFee + additionsSubtotal;
     const isValid = stems >= minStems;
 
     return {
       stems,
       flowersSubtotal,
       additionsSubtotal,
-      discount,
       wrapFee,
       total,
       isValid
@@ -299,18 +301,16 @@
   function computeCartTotals(cartArg) {
     const list = Array.isArray(cartArg) ? cartArg : [];
     const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
-    const bulkFrom = siteData.bulkFrom ?? 9;
-    const bulkRate = siteData.bulkRate ?? 0.10;
-    const wrapFeeCfg = siteData.wrapFee ?? 35000;
+    const wrapFeeUnitStems = siteData.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnit = siteData.wrapFeePerUnit ?? 35000;
     const minStems = siteData.minStems ?? 3;
 
-    let hasCustomLine = false;
     let everyCustomLineValid = true;
 
     const lines = list.map(line => {
       let stems = 0;
       let subtotal = 0;
-      let discount = 0;
+      let wrapFee = 0;
 
       if (line.type === 'stem') {
         const flower = siteData.flowers[line.flowerKey];
@@ -325,7 +325,6 @@
         stems = (pkg ? pkg.stems : 0) * line.qty;
         subtotal = (pkg ? pkg.price : 0) * line.qty;
       } else if (line.type === 'custom') {
-        hasCustomLine = true;
         let bouquetStems = 0;
         let bouquetSubtotal = 0;
         order.forEach(key => {
@@ -340,26 +339,27 @@
           bouquetSubtotal += count * (addition.price || 0);
         });
         if (bouquetStems < minStems) everyCustomLineValid = false;
+        const bouquetWrapFee = bouquetStems > 0 ? Math.ceil(bouquetStems / wrapFeeUnitStems) * wrapFeePerUnit : 0;
         stems = bouquetStems * line.qty;
         subtotal = bouquetSubtotal * line.qty;
-        discount = bouquetStems >= bulkFrom ? Math.round(subtotal * bulkRate) : 0;
+        wrapFee = bouquetWrapFee * line.qty;
       }
 
-      return { id: line.id, type: line.type, stems, subtotal, discount, total: subtotal - discount };
+      return { id: line.id, type: line.type, stems, subtotal, wrapFee, total: subtotal + wrapFee };
     });
 
     const stemsTotal = lines.reduce((sum, l) => sum + l.stems, 0);
     const subtotalTotal = lines.reduce((sum, l) => sum + l.subtotal, 0);
-    const discountTotal = lines.reduce((sum, l) => sum + l.discount, 0);
-    const wrapFee = hasCustomLine ? wrapFeeCfg : 0;
-    const total = subtotalTotal - discountTotal + wrapFee;
+    const wrapFeeTotal = lines.reduce((sum, l) => sum + l.wrapFee, 0);
+    const messageCardFee = list.length > 0 && messageCardEnabled ? (siteData.messageCardPrice ?? 0) : 0;
+    const total = subtotalTotal + wrapFeeTotal + messageCardFee;
 
     return {
       lines,
       stems: stemsTotal,
       subtotal: subtotalTotal,
-      discount: discountTotal,
-      wrapFee,
+      wrapFee: wrapFeeTotal,
+      messageCardFee,
       total,
       isValid: list.length > 0 && everyCustomLineValid
     };
@@ -390,7 +390,6 @@
         const name = (addition[lang] || addition.en).name;
         return count > 1 ? `${count} × ${name}` : name;
       });
-    if (line.messageCard) additionParts.push(t.messageCardSelected);
     const additions = additionParts.length ? ` · ${t.additionsLabel}: ${additionParts.join(', ')}` : '';
     return `${line.qty > 1 ? `${line.qty} × ` : ''}${lang === 'en' ? 'Custom bouquet' : 'Buket custom'} (${parts.join(', ')})${additions}`;
   }
@@ -402,7 +401,7 @@
       if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
       if (line.type === 'pot') return { type: 'pot', id: line.potKey, qty: line.qty };
       if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty };
-      return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, message_card: !!line.messageCard, stems: siteData.flowerOrder.reduce((out, key) => {
+      return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, stems: siteData.flowerOrder.reduce((out, key) => {
         const qty = (line.counts && line.counts[key]) || 0;
         if (qty) out[key] = qty;
         return out;
@@ -414,9 +413,12 @@
       itemData,
       totalStemCount: totals.stems,
       wrapId: selectedWrap,
-      giftMessage: orderNote,
+      messageCardEnabled,
+      messageCardFee: totals.messageCardFee,
+      giftMessage: messageCardEnabled ? orderNote : '',
+      recipientName: orderRecipientName,
+      cardSenderName: orderCardSenderName,
       productSubtotal: totals.subtotal + totals.wrapFee,
-      discountAmount: totals.discount,
       estimatedProductTotal: totals.total,
       currency: 'IDR', language: currentLang, isValid: totals.isValid
     };
@@ -452,9 +454,12 @@
       item_data: state.itemData,
       total_stems: state.totalStemCount,
       wrap: state.wrapId,
+      message_card_enabled: state.messageCardEnabled,
+      message_card_fee: state.messageCardFee,
       gift_message: state.giftMessage,
+      recipient_name: state.recipientName,
+      card_sender_name: state.cardSenderName,
       product_subtotal: state.productSubtotal,
-      discount_amount: state.discountAmount,
       estimated_product_total: state.estimatedProductTotal,
       currency: state.currency,
       source: 'website',
@@ -682,7 +687,7 @@
   function useCustomBouquet() {
     const tot = getCustomTotals();
     if (tot.isValid) {
-      addLine({ type: 'custom', counts: { ...customCounts }, additions: { ...customAdditions }, messageCard: customMessageCard, qty: 1 });
+      addLine({ type: 'custom', counts: { ...customCounts }, additions: { ...customAdditions }, qty: 1 });
       scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
@@ -718,7 +723,6 @@
       customCounts[k] = 0;
     });
     Object.keys(customAdditions).forEach(key => { customAdditions[key] = 0; });
-    customMessageCard = false;
     renderCustomBuilder();
     renderBouquetsUI();
     persistCart();
@@ -1242,8 +1246,6 @@
     setText('#custom-pick-label', t.customPickLabel);
     setText('#custom-additions-label', t.customAdditionsLabel);
     setText('#custom-additions-note', t.customAdditionsNote);
-    setText('#custom-message-card-label', t.customMessageCardLabel);
-    setText('#custom-message-card-note', t.customMessageCardNote);
     setText('#custom-reset-btn', t.resetLabel);
 
     const toggleBtn = document.getElementById('btn-toggle-custom');
@@ -1295,15 +1297,6 @@
         }
         if (btnToFocus) btnToFocus.focus();
       }
-    }
-
-    const messageCardInput = document.getElementById('custom-message-card');
-    if (messageCardInput) {
-      messageCardInput.checked = customMessageCard;
-      messageCardInput.onchange = event => {
-        customMessageCard = !!event.target.checked;
-        renderCustomBuilder();
-      };
     }
 
     // List of flower rows
@@ -1378,17 +1371,6 @@
     setText('#custom-est-label', t.estimateLabel);
     setText('#est-flowers-label', `${t.flowersLabel} (${tot.stems})`);
     setText('#est-flowers-val', tot.isValid ? formatRp(tot.flowersSubtotal) : '—');
-
-    const discountRow = document.getElementById('est-discount-row');
-    if (discountRow) {
-      if (tot.isValid && tot.discount > 0) {
-        discountRow.style.display = 'flex';
-        setText('#est-discount-label', interpolateRules(t.discountLabel));
-        setText('#est-discount-val', `− ${formatRp(tot.discount)}`);
-      } else {
-        discountRow.style.display = 'none';
-      }
-    }
 
     setText('#est-wrap-label', t.wrapFeeLabel);
     setText('#est-wrap-val', tot.isValid ? formatRp(tot.wrapFee) : '—');
@@ -1856,12 +1838,25 @@
       });
     }
 
-    // 3. Message card textarea
+    // 3. Message card: paid checkbox gates the textarea and its fee
+    const messageCardPrice = siteData.messageCardPrice ?? 0;
+    setText('#card-note-toggle-label', fillTemplate(t.cardCheckboxLabel || 'Tambahkan kartu ucapan (+{price})', { price: formatRp(messageCardPrice) }));
+    const cardToggle = document.getElementById('card-note-toggle');
+    const cardFieldsWrap = document.getElementById('card-note-fields');
     const noteInput = document.getElementById('card-note-input');
     const noteCounterEl = document.getElementById('card-note-counter');
     const updateNoteCounter = () => {
       if (noteCounterEl) noteCounterEl.textContent = fillTemplate(t.cardNoteCounter || '{n}/{max}', { n: orderNote.length, max: CARD_NOTE_MAX });
     };
+    if (cardToggle) {
+      cardToggle.checked = messageCardEnabled;
+      cardToggle.onchange = event => {
+        messageCardEnabled = !!event.target.checked;
+        renderOrderSection();
+        persistCart();
+      };
+    }
+    if (cardFieldsWrap) cardFieldsWrap.hidden = !messageCardEnabled;
     if (noteInput) {
       noteInput.placeholder = t.cardPlaceholder;
       noteInput.maxLength = CARD_NOTE_MAX;
@@ -1878,6 +1873,31 @@
         updateNoteCounter();
         renderSummaryIncludes();
         updateWhatsAppLink();
+        persistCart();
+      };
+    }
+
+    // 3b. Recipient & card-sender name (optional, order-level — replaces the
+    //     old gift-recipient fields that used to live in the checkout form).
+    //     Only relevant once a card is actually being added.
+    const giftDetailsFields = document.getElementById('gift-details-fields');
+    if (giftDetailsFields) giftDetailsFields.hidden = !messageCardEnabled;
+    setText('#gift-details-label', t.giftDetailsLabel);
+    setText('#recipient-name-order-label', t.recipientNameOrderLabel);
+    setText('#card-sender-order-label', t.cardSenderOrderLabel);
+    const recipientNameInput = document.getElementById('order-recipient-name');
+    if (recipientNameInput) {
+      if (recipientNameInput.value !== orderRecipientName) recipientNameInput.value = orderRecipientName;
+      recipientNameInput.oninput = (e) => {
+        orderRecipientName = e.target.value.slice(0, 120);
+        persistCart();
+      };
+    }
+    const cardSenderInput = document.getElementById('order-card-sender-name');
+    if (cardSenderInput) {
+      if (cardSenderInput.value !== orderCardSenderName) cardSenderInput.value = orderCardSenderName;
+      cardSenderInput.oninput = (e) => {
+        orderCardSenderName = e.target.value.slice(0, 120);
         persistCart();
       };
     }
@@ -1956,8 +1976,11 @@
             allIncludes.push(`${t.wrapFeeLabel}: ${formatRp(cartTotals.wrapFee)}`);
           }
           allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
-          if (orderNote.trim()) {
-            allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
+          if (messageCardEnabled) {
+            const feeText = cartTotals.messageCardFee > 0 ? ` (+${formatRp(cartTotals.messageCardFee)})` : '';
+            allIncludes.push(orderNote.trim()
+              ? `${t.cardLinePrefix}: "${orderNote.trim()}"${feeText}`
+              : `${t.messageCardSelected}${feeText}`);
           }
         }
 
@@ -2102,7 +2125,7 @@
 
       const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
       const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
-      const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
+      const cardTxt = messageCardEnabled && orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
       let waMsg = '';
       if (cart.length === 1) {
@@ -2124,7 +2147,6 @@
               const name = (addition[currentLang] || addition.en).name;
               return count > 1 ? `${count} × ${name}` : name;
             });
-          if (line.messageCard) additionNames.push(t.messageCardSelected);
           const customItems = [...flowerNames, ...additionNames.map(item => `${t.additionsLabel}: ${item}`)];
           const flowerList = customItems.map(item => `• ${item}`).join('\n');
           const vars = {
@@ -2856,14 +2878,14 @@
     }
     setText('#checkout-subtotal-label', en ? 'Product subtotal' : 'Subtotal produk');
     setText('#checkout-subtotal', formatRp(state.productSubtotal));
-    setText('#checkout-discount-label', en ? 'Discount' : 'Potongan');
-    setText('#checkout-discount', `− ${formatRp(state.discountAmount)}`);
-    const discountRow = document.getElementById('checkout-discount-row');
-    if (discountRow) discountRow.hidden = state.discountAmount === 0;
+    setText('#checkout-card-fee-label', en ? 'Message card' : 'Kartu ucapan');
+    setText('#checkout-card-fee', formatRp(state.messageCardFee));
+    const cardFeeRow = document.getElementById('checkout-card-fee-row');
+    if (cardFeeRow) cardFeeRow.hidden = !state.messageCardEnabled;
     setText('#checkout-total-label', en ? 'Estimated product total' : 'Estimasi total produk');
     setText('#checkout-total', formatRp(state.estimatedProductTotal));
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    const cardNoteText = orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
+    const cardNoteText = state.messageCardEnabled && orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
     setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
     setText('#checkout-notice', en ? 'No payment is required at this stage. We will confirm your address, delivery fee, and final total through WhatsApp.' : 'Belum ada pembayaran pada tahap ini. Kami akan mengonfirmasi alamat, ongkos kirim, dan total akhir melalui WhatsApp.');
     setText('#checkout-edit', en ? 'Edit order' : 'Ubah pesanan');
@@ -2892,35 +2914,52 @@
     const copy = en ? {
       '#checkout-form-eyebrow': 'Order form', '#checkout-form-title': 'Complete your order details', '#buyer-legend': 'Buyer',
       '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
-      '#optional-email': '(optional)', '#recipient-legend': 'Recipient', '#order-for-label': 'Who is this order for?', '#recipient-name-label': 'Recipient name',
-      '#recipient-phone-label': 'Recipient WhatsApp number', '#recipient-permission-label': 'May we contact the recipient?', '#recipient-help': 'Recipient details are used only to coordinate delivery.',
-      '#delivery-legend': 'Delivery', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
-      '#directions-label': 'Location directions (optional)', '#date-label': 'Preferred date', '#window-label': 'Time (optional)',
-      '#delivery-help': 'The date and time are preferences and will be confirmed through WhatsApp.', '#details-legend': 'Gift details and notes',
-      '#sender-label': 'Sender name on card (optional)', '#anonymous-label': 'Send anonymously', '#notes-label': 'Additional notes (optional)',
-      '#price-note': 'Requests that affect the price will be confirmed before payment.',
+      '#location-legend': 'Location & delivery', '#location-type-label': 'Your location', '#regency-label': 'City/regency',
+      '#delivery-method-label': 'Delivery method', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
+      '#pickup-help': 'The pickup address will be confirmed and sent via WhatsApp.',
+      '#outside-bali-help': 'Delivery will be sent to the address you write — please make sure it is correct.',
+      '#date-label': 'Preferred date', '#delivery-help': 'The date is a preference and will be confirmed through WhatsApp.',
       '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
     } : {
       '#checkout-form-eyebrow': 'Formulir pesanan', '#checkout-form-title': 'Lengkapi detail pesanan', '#buyer-legend': 'Data pemesan',
       '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
-      '#optional-email': '(opsional)', '#recipient-legend': 'Penerima', '#order-for-label': 'Pesanan ini untuk siapa?', '#recipient-name-label': 'Nama penerima',
-      '#recipient-phone-label': 'Nomor WhatsApp penerima', '#recipient-permission-label': 'Bolehkah kami menghubungi penerima?', '#recipient-help': 'Detail penerima hanya digunakan untuk koordinasi pengiriman.',
-      '#delivery-legend': 'Pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
-      '#directions-label': 'Patokan atau petunjuk lokasi (opsional)', '#date-label': 'Tanggal yang diinginkan', '#window-label': 'Waktu (opsional)',
-      '#delivery-help': 'Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.', '#details-legend': 'Detail hadiah dan catatan',
-      '#sender-label': 'Nama pengirim pada kartu (opsional)', '#anonymous-label': 'Kirim secara anonim', '#notes-label': 'Catatan tambahan (opsional)',
-      '#price-note': 'Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.',
+      '#location-legend': 'Lokasi & pengiriman', '#location-type-label': 'Lokasi Anda', '#regency-label': 'Kabupaten/kota',
+      '#delivery-method-label': 'Metode pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
+      '#pickup-help': 'Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui WhatsApp.',
+      '#outside-bali-help': 'Pengiriman akan dikirim sesuai dengan alamat yang ditulis, mohon diperhatikan dengan benar.',
+      '#date-label': 'Tanggal yang diinginkan', '#delivery-help': 'Tanggal merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.',
       '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
     const form = document.getElementById('checkout-form');
     const setOptions = (name, options) => {
       const select = form.elements[name];
-      options.forEach((label, index) => { select.options[index].textContent = label; });
+      options.forEach((label, index) => { if (select.options[index]) select.options[index].textContent = label; });
     };
-    setOptions('order_for', en ? ['For myself', 'Someone else or a gift'] : ['Untuk saya sendiri', 'Untuk orang lain atau hadiah']);
-    setOptions('recipient_contact_permission', en ? ['Choose one', 'Yes', 'Contact me first', 'Do not contact the recipient; it is a surprise'] : ['Pilih satu', 'Ya, boleh', 'Hubungi saya terlebih dahulu', 'Jangan hubungi penerima; ini kejutan']);
-    setOptions('preferred_window', en ? ['Flexible', 'Morning', 'Afternoon', 'Evening'] : ['Fleksibel', 'Pagi', 'Siang', 'Sore']);
+    setOptions('location_type', en ? ['In Bali', 'Outside Bali'] : ['Di Bali', 'Luar Bali']);
+    setOptions('delivery_method', en ? ['Grab/Gojek (you book it yourself)', 'Self pickup at the studio'] : ['Grab/Gojek (saya pesan sendiri)', 'Ambil sendiri di studio']);
+
+    const regencySelect = form.elements['regency'];
+    if (regencySelect) {
+      const regencies = siteData.baliRegencies || [];
+      const currentValue = regencySelect.value;
+      while (regencySelect.options.length > 1) regencySelect.remove(1);
+      regencySelect.options[0].textContent = en ? 'Choose one' : 'Pilih satu';
+      regencies.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        regencySelect.appendChild(opt);
+      });
+      if (regencies.includes(currentValue)) regencySelect.value = currentValue;
+    }
+
+    const dateInput = form.elements['preferred_date'];
+    if (dateInput) {
+      const today = new Date();
+      const minDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      dateInput.min = minDate;
+    }
   }
 
   /**
@@ -2960,6 +2999,9 @@
     }
     if (field.validity.typeMismatch) {
       return en ? 'Enter a valid email address.' : 'Masukkan alamat email yang valid.';
+    }
+    if (field.validity.rangeUnderflow && field.type === 'date') {
+      return en ? 'Choose today or a later date.' : 'Pilih hari ini atau tanggal setelahnya.';
     }
     return en ? 'This field needs attention.' : 'Kolom ini perlu diperiksa.';
   }
@@ -3045,22 +3087,38 @@
       setText('#checkout-form-summary', `${checkoutAttempt.reference} · ${checkoutAttempt.state.items.join('; ')} · ${formatRp(checkoutAttempt.state.estimatedProductTotal)}`);
       document.querySelector('#checkout-form input')?.focus();
     });
-    const orderFor = document.querySelector('#checkout-form [name="order_for"]');
-    const giftFields = document.getElementById('gift-fields');
-    const toggleGiftFields = () => {
-      const isGift = orderFor.value === 'gift';
-      giftFields.hidden = !isGift;
-      giftFields.querySelectorAll('input, select').forEach(field => {
-        field.required = isGift;
+    const locationType = document.querySelector('#checkout-form [name="location_type"]');
+    const baliFields = document.getElementById('bali-fields');
+    const outsideBaliFields = document.getElementById('outside-bali-fields');
+    const toggleLocationFields = () => {
+      const isBali = locationType.value !== 'luar_bali';
+      baliFields.hidden = !isBali;
+      outsideBaliFields.hidden = isBali;
+      baliFields.querySelectorAll('input, select').forEach(field => {
+        field.required = isBali;
+        if (document.getElementById(fieldErrorId(field))) {
+          setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
+        }
+      });
+      outsideBaliFields.querySelectorAll('input, textarea').forEach(field => {
+        field.required = !isBali;
         // A field that was invalid while required must not keep showing
         // a stale error once toggling makes it optional again.
         if (document.getElementById(fieldErrorId(field))) {
           setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
         }
       });
-      if (isGift) giftFields.querySelector('input')?.focus();
+      if (!isBali) outsideBaliFields.querySelector('textarea, input')?.focus();
     };
-    orderFor.addEventListener('change', toggleGiftFields);
+    locationType.addEventListener('change', toggleLocationFields);
+    toggleLocationFields();
+    const deliveryMethod = document.querySelector('#checkout-form [name="delivery_method"]');
+    const pickupHelp = document.getElementById('pickup-help');
+    const togglePickupHelp = () => {
+      if (pickupHelp) pickupHelp.hidden = deliveryMethod.value !== 'self_pickup';
+    };
+    deliveryMethod.addEventListener('change', togglePickupHelp);
+    togglePickupHelp();
     const checkoutFormEl = document.getElementById('checkout-form');
     checkoutFormEl.addEventListener('submit', submitWebsiteOrder);
     // Filling in a field that already shows an error clears only that
@@ -3195,15 +3253,26 @@
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
       bumpCustomAddition: bumpCustomAddition,
-      setCustomMessageCard: (checked) => {
-        customMessageCard = !!checked;
-        renderCustomBuilder();
-      },
       resetCustom: resetCustomCounts,
       useCustom: useCustomBouquet,
       selectWrap: selectWrap,
       setOrderNote: (note) => {
         orderNote = typeof note === 'string' ? note : '';
+        renderOrderSection();
+        persistCart();
+      },
+      setMessageCardEnabled: (checked) => {
+        messageCardEnabled = !!checked;
+        renderOrderSection();
+        persistCart();
+      },
+      setOrderRecipientName: (name) => {
+        orderRecipientName = typeof name === 'string' ? name.slice(0, 120) : '';
+        renderOrderSection();
+        persistCart();
+      },
+      setOrderCardSenderName: (name) => {
+        orderCardSenderName = typeof name === 'string' ? name.slice(0, 120) : '';
         renderOrderSection();
         persistCart();
       },
@@ -3214,9 +3283,11 @@
         selectedPackage = 1;
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
         customAdditions = { rounded: 0, fern: 0 };
-        customMessageCard = false;
         selectedWrap = 'kraft';
         orderNote = '';
+        messageCardEnabled = false;
+        orderRecipientName = '';
+        orderCardSenderName = '';
         checkoutAttempt = null;
         activeCategory = 'all';
         renderAll();
@@ -3246,7 +3317,9 @@
         selectedPackage,
         customCounts: { ...customCounts },
         customAdditions: { ...customAdditions },
-        customMessageCard,
+        messageCardEnabled,
+        orderRecipientName,
+        orderCardSenderName,
         selectedWrap,
         orderNote,
         activeCategory,

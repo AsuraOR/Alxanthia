@@ -29,16 +29,18 @@ Never paste your webhook secret, Google credentials, Cloudflare API token, or Mi
 5. Click cell `A1` and paste this tab-separated header row:
 
 ```text
-Order Reference	Submitted At	Buyer Name	Buyer WhatsApp	Buyer Email	Order For	Recipient Name	Recipient WhatsApp	Recipient Contact Permission	Address	City/Regency	Postal Code	Location Directions	Preferred Date	Preferred Window	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Gift Message	Card Sender Name	Anonymous Gift	Additional Notes	Product Subtotal	Discount	Estimated Product Total	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
+Order Reference	Submitted At	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Message Card Fee	Gift Message	Recipient Name	Card Sender Name	Product Subtotal	Estimated Product Total	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
 ```
 
 6. If the headings stay in one cell, select it and choose **Data → Split text to columns → Tab**.
 7. Choose **View → Freeze → 1 row**.
 8. Select row 1 and choose **Data → Create a filter**.
 
+A quick guide to the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank — the customer books their own Grab/Gojek courier, or picks up in person, so no address is collected. For an out-of-Bali order, it's the reverse: **Address/City/Postal Code** are filled and **Regency/Delivery Method** stay blank. Always check **Location Type** first before reading the other columns.
+
 ### Add the status dropdowns
 
-For **Payment Status**, choose **Data → Data validation → Dropdown** and add exactly:
+For **Payment Status** (column AA), choose **Data → Data validation → Dropdown** and add exactly:
 
 ```text
 Awaiting confirmation
@@ -49,7 +51,7 @@ Refunded
 Cancelled
 ```
 
-For **Work Phase**, add exactly:
+For **Work Phase** (column AB), add exactly:
 
 ```text
 Not started
@@ -64,13 +66,13 @@ Delivered
 Cancelled
 ```
 
-In cell `AC2` (**Final Total**), enter this formula and copy it down the column:
+In cell `Y2` (**Final Total**), enter this formula and copy it down the column:
 
 ```excel
-=IF(AA2="","",AA2+IF(AB2="",0,AB2))
+=IF(W2="","",W2+IF(X2="",0,X2))
 ```
 
-Format the Product Subtotal, Discount, Estimated Product Total, Shipping Fee, and Final Total columns as Indonesian rupiah while keeping them numeric.
+Format the Product Subtotal, Message Card Fee, Estimated Product Total, Shipping Fee, and Final Total columns as Indonesian rupiah while keeping them numeric.
 
 ---
 
@@ -84,6 +86,7 @@ Format the Product Subtotal, Discount, Estimated Product Total, Shipping Fee, an
 ```javascript
 const SHEET_NAME = 'Orders';
 const WEBHOOK_SECRET = 'REPLACE_WITH_YOUR_PRIVATE_RANDOM_SECRET';
+const BALI_REGENCIES = ['Denpasar', 'Badung', 'Gianyar', 'Tabanan', 'Klungkung', 'Bangli', 'Karangasem', 'Buleleng', 'Jembrana'];
 
 function doPost(event) {
   try {
@@ -105,18 +108,18 @@ function doPost(event) {
         return jsonResponse({ ok: true, order_reference: order.order_reference, duplicate: true });
       }
 
+      const isBali = order.location_type === 'bali';
       sheet.appendRow([
         safeText(order.order_reference), new Date(), safeText(order.buyer_name),
-        safeText(order.buyer_whatsapp), safeText(order.buyer_email), safeText(order.order_for),
-        safeText(order.recipient_name), safeText(order.recipient_whatsapp),
-        safeText(order.recipient_contact_permission), safeText(order.address), safeText(order.city),
-        safeText(order.postal_code), safeText(order.location_directions), safeText(order.preferred_date),
-        safeText(order.preferred_window), safeText(order.order_mode), safeText(order.order_summary),
+        safeText(order.buyer_whatsapp), safeText(order.location_type),
+        isBali ? safeText(order.regency) : '', isBali ? safeText(order.delivery_method) : '',
+        isBali ? '' : safeText(order.address), isBali ? '' : safeText(order.city), isBali ? '' : safeText(order.postal_code),
+        safeText(order.preferred_date), safeText(order.order_mode), safeText(order.order_summary),
         JSON.stringify(order.item_data || []), safeNumber(order.total_stems), safeText(order.wrap),
-        safeText(order.gift_message), safeText(order.card_sender_name), safeText(order.anonymous_gift),
-        safeText(order.additional_notes), safeNumber(order.product_subtotal),
-        safeNumber(order.discount_amount), safeNumber(order.estimated_product_total), '', '', '',
-        'Awaiting confirmation', 'Not started', '', '', ''
+        order.message_card_enabled ? 'Yes' : 'No', safeNumber(order.message_card_fee || 0),
+        safeText(order.gift_message), safeText(order.recipient_name), safeText(order.card_sender_name),
+        safeNumber(order.product_subtotal), safeNumber(order.estimated_product_total),
+        '', '', '', 'Awaiting confirmation', 'Not started', '', '', ''
       ]);
     } finally {
       lock.releaseLock();
@@ -130,24 +133,32 @@ function doPost(event) {
 
 function validateOrder(order) {
   const required = [
-    'order_reference', 'buyer_name', 'buyer_whatsapp', 'order_for', 'address',
-    'city', 'postal_code', 'preferred_date', 'order_mode', 'order_summary', 'wrap'
+    'order_reference', 'buyer_name', 'buyer_whatsapp', 'location_type',
+    'preferred_date', 'order_mode', 'order_summary', 'wrap'
   ];
   required.forEach(function (field) {
     if (!String(order[field] || '').trim()) throw new Error('Missing required field: ' + field);
   });
   if (!/^ALX-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(order.order_reference)) throw new Error('Invalid order reference.');
   if (!/^[+0-9 ()-]{8,20}$/.test(order.buyer_whatsapp)) throw new Error('Invalid buyer WhatsApp number.');
-  if (!['self', 'gift'].includes(order.order_for)) throw new Error('Invalid recipient selection.');
-  if (order.order_for === 'gift' && (!order.recipient_name || !order.recipient_whatsapp || !order.recipient_contact_permission)) {
-    throw new Error('Gift recipient information is incomplete.');
+  if (!['bali', 'luar_bali'].includes(order.location_type)) throw new Error('Invalid location type.');
+  if (order.location_type === 'bali') {
+    if (BALI_REGENCIES.indexOf(order.regency) === -1) throw new Error('Invalid or missing regency for a Bali order.');
+    if (['grab_gojek', 'self_pickup'].indexOf(order.delivery_method) === -1) throw new Error('Invalid delivery method for a Bali order.');
+  } else {
+    if (!String(order.address || '').trim()) throw new Error('Missing delivery address.');
+    if (!String(order.city || '').trim()) throw new Error('Missing city.');
+    if (!String(order.postal_code || '').trim()) throw new Error('Missing postal code.');
   }
-  if (!['stem', 'package', 'custom'].includes(order.order_mode)) throw new Error('Invalid order mode.');
-  if (!['kraft', 'cream', 'sage', 'blush'].includes(order.wrap)) throw new Error('Invalid wrapping option.');
+  if (['stem', 'package', 'custom'].indexOf(order.order_mode) === -1) throw new Error('Invalid order mode.');
+  if (['kraft', 'cream', 'sage', 'blush'].indexOf(order.wrap) === -1) throw new Error('Invalid wrapping option.');
   if (!order.acknowledgement) throw new Error('Acknowledgement is required.');
-  ['total_stems', 'product_subtotal', 'discount_amount', 'estimated_product_total'].forEach(function (field) {
+  ['total_stems', 'product_subtotal', 'estimated_product_total'].forEach(function (field) {
     if (!Number.isFinite(Number(order[field])) || Number(order[field]) < 0) throw new Error('Invalid number: ' + field);
   });
+  if (order.message_card_fee !== undefined && (!Number.isFinite(Number(order.message_card_fee)) || Number(order.message_card_fee) < 0)) {
+    throw new Error('Invalid number: message_card_fee');
+  }
   if (!Array.isArray(order.item_data) || !order.item_data.length) throw new Error('Order items are missing.');
 }
 
@@ -190,6 +201,8 @@ function jsonResponse(value) {
 5. Choose **Who has access: Anyone**.
 6. Click **Deploy**, select your Google account, and approve the requested spreadsheet access.
 7. Copy the Web App URL ending in `/exec`. Keep it private for the next part.
+
+If you ever change the list of Bali kabupaten/kota in `site-content.js` (`baliRegencies`), update the matching `BALI_REGENCIES` list in this script too, then redeploy (**Deploy → Manage deployments → edit → New version**) — otherwise the script will reject valid orders from a newly added regency.
 
 ---
 
@@ -252,6 +265,8 @@ function reply(body, status, headers) {
 8. Save the variables and redeploy if Cloudflare asks.
 9. Copy the public Worker URL, such as `https://alxanthia-order-endpoint.your-name.workers.dev`.
 
+The Worker code itself never needs to change when you add fields, rename regencies, or adjust prices — it forwards whatever the website sends. Only Part 1 (Sheet columns) and Part 2 (Apps Script validation) need updating for that kind of change.
+
 ---
 
 ## Part 4 — Connect the website
@@ -278,21 +293,26 @@ If you prefer, send the public Worker URL to the developer maintaining the websi
 
 1. Deploy the updated website.
 2. Open the production website and select one Gerbera.
-3. Open **Tinjau pesanan** and write down the reference.
-4. Continue, complete the form with test information, accept the acknowledgement, and click **Simpan pesanan**.
-5. Confirm the button temporarily reads **Menyimpan…**.
-6. Confirm the website displays **Pesanan Anda sudah dicatat**.
-7. Open the `Orders` sheet and confirm exactly one row was added with the same reference.
-8. Confirm Payment Status is **Awaiting confirmation** and Work Phase is **Not started**.
-9. Click **Lanjut ke WhatsApp** and confirm the message has the reference, name, order, total, and date—but not the address, phone numbers, email, gift message, or notes.
+3. Optionally check **Tambahkan kartu ucapan** and write a message, and fill in an optional recipient/sender name.
+4. Open **Tinjau pesanan** and write down the reference.
+5. Continue to the form. Fill in your name and WhatsApp number.
+6. Test the **Di Bali** path: pick a kabupaten/kota and a delivery method (try both Grab/Gojek and Ambil sendiri).
+7. Switch to **Luar Bali** and confirm the address/city/postal code fields appear instead, with the courier note beneath them.
+8. Try picking a date before today — it must be rejected. Pick today or a later date.
+9. Accept the acknowledgement and click **Simpan pesanan**.
+10. Confirm the button temporarily reads **Menyimpan…**.
+11. Confirm the website displays **Pesanan Anda sudah dicatat**.
+12. Open the `Orders` sheet and confirm exactly one row was added with the same reference, with the location columns filled correctly for the path you tested (Bali columns filled and address columns blank, or vice versa).
+13. Confirm Payment Status is **Awaiting confirmation** and Work Phase is **Not started**.
+14. Click **Lanjut ke WhatsApp** and confirm the message has the reference, name, order, total, and date—but not the address, WhatsApp number, gift message, or recipient/sender name.
 
 ## Troubleshooting
 
-### “Penyimpanan pesanan belum dikonfigurasi”
+### "Penyimpanan pesanan belum dikonfigurasi"
 
 The Worker URL is still missing from `site-content.js`, or the updated website has not been deployed.
 
-### “Kami belum dapat memastikan pesanan tersimpan”
+### "Kami belum dapat memastikan pesanan tersimpan"
 
 1. Look in the Sheet for the displayed reference before retrying.
 2. Open the Cloudflare Worker logs.
@@ -305,6 +325,10 @@ The Worker URL is still missing from `site-content.js`, or the updated website h
 
 Confirm the worksheet is named exactly `Orders`, the Apps Script was created from that spreadsheet, and the deployed URL—not the editor URL—was placed in Cloudflare.
 
+### A valid-looking Bali order is rejected
+
+Check that the regency the customer picked is spelled exactly the same in `site-content.js`'s `baliRegencies` list and in the Apps Script's `BALI_REGENCIES` list — a mismatch after either one was edited is the most common cause.
+
 ## Safety reminder
 
-Browser totals can be edited by a technically skilled visitor. Treat every submission as an order request. Before sending a Midtrans Payment Link, verify the current product price, stock/capacity, address, delivery fee, and final total. Mark an order Paid only after Midtrans itself confirms the payment.
+Browser totals can be edited by a technically skilled visitor. Treat every submission as an order request. Before sending a Midtrans Payment Link, verify the current product price, stock/capacity, delivery details, delivery fee, and final total. Mark an order Paid only after Midtrans itself confirms the payment.

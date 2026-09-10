@@ -38,7 +38,8 @@ mana yang harus dibuka untuk mengubah apa.
 | Judul & kalimat pembuka (Hero) | `site-content.js` | `translations.id.heroTitle`, `heroSub` |
 | Bunga satuan (nama, harga, deskripsi, foto) | `site-content.js` | `flowers.{Sunflower / Rose / Tulip / Gerbera}` |
 | Paket buket (harga, isi tangkai, foto) | `site-content.js` | `packages` (array 4 paket) |
-| Ongkos bungkus, minimal tangkai, diskon | `site-content.js` | `wrapFee`, `minStems`, `bulkFrom`, `bulkRate` |
+| Ongkos bungkus (per berapa tangkai), minimal tangkai, harga kartu ucapan | `site-content.js` | `wrapFeePerUnit`, `wrapFeeUnitStems`, `minStems`, `messageCardPrice` |
+| Daftar kabupaten/kota Bali di formulir pemesanan | `site-content.js` | `baliRegencies` |
 | Pilihan warna kertas bungkus | `site-content.js` | `wraps` |
 | Teks & foto 4 langkah "Cara Dibuat" | `site-content.js` | `translations.id.steps`, `stepPhotos` |
 | Teks bagian "Bahannya" | `site-content.js` | `translations.id.matTitle`, `matBody` |
@@ -126,18 +127,35 @@ Ada di `packages: [ ... ]` — empat paket berurutan (3, 5, 9, 15 tangkai):
 ## 5. Buket Custom & Aturan Harga
 
 ```js
-wrapFee: 35000,     // biaya bungkus & pita, dikenakan sekali per keranjang
-bulkFrom: 9,         // mulai berapa tangkai diskon berlaku
-bulkRate: 0.10,      // besaran diskon (0.10 = 10%)
-minStems: 3,         // minimal tangkai untuk buket custom
+wrapFeeUnitStems: 3,     // setiap berapa tangkai biaya bungkus dikenakan
+wrapFeePerUnit: 35000,   // biaya bungkus & pita untuk setiap kelipatan di atas
+messageCardPrice: 5000,  // harga kartu ucapan, dikenakan setelah kotaknya dicentang
+minStems: 3,             // minimal tangkai untuk buket custom
 ```
-Ubah angka-angka ini untuk mengubah aturan harga buket custom di seluruh
-situs (harga akan otomatis terhitung ulang, tidak perlu ubah tempat lain).
+Biaya bungkus & pita sekarang mengikuti jumlah bunga: setiap kelipatan
+`wrapFeeUnitStems` tangkai (sisa tangkai yang belum genap tetap dihitung satu
+kelipatan penuh) menambah satu kali `wrapFeePerUnit` — jadi buket 3 tangkai
+kena satu kali biaya, buket 4–6 tangkai kena dua kali, dan seterusnya. Ubah
+kedua angka ini untuk mengganti besar biayanya atau setiap berapa tangkai ia
+bertambah; harga akan otomatis terhitung ulang di seluruh situs, tidak perlu
+ubah tempat lain.
+
+`messageCardPrice` adalah harga kartu ucapan yang muncul di kotak centang
+"Tambahkan kartu ucapan" pada bagian Sentuhan Akhir — ubah angka ini untuk
+mengganti harganya.
 
 Pilihan warna kertas bungkus ada di `wraps` — setiap warna punya `key` (nama
 internal, jangan diubah) dan `swatch` (kode warna, boleh diganti untuk warna
 kertas baru). Nama warna yang tampil ke pembeli ada di
 `translations.id.wrapNames` (urutannya harus sama dengan `wraps`).
+
+Daftar kabupaten/kota Bali yang muncul di formulir pemesanan (saat pembeli
+memilih "Di Bali") ada di `baliRegencies` — sebuah daftar nama kota/kabupaten.
+Tambah, hapus, atau ubah ejaan namanya sesuai kebutuhan. **Penting:** kalau
+Anda mengubah daftar ini, minta developer atau Anda sendiri memperbarui
+daftar `BALI_REGENCIES` yang sama di Google Apps Script (lihat
+`CONFIGURE-SUBMISSION-ENDPOINT.md`) — kalau tidak, pesanan dari kota yang baru
+ditambahkan akan ditolak oleh sistem penyimpanan.
 
 ## 6. Cara Dibuat (4 Langkah + Foto)
 

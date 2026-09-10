@@ -572,15 +572,8 @@
             </div>
             <fieldset class="custom-additions-fieldset">
               <legend class="step-label" id="custom-additions-label">Pilih tambahan</legend>
-              <p class="custom-additions-note" id="custom-additions-note">Tambahkan daun pilihan atau kartu ucapan.</p>
+              <p class="custom-additions-note" id="custom-additions-note">Tambahkan daun pilihan untuk buket Anda.</p>
               <div class="custom-additions-grid" id="custom-additions-grid"></div>
-              <label class="custom-message-card-option">
-                <input type="checkbox" id="custom-message-card" />
-                <span>
-                  <strong id="custom-message-card-label">Tambahkan kartu ucapan</strong>
-                  <small id="custom-message-card-note">Gratis · isi pesannya dapat ditulis saat menyelesaikan pesanan.</small>
-                </span>
-              </label>
             </fieldset>
           </div>
 
@@ -591,10 +584,6 @@
               <div class="custom-est-row">
                 <dt id="est-flowers-label">Bunga (0)</dt>
                 <dd id="est-flowers-val">Rp 0</dd>
-              </div>
-              <div class="custom-est-row est-discount-row" id="est-discount-row" style="display: none;">
-                <dt id="est-discount-label">Potongan grosir (9+ tangkai)</dt>
-                <dd id="est-discount-val">− Rp 0</dd>
               </div>
               <div class="custom-est-row">
                 <dt id="est-wrap-label">Bungkus & pita</dt>
@@ -653,14 +642,30 @@
             <!-- Dynamically populated wrap chips -->
           </div>
 
-          <!-- Handwritten Message Card Textarea -->
+          <!-- Handwritten Message Card (paid add-on, checkbox-gated) -->
           <h3 class="step-label" id="card-label">Kartu ucapan</h3>
-          <textarea id="card-note-input" class="card-note-textarea" rows="4" maxlength="200"
-            placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
-          <div class="card-note-footer">
-            <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil,
-              tanpa biaya tambahan.</p>
-            <span class="card-note-counter" id="card-note-counter" aria-live="polite"></span>
+          <label class="check-label message-card-option">
+            <input type="checkbox" id="card-note-toggle" />
+            <span id="card-note-toggle-label">Tambahkan kartu ucapan (+Rp 5.000)</span>
+          </label>
+          <div id="card-note-fields" hidden>
+            <textarea id="card-note-input" class="card-note-textarea" rows="4" maxlength="200"
+              placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
+            <div class="card-note-footer">
+              <p class="card-note-hint" id="card-note-hint">Ditulis tangan di kartu kecil.</p>
+              <span class="card-note-counter" id="card-note-counter" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <!-- Recipient & Card Sender Name (optional, only relevant once a card is added) -->
+          <div id="gift-details-fields" hidden>
+            <h3 class="step-label" id="gift-details-label">Detail penerima (opsional)</h3>
+            <div class="form-row">
+              <label><span id="recipient-name-order-label">Nama penerima</span><input id="order-recipient-name"
+                  autocomplete="name"></label>
+              <label><span id="card-sender-order-label">Nama pengirim pada kartu</span><input
+                  id="order-card-sender-name"></label>
+            </div>
           </div>
         </div>
 
@@ -908,9 +913,9 @@
             <dt id="checkout-subtotal-label">Subtotal produk</dt>
             <dd id="checkout-subtotal"></dd>
           </div>
-          <div id="checkout-discount-row">
-            <dt id="checkout-discount-label">Potongan</dt>
-            <dd id="checkout-discount"></dd>
+          <div id="checkout-card-fee-row">
+            <dt id="checkout-card-fee-label">Kartu ucapan</dt>
+            <dd id="checkout-card-fee"></dd>
           </div>
           <div class="checkout-total">
             <dt id="checkout-total-label">Estimasi total produk</dt>
@@ -938,60 +943,37 @@
                 autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" required></label>
             <p class="form-help" id="buyer-help">Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan
               pembayaran.</p>
-            <label><span>Email <small id="optional-email">(opsional)</small></span><input name="buyer_email"
-                type="email" autocomplete="email"></label>
           </fieldset>
           <fieldset>
-            <legend id="recipient-legend">Penerima</legend>
-            <label><span id="order-for-label">Pesanan ini untuk siapa?</span><select name="order_for" required>
-                <option value="self">Untuk saya sendiri</option>
-                <option value="gift">Untuk orang lain atau hadiah</option>
+            <legend id="location-legend">Lokasi & pengiriman</legend>
+            <label><span id="location-type-label">Lokasi Anda</span><select name="location_type" required>
+                <option value="bali">Di Bali</option>
+                <option value="luar_bali">Luar Bali</option>
               </select></label>
-            <div id="gift-fields" hidden>
-              <label><span id="recipient-name-label">Nama penerima</span><input name="recipient_name"
-                  autocomplete="name"></label>
-              <label><span id="recipient-phone-label">Nomor WhatsApp penerima</span><input name="recipient_whatsapp"
-                  type="tel" autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}"></label>
-              <label><span id="recipient-permission-label">Bolehkah kami menghubungi penerima?</span><select
-                  name="recipient_contact_permission">
+            <div id="bali-fields">
+              <label><span id="regency-label">Kabupaten/kota</span><select name="regency">
                   <option value="">Pilih satu</option>
-                  <option value="yes">Ya, boleh</option>
-                  <option value="buyer_first">Hubungi saya terlebih dahulu</option>
-                  <option value="surprise">Jangan hubungi penerima; ini kejutan</option>
                 </select></label>
-              <p class="form-help" id="recipient-help">Detail penerima hanya digunakan untuk koordinasi pengiriman.</p>
+              <label><span id="delivery-method-label">Metode pengiriman</span><select name="delivery_method">
+                  <option value="grab_gojek">Grab/Gojek (saya pesan sendiri)</option>
+                  <option value="self_pickup">Ambil sendiri di studio</option>
+                </select></label>
+              <p class="form-help" id="pickup-help" hidden>Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui
+                WhatsApp.</p>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend id="delivery-legend">Pengiriman</legend>
-            <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3"
-                autocomplete="street-address" required></textarea></label>
-            <div class="form-row"><label><span id="city-label">Kota atau kabupaten</span><input name="city"
-                  autocomplete="address-level2" required></label><label><span id="postal-label">Kode pos</span><input
-                  name="postal_code" autocomplete="postal-code" inputmode="numeric" required></label></div>
-            <label><span id="directions-label">Patokan atau petunjuk lokasi (opsional)</span><input
-                name="location_directions"></label>
-            <div class="form-row"><label><span id="date-label">Tanggal yang diinginkan</span><input
-                  name="preferred_date" type="date" required></label><label><span id="window-label">Waktu
-                  (opsional)</span><select name="preferred_window">
-                  <option value="">Fleksibel</option>
-                  <option value="morning">Pagi</option>
-                  <option value="afternoon">Siang</option>
-                  <option value="evening">Sore</option>
-                </select></label></div>
-            <p class="form-help" id="delivery-help">Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui
+            <div id="outside-bali-fields" hidden>
+              <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3"
+                  autocomplete="street-address"></textarea></label>
+              <div class="form-row"><label><span id="city-label">Kota atau kabupaten</span><input name="city"
+                    autocomplete="address-level2"></label><label><span id="postal-label">Kode pos</span><input
+                    name="postal_code" autocomplete="postal-code" inputmode="numeric"></label></div>
+              <p class="form-help" id="outside-bali-help">Pengiriman akan dikirim sesuai dengan alamat yang ditulis,
+                mohon diperhatikan dengan benar.</p>
+            </div>
+            <label><span id="date-label">Tanggal yang diinginkan</span><input name="preferred_date" type="date"
+                required></label>
+            <p class="form-help" id="delivery-help">Tanggal merupakan preferensi dan akan dikonfirmasi melalui
               WhatsApp.</p>
-          </fieldset>
-          <fieldset>
-            <legend id="details-legend">Detail hadiah dan catatan</legend>
-            <label><span id="sender-label">Nama pengirim pada kartu (opsional)</span><input
-                name="card_sender_name"></label>
-            <label class="check-label"><input name="anonymous_gift" type="checkbox"><span id="anonymous-label">Kirim
-                secara anonim</span></label>
-            <label><span id="notes-label">Catatan tambahan (opsional)</span><textarea name="additional_notes"
-                rows="3"></textarea></label>
-            <p class="form-help" id="price-note">Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.
-            </p>
           </fieldset>
           <label class="check-label acknowledgement"><input name="acknowledgement" type="checkbox" required><span
               id="ack-label">Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman

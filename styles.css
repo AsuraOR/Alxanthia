@@ -1898,6 +1898,19 @@ body.lock-scroll-off {
   grid-column: 1 / -1;
 }
 
+@media (min-width: 769px) {
+  /* On wider screens the picker's job is a quick, compact pick-list, not
+     another full product showcase — one row per category (at most 4
+     items) instead of a tall 2-column block of full-size photos. */
+  .order-picker-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .order-picker-grid > .picker-tile:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
 .picker-tile {
   display: flex;
   flex-direction: column;
@@ -3025,16 +3038,17 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .category-tabs-inner {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 6px;
     width: 100%;
   }
 
   .category-tab {
-    width: 100%;
+    flex: 0 1 auto;
     min-height: 44px;
-    padding: 10px 8px;
+    padding: 10px 14px;
     font-size: var(--fs-label);
     letter-spacing: 0.04em;
     border-radius: 0;
@@ -3427,26 +3441,12 @@ details.is-closing > .faq-answer-wrapper {
     padding-right: 18px;
   }
 
-  /* Five category tabs in a 2-column grid leave the fifth stranded alone
-     on its own row — read as one horizontally-scrollable strip instead
-     of a ragged block (UX-24). */
+  /* Five category tabs in a fixed 2-column grid left the fifth stranded
+     alone on its own row (UX-24). A horizontally-scrollable strip was
+     tried and dropped — a hidden, undiscoverable scroll is worse than a
+     centred wrap where every tab stays visible up front. */
   .category-nav-tabs {
     max-width: 100%;
-  }
-
-  .category-tabs-inner {
-    display: flex;
-    grid-template-columns: none;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .category-tabs-inner .category-tab {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
   }
 
   .brand-est {

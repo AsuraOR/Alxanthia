@@ -589,7 +589,8 @@ assert.strictEqual(summaryPrice.textContent, 'Rp 50.000');
 assert.strictEqual(waBtn.getAttribute('aria-disabled'), null);
 assert(!waBtn.classList.contains('btn-disabled'));
 const waHref = waBtn.getAttribute('href');
-assert(waHref && waHref.startsWith('https://wa.me/6281234567890?text='), 'WhatsApp link must be populated');
+const configuredWaNumber = String(app.getData().store.whatsappNumber || '').replace(/[^0-9]/g, '');
+assert(waHref && waHref.startsWith(`https://wa.me/${configuredWaNumber}?text=`), 'WhatsApp link must use the configured store number');
 const decodedWa = decodeURIComponent(waHref);
 assert(decodedWa.includes('1 × Tulip — tangkai jadi'), 'WhatsApp text must contain stem quantity and flower name');
 assert(decodedWa.includes('Total Rp 50.000'), 'WhatsApp text must contain formatted total');
@@ -1423,8 +1424,33 @@ assert.deepStrictEqual(app.buildOrderSubmission(customerValues24, reference24, {
 console.log('✔ Suite 24 Passed: Native checkout uses shared totals, literal gift text, complete operational data, and privacy-safe WhatsApp content');
 
 // ---------------------------------------------------------------------------
+// Suite 25: Mini pots and custom bouquet additions
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 25: Mini Pots & Custom Additions ---');
+app.resetToInitial();
+app.selectMiniPot('daisy', false);
+assert.strictEqual(app.getCart()[0].type, 'pot');
+assert.strictEqual(app.computeCartTotals(app.getCart()).total, 125000, 'Mini pot must use its configured placeholder price');
+assert(app.normalizedCheckoutState().items[0].includes('Mini Pot Daisy'), 'Mini pot name must enter checkout summary');
+
+app.resetToInitial();
+app.bumpCustom('Sunflower', 3);
+app.toggleCustomAddition('rounded', true);
+app.toggleCustomAddition('fern', true);
+app.setCustomMessageCard(true);
+assert.strictEqual(app.getCustomTotals().additionsSubtotal, 24000, 'Both leaf additions must be included in the estimate');
+assert.strictEqual(app.getCustomTotals().total, 224000, 'Custom total must include stems, wrap, and selected leaves');
+app.useCustom();
+const custom25 = app.normalizedCheckoutState();
+assert.strictEqual(custom25.itemData[0].additions.rounded, true);
+assert.strictEqual(custom25.itemData[0].additions.fern, true);
+assert.strictEqual(custom25.itemData[0].message_card, true);
+assert(custom25.items[0].includes('Daun Bulat') && custom25.items[0].includes('Daun Pakis') && custom25.items[0].includes('Kartu ucapan'));
+console.log('✔ Suite 25 Passed: Mini pots and both leaf/message-card additions flow through pricing and checkout data');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 24 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 25 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

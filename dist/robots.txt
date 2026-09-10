@@ -1,0 +1,7 @@
+# Alxanthia Studio robots.txt
+# https://alxanthia.com/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://alxanthia.com/sitemap.xml

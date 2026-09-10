@@ -1878,7 +1878,10 @@
     }
 
     // 3b. Recipient & card-sender name (optional, order-level — replaces the
-    //     old gift-recipient fields that used to live in the checkout form)
+    //     old gift-recipient fields that used to live in the checkout form).
+    //     Only relevant once a card is actually being added.
+    const giftDetailsFields = document.getElementById('gift-details-fields');
+    if (giftDetailsFields) giftDetailsFields.hidden = !messageCardEnabled;
     setText('#gift-details-label', t.giftDetailsLabel);
     setText('#recipient-name-order-label', t.recipientNameOrderLabel);
     setText('#card-sender-order-label', t.cardSenderOrderLabel);
@@ -2913,6 +2916,7 @@
       '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
       '#location-legend': 'Location & delivery', '#location-type-label': 'Your location', '#regency-label': 'City/regency',
       '#delivery-method-label': 'Delivery method', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
+      '#pickup-help': 'The pickup address will be confirmed and sent via WhatsApp.',
       '#outside-bali-help': 'Delivery will be sent to the address you write — please make sure it is correct.',
       '#date-label': 'Preferred date', '#delivery-help': 'The date is a preference and will be confirmed through WhatsApp.',
       '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
@@ -2921,6 +2925,7 @@
       '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
       '#location-legend': 'Lokasi & pengiriman', '#location-type-label': 'Lokasi Anda', '#regency-label': 'Kabupaten/kota',
       '#delivery-method-label': 'Metode pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
+      '#pickup-help': 'Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui WhatsApp.',
       '#outside-bali-help': 'Pengiriman akan dikirim sesuai dengan alamat yang ditulis, mohon diperhatikan dengan benar.',
       '#date-label': 'Tanggal yang diinginkan', '#delivery-help': 'Tanggal merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.',
       '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
@@ -3107,6 +3112,13 @@
     };
     locationType.addEventListener('change', toggleLocationFields);
     toggleLocationFields();
+    const deliveryMethod = document.querySelector('#checkout-form [name="delivery_method"]');
+    const pickupHelp = document.getElementById('pickup-help');
+    const togglePickupHelp = () => {
+      if (pickupHelp) pickupHelp.hidden = deliveryMethod.value !== 'self_pickup';
+    };
+    deliveryMethod.addEventListener('change', togglePickupHelp);
+    togglePickupHelp();
     const checkoutFormEl = document.getElementById('checkout-form');
     checkoutFormEl.addEventListener('submit', submitWebsiteOrder);
     // Filling in a field that already shows an error clears only that

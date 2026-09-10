@@ -657,13 +657,15 @@
             </div>
           </div>
 
-          <!-- Recipient & Card Sender Name (optional) -->
-          <h3 class="step-label" id="gift-details-label">Detail penerima (opsional)</h3>
-          <div class="form-row">
-            <label><span id="recipient-name-order-label">Nama penerima</span><input id="order-recipient-name"
-                autocomplete="name"></label>
-            <label><span id="card-sender-order-label">Nama pengirim pada kartu</span><input
-                id="order-card-sender-name"></label>
+          <!-- Recipient & Card Sender Name (optional, only relevant once a card is added) -->
+          <div id="gift-details-fields" hidden>
+            <h3 class="step-label" id="gift-details-label">Detail penerima (opsional)</h3>
+            <div class="form-row">
+              <label><span id="recipient-name-order-label">Nama penerima</span><input id="order-recipient-name"
+                  autocomplete="name"></label>
+              <label><span id="card-sender-order-label">Nama pengirim pada kartu</span><input
+                  id="order-card-sender-name"></label>
+            </div>
           </div>
         </div>
 
@@ -956,6 +958,8 @@
                   <option value="grab_gojek">Grab/Gojek (saya pesan sendiri)</option>
                   <option value="self_pickup">Ambil sendiri di studio</option>
                 </select></label>
+              <p class="form-help" id="pickup-help" hidden>Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui
+                WhatsApp.</p>
             </div>
             <div id="outside-bali-fields" hidden>
               <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3"

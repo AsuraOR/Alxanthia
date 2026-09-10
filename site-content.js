@@ -82,10 +82,16 @@ window.ALXANTHIA_DATA = {
   ],
 
   // Pricing & Builder Rules (editable without modifying app.js)
-  wrapFee: 35000,
-  bulkFrom: 9,
-  bulkRate: 0.10,
+  // Bungkus & pita (wrap & ribbon fee) scales with the flower count: every
+  // wrapFeeUnitStems stems in a bouquet adds one more wrapFeePerUnit charge.
+  wrapFeeUnitStems: 3,
+  wrapFeePerUnit: 35000,
+  // Price for adding a handwritten message card to the order (checkbox in the finishing section).
+  messageCardPrice: 5000,
   minStems: 3,
+
+  // Bali kabupaten/kota list for the checkout delivery-location dropdown
+  baliRegencies: ["Denpasar", "Badung", "Gianyar", "Tabanan", "Klungkung", "Bangli", "Karangasem", "Buleleng", "Jembrana"],
 
   // Wrapping Paper Options
   wraps: [
@@ -339,8 +345,8 @@ window.ALXANTHIA_DATA = {
       pkgBlurbs: [
         "Tiga tangkai campuran variasi studio. Pas untuk meja dan nakas.",
         "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik studio.",
-        "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
-        "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
+        "Sembilan tangkai, warna campur pilihan studio.",
+        "Lima belas tangkai mekar penuh untuk momen istimewa."
       ],
       pkgStemLine: "tangkai",
       pkgIncludes: [
@@ -357,19 +363,20 @@ window.ALXANTHIA_DATA = {
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
-      customIntro: "Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal {minStems} tangkai; {bulkFrom} tangkai ke atas otomatis mendapat potongan {bulkPercent}% untuk bunganya.",
+      customIntro: "Tambahkan bunga yang Anda inginkan, estimasi harga diperbarui seketika. Minimal {minStems} tangkai. Biaya bungkus & pita: {wrapFeePerUnit} untuk setiap {wrapFeeUnitStems} tangkai.",
       customPickLabel: "Pilih tangkainya",
       customAdditionsLabel: "Pilih tambahan",
       customAdditionsNote: "Pilih satu atau dua jenis daun untuk melengkapi buket Anda.",
-      customMessageCardLabel: "Tambahkan kartu ucapan",
-      customMessageCardNote: "Gratis · isi pesannya dapat ditulis saat menyelesaikan pesanan.",
       additionsLabel: "Tambahan",
       noAdditionsLabel: "Tanpa tambahan",
       messageCardSelected: "Kartu ucapan",
+      cardCheckboxLabel: "Tambahkan kartu ucapan (+{price})",
+      giftDetailsLabel: "Detail penerima (opsional)",
+      recipientNameOrderLabel: "Nama penerima",
+      cardSenderOrderLabel: "Nama pengirim pada kartu",
       resetLabel: "Atur ulang",
       estimateLabel: "Estimasi biaya",
       flowersLabel: "Bunga",
-      discountLabel: "Potongan hemat ({bulkFrom}+ tangkai, {bulkPercent}%)",
       wrapFeeLabel: "Bungkus & pita (termasuk dalam total)",
       estTotalLabel: "Estimasi total",
       stemsWord: "tangkai",
@@ -417,7 +424,7 @@ window.ALXANTHIA_DATA = {
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
       cardPlaceholder: "mis. Selamat wisuda, Sagita — sukses selalu!",
-      cardNote: "Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.",
+      cardNote: "Ditulis tangan di kartu kecil.",
       cardNoteCounter: "{n}/{max} karakter",
       selectionLabel: "Pilihan Anda",
       includesLabel: "Termasuk",
@@ -563,8 +570,8 @@ window.ALXANTHIA_DATA = {
       pkgBlurbs: [
         "Three stems in a studio mix. Ideal for desk and bedside display.",
         "Five stems arranged with gentle height at the centre. A balanced classic studio bouquet.",
-        "Nine stems in a harmonious studio mix. 10% volume savings applied.",
-        "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."
+        "Nine stems in a harmonious studio mix.",
+        "Fifteen full blooming stems for standout celebrations."
       ],
       pkgStemLine: "stems",
       pkgIncludes: [
@@ -581,19 +588,20 @@ window.ALXANTHIA_DATA = {
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
-      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum {minStems} stems; {bulkFrom} or more automatically receives {bulkPercent}% off the flowers.",
+      customIntro: "Add the flowers you want and the estimate updates as you go. Minimum {minStems} stems. Wrapping & ribbon: {wrapFeePerUnit} for every {wrapFeeUnitStems} stems.",
       customPickLabel: "Choose your stems",
       customAdditionsLabel: "Choose your additions",
       customAdditionsNote: "Choose one or both leaf styles to finish your bouquet.",
-      customMessageCardLabel: "Add a message card",
-      customMessageCardNote: "Free · write the message while finishing your order.",
       additionsLabel: "Additions",
       noAdditionsLabel: "No additions",
       messageCardSelected: "Message card",
+      cardCheckboxLabel: "Add a message card (+{price})",
+      giftDetailsLabel: "Recipient details (optional)",
+      recipientNameOrderLabel: "Recipient name",
+      cardSenderOrderLabel: "Sender name on the card",
       resetLabel: "Reset",
       estimateLabel: "Estimate",
       flowersLabel: "Flowers",
-      discountLabel: "Volume discount ({bulkFrom}+ stems, {bulkPercent}%)",
       wrapFeeLabel: "Wrapping & ribbon (included in total)",
       estTotalLabel: "Estimated total",
       stemsWord: "stems",
@@ -641,7 +649,7 @@ window.ALXANTHIA_DATA = {
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
       cardPlaceholder: "e.g. Happy graduation, Sagita — from all of us!",
-      cardNote: "Leave it blank if you'd rather not have one. Handwritten on a small card, no extra charge.",
+      cardNote: "Handwritten on a small card.",
       cardNoteCounter: "{n}/{max} characters",
       selectionLabel: "Your selection",
       includesLabel: "Includes",

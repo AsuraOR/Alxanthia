@@ -1478,11 +1478,22 @@ body.lock-scroll-off {
 .custom-addition-copy strong { color: var(--text-dark); font: 500 18px/1.2 var(--font-serif); }
 .custom-addition-copy small { color: var(--text-muted); font: 600 var(--fs-label) var(--font-sans); }
 .custom-addition-stepper { grid-column: 1 / -1; justify-content: flex-end; padding-top: 4px; }
-.custom-message-card-option { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 15px; border: 1px solid var(--border-medium); background: var(--bg-main); cursor: pointer; }
-.custom-message-card-option input { flex: none; width: 19px; height: 19px; margin-top: 2px; accent-color: var(--accent-green); }
-.custom-message-card-option span { display: grid; gap: 4px; }
-.custom-message-card-option strong { color: var(--text-dark); font-size: 15px; }
-.custom-message-card-option small { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.message-card-option { margin-top: 14px; }
+#card-note-fields { margin-top: 14px; }
+
+#gift-details-label { margin-top: 28px; }
+.order-controls-col .form-row label { display: grid; gap: 7px; font-weight: 600; font-family: var(--font-sans); font-size: 14.5px; color: var(--text-dark); }
+.order-controls-col .form-row input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 0;
+  background: #fff;
+  color: var(--text-dark);
+  font: inherit;
+}
+.order-controls-col .form-row input:focus { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 
 .custom-stem-count {
   font-family: var(--font-sans);
@@ -3963,6 +3974,7 @@ details.is-closing > .faq-answer-wrapper {
 .checkout-form input:not([type="checkbox"]), .checkout-form select, .checkout-form textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--border-medium); border-radius: 0; background: #fff; color: var(--text-dark); font: inherit; }
 .checkout-form input:focus, .checkout-form select:focus, .checkout-form textarea:focus { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+#bali-fields:not([hidden]), #outside-bali-fields:not([hidden]) { display: grid; gap: 14px; }
 .form-help { margin: -4px 0 2px; color: var(--text-muted); font-size: .88rem; line-height: 1.45; }
 .field-error { display: block; margin: -3px 0 2px; color: #9d3e32; font-size: .85rem; font-weight: 600; line-height: 1.4; }
 .checkout-form [aria-invalid="true"] { border-color: #9d3e32; }

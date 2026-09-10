@@ -562,6 +562,7 @@ console.log('\n--- SUITE 2: Gift Note Safe textContent Assignment (R02) ---');
 app.selectStem('Sunflower', false);
 assert.strictEqual(app.getState().hasUserSelected, true);
 
+app.setMessageCardEnabled(true);
 const maliciousNote = '<script>alert("hack")</script><b onmouseover="evil()">Selamat!</b>';
 app.setOrderNote(maliciousNote);
 
@@ -636,13 +637,20 @@ for (const [lang, mode, expected, total] of messageCases) {
     assert(!/\(\s*—/.test(readWaMessage()), `${lang}: stem suffix must not be parenthesized`);
     assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar' : 'Rose');
   }
+  // With the message-card checkbox off, note text must never leak into the message.
+  app.setOrderNote('Untuk {Alam}');
+  assert(!readWaMessage().includes('Alam'), `${lang}/${mode}: note must not appear while the message-card checkbox is unchecked`);
+
+  app.setMessageCardEnabled(true);
   app.setOrderNote('Untuk {Alam}');
   assert(readWaMessage().includes('"Untuk {Alam}"'), `${lang}/${mode}: preserve greeting braces verbatim`);
   app.setOrderNote('{total}');
   assert(readWaMessage().includes('"{total}"'), `${lang}/${mode}: never expand greeting placeholders`);
-  assert.strictEqual(readWaMessage().split(total).length - 1, 1, `${lang}/${mode}: total appears only once`);
+  const liveTotal = formatRpForTest(app.computeCartTotals(app.getCart()).total);
+  assert.strictEqual(readWaMessage().split(liveTotal).length - 1, 1, `${lang}/${mode}: total appears only once`);
+  app.setMessageCardEnabled(false);
 
-  // Missing configuration must retain the same fallback, including literal note text.
+  // Missing configuration must retain the same fallback message.
   const withLiteralNote = readWaMessage();
   for (const missing of ['object', 'language', 'mode']) {
     const fallbackData = JSON.parse(JSON.stringify(originalMessageData));
@@ -666,8 +674,10 @@ editedMessageData.store.whatsappTemplates.id.stem = 'TESTMARKER {unknown} {total
 app.setData(editedMessageData);
 assert.strictEqual(readWaMessage(), 'TESTMARKER  Rp 60.000 Rp 60.000 ', 'Unknown keys become empty and repeated keys are filled');
 assert(!/[{}]/.test(readWaMessage()), 'Empty note leaves no template braces');
+app.setMessageCardEnabled(true);
 app.setOrderNote('{total}');
-assert.strictEqual(readWaMessage(), 'TESTMARKER  Rp 60.000 Rp 60.000 Kartu ucapan: "{total}". ', 'Inserted card text is never re-scanned');
+const cardTotal3 = formatRpForTest(60000 + (app.getData().messageCardPrice ?? 0));
+assert.strictEqual(readWaMessage(), `TESTMARKER  ${cardTotal3} ${cardTotal3} Kartu ucapan: "{total}". `, 'Inserted card text is never re-scanned');
 
 // Restore the original suite's selection and note for the quantity-stepper checks.
 app.setData(originalMessageData);
@@ -775,16 +785,15 @@ assert(customHint.textContent.includes('minimal 3 tangkai'));
 console.log('✔ Suite 7 Passed: Custom builder draft dynamically reflects stems and localizes in ID and EN');
 
 // ---------------------------------------------------------------------------
-// Suite 8: Valid Custom Bouquet (3 stems), Commit to Cart & 10% Volume Discount (9+ stems)
+// Suite 8: Valid Custom Bouquet (3 stems), Commit to Cart & Wrap Fee Scaling
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 8: Valid Custom Calculations, Commit & Volume Savings ---');
+console.log('\n--- SUITE 8: Valid Custom Calculations, Commit & Wrap Fee Scaling ---');
 // Add 1 Tulip -> Total stems = 3 (1 Sunflower @ 55k, 1 Rose @ 60k, 1 Tulip @ 50k)
 app.bumpCustom('Tulip', 1);
 const tot3 = app.getCustomTotals();
 assert.strictEqual(tot3.stems, 3);
 assert.strictEqual(tot3.flowersSubtotal, 165000);
-assert.strictEqual(tot3.discount, 0);
-assert.strictEqual(tot3.wrapFee, 35000);
+assert.strictEqual(tot3.wrapFee, 35000, 'wrapFeePerUnit charged once for the first group of wrapFeeUnitStems stems');
 assert.strictEqual(tot3.total, 200000);
 assert.strictEqual(tot3.isValid, true);
 assert.strictEqual(cartLineEls().length, 0, 'Still just a valid draft — committing is a separate, explicit step');
@@ -797,28 +806,26 @@ assert.strictEqual(waBtn.getAttribute('aria-disabled'), null);
 assert(!waBtn.classList.contains('btn-disabled'));
 assert(decodeURIComponent(waBtn.getAttribute('href')).includes('estimasi Rp 200.000'));
 
-// Volume Discount: 9 Stems (5 Sunflower @ 55k, 4 Tulip @ 50k), committed as a second bouquet
+// 9-stem bouquet (5 Sunflower @ 55k, 4 Tulip @ 50k): wrap fee scales to 3 groups of 3
 app.resetCustom();
 app.bumpCustom('Sunflower', 5);
 app.bumpCustom('Tulip', 4);
 const tot9 = app.getCustomTotals();
 assert.strictEqual(tot9.stems, 9);
 const expSub = (5 * 55000) + (4 * 50000); // 275000 + 200000 = 475000
-const expDisc = Math.round(expSub * 0.10); // 47500
-const expTot = expSub - expDisc + 35000; // 462500
+const expWrap = Math.ceil(9 / 3) * 35000; // 105000
+const expTot = expSub + expWrap; // 580000
 assert.strictEqual(tot9.flowersSubtotal, expSub);
-assert.strictEqual(tot9.discount, expDisc);
+assert.strictEqual(tot9.wrapFee, expWrap);
 assert.strictEqual(tot9.total, expTot);
 
 app.useCustom();
 assert.strictEqual(cartLineEls().length, 2, 'Two distinct committed bouquets must yield two separate cart lines (P1-06)');
-// Cart total combines both bouquets' flower subtotals and discounts, but the
-// wrap fee (Rp 35.000) is charged once for the whole cart, not once per line:
-// (165000 + 475000) - (0 + 47500) + 35000 = 627500 — Rp 27.500 less than the
-// naive sum of each bouquet's standalone total (200000 + 462500), which each
-// separately included their own wrap fee.
-assert.strictEqual(summaryPrice.textContent, 'Rp 627.500');
-console.log('✔ Suite 8 Passed: 3-stem (Rp 200.000) and 9-stem volume discount (Rp 462.500) committed as two distinct cart lines');
+// Cart total combines both bouquets' flower subtotals, and the wrap fee is
+// charged per bouquet (scaled by its own stem count), not once per cart:
+// (165000 + 475000) + (35000 + 105000) = 780000.
+assert.strictEqual(summaryPrice.textContent, 'Rp 780.000');
+console.log('✔ Suite 8 Passed: 3-stem (Rp 200.000) and 9-stem (Rp 580.000) bouquets committed as two distinct cart lines');
 
 // ---------------------------------------------------------------------------
 // Suite 9: Channel Visibility Flags & Honest Marketplace Reality (R01)
@@ -908,20 +915,20 @@ console.log('✔ Suite 11 Passed: Centralized readiness checks and neutral offli
 // Suite 12: Dynamic Rule Interpolation (A2)
 // ---------------------------------------------------------------------------
 console.log('\n--- SUITE 12: Dynamic Rule Interpolation (A2) ---');
-const testTemplate = 'Min {minStems} tangkai, diskon {bulkPercent}% mulai {bulkFrom} tangkai, jasa wrap {wrapFee}';
+const testTemplate = 'Min {minStems} tangkai, jasa wrap {wrapFeePerUnit} per {wrapFeeUnitStems} tangkai';
 const interpolated = app.interpolateRules(testTemplate);
-assert.strictEqual(interpolated, 'Min 3 tangkai, diskon 10% mulai 9 tangkai, jasa wrap Rp 35.000', 'Rule interpolation must correctly replace all tokens');
+assert.strictEqual(interpolated, 'Min 3 tangkai, jasa wrap Rp 35.000 per 3 tangkai', 'Rule interpolation must correctly replace all tokens');
 
 // Mutate rule in live store and test dynamic re-interpolation
 const origDataA2 = JSON.parse(JSON.stringify(app.getData()));
 const modifiedRulesData = JSON.parse(JSON.stringify(origDataA2));
 modifiedRulesData.minStems = 5;
-modifiedRulesData.bulkRate = 0.25;
-modifiedRulesData.bulkFrom = 10;
+modifiedRulesData.wrapFeePerUnit = 40000;
+modifiedRulesData.wrapFeeUnitStems = 4;
 app.setData(modifiedRulesData);
 
 const mutatedInterpolated = app.interpolateRules(testTemplate);
-assert.strictEqual(mutatedInterpolated, 'Min 5 tangkai, diskon 25% mulai 10 tangkai, jasa wrap Rp 35.000', 'Interpolation must reflect updated store rules');
+assert.strictEqual(mutatedInterpolated, 'Min 5 tangkai, jasa wrap Rp 40.000 per 4 tangkai', 'Interpolation must reflect updated store rules');
 
 app.setData(origDataA2);
 console.log('✔ Suite 12 Passed: Rule tokens dynamically interpolate from live store configuration');
@@ -1047,35 +1054,34 @@ assert.strictEqual(pkgTot.subtotal, 195000);
 assert.strictEqual(pkgTot.total, 195000);
 assert.strictEqual(pkgTot.isValid, true);
 
-// Custom bouquet: 3 stems (at minStems, no volume discount).
+// Custom bouquet: 3 stems (at minStems — wrap fee is one group of wrapFeeUnitStems).
 const custom3 = app.computeCartTotals([
   { id: 1, type: 'custom', counts: { Sunflower: 2, Rose: 1, Tulip: 0, Gerbera: 0 }, qty: 1 }
 ]);
 assert.strictEqual(custom3.stems, 3);
 assert.strictEqual(custom3.subtotal, 170000);
-assert.strictEqual(custom3.discount, 0);
 assert.strictEqual(custom3.wrapFee, 35000);
 assert.strictEqual(custom3.total, 205000);
 assert.strictEqual(custom3.isValid, true);
 
-// Custom bouquet: 8 stems (still below the 9-stem discount threshold).
+// Custom bouquet: 8 stems — wrap fee rounds UP to 3 groups of 3 (ceil(8/3) = 3).
 const custom8 = app.computeCartTotals([
   { id: 1, type: 'custom', counts: { Sunflower: 8, Rose: 0, Tulip: 0, Gerbera: 0 }, qty: 1 }
 ]);
 assert.strictEqual(custom8.stems, 8);
-assert.strictEqual(custom8.discount, 0, '8 stems must not trigger the volume discount');
-assert.strictEqual(custom8.total, 8 * 55000 + 35000);
+assert.strictEqual(custom8.wrapFee, 3 * 35000, 'A partial group of stems still charges a full wrap-fee unit');
+assert.strictEqual(custom8.total, 8 * 55000 + 3 * 35000);
 
-// Custom bouquet: 9 stems — the discount boundary.
+// Custom bouquet: 9 stems — an exact 3 groups of 3.
 const custom9 = app.computeCartTotals([
   { id: 1, type: 'custom', counts: { Sunflower: 5, Rose: 0, Tulip: 4, Gerbera: 0 }, qty: 1 }
 ]);
 const custom9Sub = 5 * 55000 + 4 * 50000;
-const custom9Disc = Math.round(custom9Sub * 0.10);
+const custom9Wrap = Math.ceil(9 / 3) * 35000;
 assert.strictEqual(custom9.stems, 9);
-assert.strictEqual(custom9.discount, custom9Disc, '9 stems must trigger the 10% volume discount');
-assert.strictEqual(custom9.total, custom9Sub - custom9Disc + 35000);
-assert.strictEqual(custom9.total, 462500, 'Must match getCustomTotals() for the same bouquet (Suite 8)');
+assert.strictEqual(custom9.wrapFee, custom9Wrap);
+assert.strictEqual(custom9.total, custom9Sub + custom9Wrap);
+assert.strictEqual(custom9.total, 580000, 'Must match getCustomTotals() for the same bouquet (Suite 8)');
 
 // Custom bouquet: 2 stems — below minStems, invalid.
 const custom2 = app.computeCartTotals([
@@ -1084,21 +1090,19 @@ const custom2 = app.computeCartTotals([
 assert.strictEqual(custom2.isValid, false, 'A bouquet under minStems must be invalid');
 
 // Mixed cart: stem + package + two custom lines.
-// The 9-stem discount threshold is evaluated per bouquet, not on the cart total,
-// and the wrap fee is charged once no matter how many custom lines exist.
+// The wrap fee is scaled per bouquet (by its own stem count), not once per cart.
 const mixedCart = [
   { id: 1, type: 'stem', flowerKey: 'Sunflower', qty: 4 },
   { id: 2, type: 'package', pkgIndex: 1, qty: 1 }, // Handful: 5 stems, Rp 295.000
-  { id: 3, type: 'custom', counts: { Sunflower: 0, Rose: 3, Tulip: 0, Gerbera: 0 }, qty: 1 }, // 3 stems
-  { id: 4, type: 'custom', counts: { Sunflower: 0, Rose: 0, Tulip: 3, Gerbera: 0 }, qty: 1 } // 3 stems
+  { id: 3, type: 'custom', counts: { Sunflower: 0, Rose: 3, Tulip: 0, Gerbera: 0 }, qty: 1 }, // 3 stems -> Rp 35.000 wrap
+  { id: 4, type: 'custom', counts: { Sunflower: 0, Rose: 0, Tulip: 3, Gerbera: 0 }, qty: 1 } // 3 stems -> Rp 35.000 wrap
 ];
 const mixedTot = app.computeCartTotals(mixedCart);
 assert.strictEqual(mixedTot.stems, 4 + 5 + 3 + 3, 'Cart-level stems must sum every line');
-assert.strictEqual(mixedTot.discount, 0, 'No single bouquet reaches 9 stems, so summing across lines must not trigger a discount');
-assert.strictEqual(mixedTot.wrapFee, 35000, 'Wrap fee must be charged exactly once for a cart with two custom lines');
+assert.strictEqual(mixedTot.wrapFee, 35000 + 35000, 'Each custom line charges its own wrap fee, summed across the cart');
 const mixedExpectedSubtotal = (4 * 55000) + 295000 + (3 * 60000) + (3 * 50000);
 assert.strictEqual(mixedTot.subtotal, mixedExpectedSubtotal);
-assert.strictEqual(mixedTot.total, mixedExpectedSubtotal + 35000);
+assert.strictEqual(mixedTot.total, mixedExpectedSubtotal + 70000);
 
 // Purity: the input array (and its line objects) must never be mutated, and
 // calling twice with the same input must return equal results.
@@ -1209,23 +1213,23 @@ assert.strictEqual(cart19[2].type, 'custom');
 assert.strictEqual(cart19[3].type, 'custom');
 assert.notStrictEqual(cart19[2].id, cart19[3].id, 'Distinct custom lines must have distinct ids');
 
-// wrapFee is charged exactly once for a cart made of exactly two custom lines
+// wrapFee is charged once per custom bouquet — two 3-stem bouquets each add one wrap-fee unit
 const twoCustomOnly = [
   { id: 101, type: 'custom', counts: { Sunflower: 3, Rose: 0, Tulip: 0, Gerbera: 0 }, qty: 1 },
   { id: 102, type: 'custom', counts: { Sunflower: 0, Rose: 3, Tulip: 0, Gerbera: 0 }, qty: 1 }
 ];
-assert.strictEqual(app.computeCartTotals(twoCustomOnly).wrapFee, 35000, 'wrapFee must be charged exactly once for two custom lines, not per line');
+assert.strictEqual(app.computeCartTotals(twoCustomOnly).wrapFee, 70000, 'wrapFee must be charged once per custom bouquet, scaled by its own stem count');
 
 // The WhatsApp message enumerates every line in a genuinely mixed cart (stem + package + custom)
 app.resetToInitial();
 app.addLine({ type: 'stem', flowerKey: 'Sunflower', qty: 2 });
 app.selectPackage(0, false); // Buket Mini: 3 stems, Rp 195.000
 app.bumpCustom('Rose', 3);
-app.useCustom(); // Buket custom (3 tangkai): Rp 180.000, no discount, no line-level wrap fee
+app.useCustom(); // Buket custom (3 tangkai): Rp 180.000 flowers + Rp 35.000 wrap = Rp 215.000
 const mixedMsg = decodeURIComponent(waBtn.getAttribute('href'));
 assert(mixedMsg.includes('2 × Bunga Matahari — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem line');
 assert(mixedMsg.includes('1 × Buket Mini — Rp 195.000'), 'Mixed-cart WhatsApp message must enumerate the package line');
-assert(mixedMsg.includes('Buket custom (3 tangkai) — Rp 180.000'), 'Mixed-cart WhatsApp message must enumerate the custom line');
+assert(mixedMsg.includes('Buket custom (3 tangkai) — Rp 215.000'), 'Mixed-cart WhatsApp message must enumerate the custom line, including its own wrap fee');
 const mixedCartTotal = app.computeCartTotals(app.getCart());
 assert(mixedMsg.includes(`Total ${formatRpForTest(mixedCartTotal.total)}`), 'Mixed-cart WhatsApp message must show the cart total');
 
@@ -1367,26 +1371,34 @@ console.log('✔ Suite 23 Passed: Adding, incrementing and removing a cart line 
 console.log('\n--- SUITE 24: Native Checkout Payload & Privacy ---');
 app.resetToInitial();
 app.selectStem('Rose', false);
+app.setMessageCardEnabled(true);
 app.setOrderNote('<img src=x onerror=alert(1)> & selamat 🎉');
+app.setOrderRecipientName('Sagita');
+app.setOrderCardSenderName('Ayu');
+const messageCardPrice24 = app.getData().messageCardPrice ?? 0;
 const normalized24 = app.normalizedCheckoutState();
 assert.strictEqual(normalized24.orderMode, 'stem');
-assert.strictEqual(normalized24.estimatedProductTotal, 60000);
+assert.strictEqual(normalized24.estimatedProductTotal, 60000 + messageCardPrice24, 'Total must include the message-card fee once the checkbox is checked');
 assert(normalized24.items[0].includes('Mawar'));
 const reference24 = app.generateOrderReference(new Date('2026-09-09T12:00:00Z'));
 assert(/^ALX-260909-[A-HJ-NP-Z2-9]{4}$/.test(reference24), 'Reference must use the non-sensitive ALX date/random format');
-const customerValues24 = new Map([['buyer_name', 'Ayu'], ['buyer_whatsapp', '081234567890'], ['address', 'Jl. Aman 1'], ['preferred_date', '2026-09-14']]);
+const customerValues24 = new Map([['buyer_name', 'Ayu'], ['buyer_whatsapp', '081234567890'], ['location_type', 'luar_bali'], ['address', 'Jl. Aman 1'], ['preferred_date', '2026-09-14']]);
 customerValues24.forEach = Map.prototype.forEach;
 const submission24 = app.buildOrderSubmission(customerValues24, reference24, normalized24);
-['order_reference', 'submitted_language', 'order_mode', 'order_summary', 'item_data', 'total_stems', 'wrap', 'gift_message', 'product_subtotal', 'discount_amount', 'estimated_product_total', 'currency', 'source'].forEach(key => {
+['order_reference', 'submitted_language', 'order_mode', 'order_summary', 'item_data', 'total_stems', 'wrap', 'message_card_enabled', 'message_card_fee', 'gift_message', 'recipient_name', 'card_sender_name', 'product_subtotal', 'estimated_product_total', 'currency', 'source'].forEach(key => {
   assert(Object.hasOwn(submission24, key), `Submission must include operational field ${key}`);
 });
 assert.strictEqual(submission24.gift_message, '<img src=x onerror=alert(1)> & selamat 🎉', 'Special text must remain literal submission data');
+assert.strictEqual(submission24.recipient_name, 'Sagita');
+assert.strictEqual(submission24.card_sender_name, 'Ayu');
+assert.strictEqual(submission24.message_card_fee, messageCardPrice24);
 assert.strictEqual(submission24.buyer_name, 'Ayu');
+assert(!Object.hasOwn(submission24, 'discount_amount'), 'The volume discount was removed; submissions must not carry a discount field');
 assert(!Object.hasOwn(submission24, 'midtrans_key'), 'Submission must never contain a payment credential');
 const submittedWa24 = new URL(app.buildPostSubmissionWhatsApp(reference24, 'Ayu', '2026-09-14', normalized24));
 const submittedMessage24 = submittedWa24.searchParams.get('text');
 assert(submittedMessage24.includes(reference24));
-assert(submittedMessage24.includes('Rp 60.000'));
+assert(submittedMessage24.includes(formatRpForTest(60000 + messageCardPrice24)));
 assert(!submittedMessage24.includes(normalized24.giftMessage), 'Private gift message must not enter post-submission WhatsApp URL');
 assert.deepStrictEqual(app.buildOrderSubmission(customerValues24, reference24, { ...normalized24 }), submission24, 'Review and submission must use the same normalized checkout state');
 console.log('✔ Suite 24 Passed: Native checkout uses shared totals, literal gift text, complete operational data, and privacy-safe WhatsApp content');
@@ -1405,7 +1417,6 @@ app.resetToInitial();
 app.bumpCustom('Sunflower', 3);
 app.bumpCustomAddition('rounded', 1);
 app.bumpCustomAddition('fern', 1);
-app.setCustomMessageCard(true);
 assert.strictEqual(app.getCustomTotals().additionsSubtotal, 24000, 'Both leaf additions must be included in the estimate');
 assert.strictEqual(app.getCustomTotals().total, 224000, 'Custom total must include stems, wrap, and selected leaves');
 
@@ -1421,9 +1432,17 @@ app.useCustom();
 const custom25 = app.normalizedCheckoutState();
 assert.strictEqual(custom25.itemData[0].additions.rounded, 1);
 assert.strictEqual(custom25.itemData[0].additions.fern, 1);
-assert.strictEqual(custom25.itemData[0].message_card, true);
-assert(custom25.items[0].includes('Daun Bulat') && custom25.items[0].includes('Daun Pakis') && custom25.items[0].includes('Kartu ucapan'));
-console.log('✔ Suite 25 Passed: Mini pots and both leaf/message-card additions flow through pricing and checkout data as quantities');
+assert.strictEqual(custom25.itemData[0].message_card, undefined, 'The message card is order-level now — no per-line flag');
+assert(custom25.items[0].includes('Daun Bulat') && custom25.items[0].includes('Daun Pakis'));
+assert(!custom25.items[0].includes('Kartu ucapan'), 'The message card is no longer listed as a per-bouquet addition');
+
+// The order-level message-card checkbox adds its price exactly once, independent of the custom draft
+const beforeCardTotal = app.computeCartTotals(app.getCart()).total;
+const cardPrice25 = app.getData().messageCardPrice ?? 0;
+app.setMessageCardEnabled(true);
+assert.strictEqual(app.computeCartTotals(app.getCart()).total, beforeCardTotal + cardPrice25, 'Enabling the message-card checkbox must add its price to the cart total exactly once');
+app.setMessageCardEnabled(false);
+console.log('✔ Suite 25 Passed: Mini pots, leaf additions, and the order-level message-card fee flow through pricing and checkout data correctly');
 
 // ---------------------------------------------------------------------------
 // Suite 26: Cart Persistence Survives Reload (UX-02)

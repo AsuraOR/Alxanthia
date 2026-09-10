@@ -1,33 +1,42 @@
 # Checkout improvement plan — current implementation
 
-**Updated:** 10 September 2026
+**Updated:** 10 September 2026 (implementation pass completed the same day)
 **Scope reviewed:** `app.js`, `index.html`, `styles.css`, `site-content.js`,
 `CONFIGURE-SUBMISSION-ENDPOINT.md`, `CHECKOUT-SETUP.md`, `README.md`, and both test runners.
 
 ## Current status
 
-The native checkout is live and functional, the production Worker URL is configured, and
-all **26 Node integration suites pass**. The website now supports a multi-item cart,
-finished stems, florist packages, custom bouquets, mini pots, custom leaf additions,
-scaled custom-bouquet wrapping fees, and a paid message card.
+All 🔴 developer tasks below (DEV-01 through DEV-26) have been implemented and are covered
+by automated tests: **26 Node client-side suites**, **6 Node server-side pricing/validation
+suites** (which execute the actual Apps Script code block from
+`CONFIGURE-SUBMISSION-ENDPOINT.md`, not a reimplementation), and **33 real-browser
+assertions** via Playwright (`tests/run-browser-runner.js`), all passing. No automated test
+writes to the production Sheet or calls the real Worker — the order endpoint is mocked at
+the network layer for the browser suite.
 
-It is **not ready for unrestricted public orders yet**. The largest remaining risk is no
-longer the front-end layout: the server instructions do not match the expanded catalogue
-and still trust prices calculated in the customer's browser.
+The remaining items are **owner tasks** (Part 2 below) that require dashboard/account
+actions this repository cannot perform on its own: creating the Cloudflare Turnstile
+widget (OWNER-05), confirming rate limiting (OWNER-06), migrating the live Google Sheet to
+the new schema (OWNER-04), and the coordinated public-launch checklist (OWNER-09–11). The
+site is **not ready for unrestricted public orders** until those are complete — see the
+"Owner action guide" this implementation pass produced for exact click-by-click steps.
 
 | Area | Current result |
 | :-- | :-- |
-| Node integration tests | ✅ 26/26 pass |
+| Node integration tests (client) | ✅ 26/26 pass |
+| Node pricing/validation tests (server, real Apps Script code) | ✅ 6/6 pass |
+| Real-browser suite (Playwright, network mocked) | ✅ 33/33 pass |
 | Production endpoint configured | ✅ Yes |
 | Apex-domain CORS preflight | ✅ Returns `204` for `https://alxanthia.com` |
 | `www` handling | ✅ Redirects to `https://alxanthia.com/` |
-| Mini-pot submission | 🔴 Apps Script rejects the `pot` order mode |
-| Mixed-cart classification | 🔴 Reported as `custom`, not `mixed` |
-| Server-owned price verification | 🔴 Not implemented |
-| Strong idempotency | 🔴 Not implemented |
-| Timeout and ambiguous-failure recovery | 🔴 Not implemented |
-| Privacy notice | 🔴 Not implemented |
-| Public launch switches | ⏳ Passcode and `noindex` intentionally remain enabled |
+| Mini-pot submission | ✅ Apps Script accepts `pot`; server treats `item_data` as authoritative |
+| Mixed-cart classification | ✅ Reported as `mixed`, distinct from `custom` |
+| Server-owned price verification | ✅ Implemented — Apps Script recalculates from its own catalogue |
+| Strong idempotency | ✅ UUID key + payload hash, with `duplicate`/conflict handling |
+| Timeout and ambiguous-failure recovery | ✅ 20s timeout, typed failure states, submit guard |
+| Privacy notice | ✅ Implemented, next to the acknowledgement checkbox |
+| Turnstile / rate limiting / secrets | ✅ Code ready; ⏳ awaiting OWNER-05/OWNER-06 dashboard setup |
+| Public launch switches | ⏳ Passcode and `noindex` intentionally remain enabled — see OWNER-11 |
 
 ### Evidence markers
 

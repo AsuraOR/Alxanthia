@@ -13,34 +13,44 @@ The website form is already present. It intentionally does not show a successful
 You will create:
 
 1. a private Google Sheet containing the orders;
-2. a Google Apps Script that writes to that sheet; and
-3. a Cloudflare Worker that securely connects the website to the script.
+2. a Google Apps Script that writes to that sheet, recalculates every price itself, and never trusts the numbers the browser sends; and
+3. a Cloudflare Worker that securely connects the website to the script, checks a security widget (Turnstile), and limits how fast one visitor can submit.
 
-Never paste your webhook secret, Google credentials, Cloudflare API token, or Midtrans credentials into the website repository.
+Never paste your webhook secret, Google credentials, Cloudflare API token, Turnstile secret key, or Midtrans credentials into the website repository.
+
+**If you are updating an existing endpoint rather than setting one up for the first time**, read [Migrating an existing deployment](#migrating-an-existing-deployment) near the end of this guide before you touch the Sheet — the column list changed and the old copied-down formula must be removed.
 
 ---
 
-## Part 1 — Create the Google Sheet
+## Part 1 — Create (or update) the Google Sheet
 
 1. Sign in to the Google account that should own the orders.
-2. Open <https://sheets.google.com> and create a blank spreadsheet.
+2. Open <https://sheets.google.com> and create a blank spreadsheet (or open your existing **Alxanthia Orders** spreadsheet if you already have one).
 3. Rename the spreadsheet **Alxanthia Orders**.
 4. Rename its first worksheet tab **Orders**.
-5. Click cell `A1` and paste this tab-separated header row:
+5. Click cell `A1` and paste this tab-separated header row exactly. The Apps Script in Part 2 looks up every column **by this header text**, not by column letter, so the order of columns does not matter as long as every heading below exists exactly once:
 
 ```text
-Order Reference	Submitted At	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Message Card Fee	Gift Message	Recipient Name	Card Sender Name	Product Subtotal	Estimated Product Total	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
+Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted At	Language	Currency	Source	Acknowledged	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Gift Message	Recipient Name	Card Sender Name	Submitted Product Subtotal	Submitted Message Card Fee	Submitted Total	Verified Product Subtotal	Verified Message Card Fee	Verified Total	Price Mismatch	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
 ```
 
 6. If the headings stay in one cell, select it and choose **Data → Split text to columns → Tab**.
 7. Choose **View → Freeze → 1 row**.
 8. Select row 1 and choose **Data → Create a filter**.
 
-A quick guide to the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank — the customer books their own Grab/Gojek courier, or picks up in person, so no address is collected. For an out-of-Bali order, it's the reverse: **Address/City/Postal Code** are filled and **Regency/Delivery Method** stay blank. Always check **Location Type** first before reading the other columns.
+A quick guide to the new/changed columns:
+
+- **Idempotency Key** and **Payload Hash** are written by the script for deduplication — you will not type into them.
+- **Catalog Version** records which price list was active when the order was verified, so an old browser tab left open across a price change can be diagnosed later.
+- **Submitted Product/Message Card/Total** are exactly what the customer's browser calculated. **Verified Product/Message Card/Total** are what the Apps Script recalculated from its own price list. They usually match. Treat **Verified Total**, never Submitted Total, as the real order amount.
+- **Price Mismatch** is normally blank. The script writes `REVIEW` here if the submitted and verified totals disagree — this can mean the customer's browser tab was open across a price change, or that someone tried to tamper with the totals in their browser. Either way, double-check the row before sending a payment link.
+- **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once you fill in **Shipping Fee**. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove.
+
+A reminder about the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank. For an out-of-Bali order, it's the reverse. Always check **Location Type** first before reading the other columns.
 
 ### Add the status dropdowns
 
-For **Payment Status** (column AA), choose **Data → Data validation → Dropdown** and add exactly:
+Select the **Payment Status** column, then choose **Data → Data validation → Dropdown** and add exactly:
 
 ```text
 Awaiting confirmation
@@ -51,7 +61,7 @@ Refunded
 Cancelled
 ```
 
-For **Work Phase** (column AB), add exactly:
+Select the **Work Phase** column and add exactly:
 
 ```text
 Not started
@@ -66,13 +76,15 @@ Delivered
 Cancelled
 ```
 
-In cell `Y2` (**Final Total**), enter this formula and copy it down the column:
+Format **Submitted Product Subtotal**, **Submitted Message Card Fee**, **Submitted Total**, **Verified Product Subtotal**, **Verified Message Card Fee**, **Verified Total**, **Shipping Fee**, and **Final Total** as Indonesian rupiah while keeping them numeric.
 
-```excel
-=IF(W2="","",W2+IF(X2="",0,X2))
-```
+### Protect the verified/final columns (OWNER-04, OWNER-07)
 
-Format the Product Subtotal, Message Card Fee, Estimated Product Total, Shipping Fee, and Final Total columns as Indonesian rupiah while keeping them numeric.
+Select the **Verified Product Subtotal**, **Verified Message Card Fee**, **Verified Total**, and **Final Total** columns, then **Data → Protect sheets and ranges**, and restrict editing to yourself. These are the numbers you should trust; nobody (including a well-meaning collaborator) should hand-edit them.
+
+### Confirm sharing (OWNER-07)
+
+Open **Share** in the top right and confirm the spreadsheet is **not** shared as "Anyone with the link" — it contains customer names, phone numbers, and addresses. Share it only with the specific people (by email) who need it.
 
 ---
 
@@ -81,106 +93,470 @@ Format the Product Subtotal, Message Card Fee, Estimated Product Total, Shipping
 1. In the spreadsheet, choose **Extensions → Apps Script**.
 2. Rename the project **Alxanthia Order Writer**.
 3. Delete the example `myFunction` code.
-4. Paste the code below.
+4. Paste the code below in full.
 
 ```javascript
-const SHEET_NAME = 'Orders';
-const WEBHOOK_SECRET = 'REPLACE_WITH_YOUR_PRIVATE_RANDOM_SECRET';
-const BALI_REGENCIES = ['Denpasar', 'Badung', 'Gianyar', 'Tabanan', 'Klungkung', 'Bangli', 'Karangasem', 'Buleleng', 'Jembrana'];
+/**
+ * Alxanthia Order Writer — Google Apps Script.
+ * Paste this whole file into Extensions → Apps Script, replacing any
+ * existing code, exactly as instructed in CONFIGURE-SUBMISSION-ENDPOINT.md.
+ */
 
+// ============================================================================
+// Configuration — keep this catalogue in sync with site-content.js. Bump
+// CATALOG_VERSION whenever a price, product, mini pot, or addition changes,
+// and update the matching value in site-content.js at the same time.
+// ============================================================================
+var SHEET_NAME = 'Orders';
+var CATALOG_VERSION = 1;
+var MINIMUM_LEAD_DAYS = 2; // must match site-content.js `minimumLeadDays` (OWNER-01)
+var TIMEZONE = 'Asia/Makassar'; // GMT+08:00, for Bali (OWNER-07)
+
+var CATALOG = {
+  wrapFeeUnitStems: 3,       // must match site-content.js `wrapFeeUnitStems`
+  wrapFeePerUnit: 35000,     // must match site-content.js `wrapFeePerUnit`
+  messageCardPrice: 5000,    // must match site-content.js `messageCardPrice`
+  minStems: 3,               // must match site-content.js `minStems`
+  // Keys must match site-content.js `flowers` keys exactly (case-sensitive).
+  flowerStemPrice: { Sunflower: 55000, Rose: 60000, Tulip: 50000, Gerbera: 55000 },
+  // Keys must match site-content.js `miniPots[].key` exactly.
+  miniPotPrice: { sunflower: 125000, 'lily-of-the-valley': 125000, daisy: 125000 },
+  // Keys must match site-content.js `customAdditions[].key` exactly.
+  additionPrice: { rounded: 12000, fern: 12000 },
+  // Index must match the position of each entry in site-content.js `packages`.
+  packagePrice: [195000, 295000, 465000, 745000],
+  packageStems: [3, 5, 9, 15]
+};
+
+var BALI_REGENCIES = ['Denpasar', 'Badung', 'Gianyar', 'Tabanan', 'Klungkung', 'Bangli', 'Karangasem', 'Buleleng', 'Jembrana'];
+var WRAP_IDS = ['kraft', 'cream', 'sage', 'blush'];
+
+var MAX_BODY_BYTES = 30000;
+var MAX_LINES_PER_ORDER = 20;
+var MAX_QTY_PER_LINE = 20;
+var MAX_TOTAL_QTY = 60;
+var MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
+
+// ============================================================================
+// Entry point
+// ============================================================================
 function doPost(event) {
   try {
-    const request = JSON.parse(event.postData.contents || '{}');
-    if (request.webhook_secret !== WEBHOOK_SECRET) {
-      return jsonResponse({ ok: false, error: 'Unauthorized' });
+    const raw = (event && event.postData && event.postData.contents) || '';
+    if (raw.length > MAX_BODY_BYTES) {
+      return jsonResponse({ ok: false, code: 'PAYLOAD_TOO_LARGE', error: 'Request body too large.' });
+    }
+
+    let request;
+    try {
+      request = JSON.parse(raw || '{}');
+    } catch (parseError) {
+      return jsonResponse({ ok: false, code: 'BAD_JSON', error: 'Malformed JSON.' });
+    }
+
+    const secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+    if (!secret || request.webhook_secret !== secret) {
+      return jsonResponse({ ok: false, code: 'UNAUTHORIZED', error: 'Unauthorized' });
     }
 
     const order = request.order || {};
-    validateOrder(order);
+    const validation = validateOrder(order);
+    if (!validation.ok) {
+      return jsonResponse({ ok: false, code: 'VALIDATION', error: validation.error });
+    }
 
+    const payloadHash = computePayloadHash(order);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-    if (!sheet) throw new Error('Orders worksheet was not found.');
+    if (!sheet) return jsonResponse({ ok: false, code: 'STORAGE_ERROR', error: 'Orders worksheet was not found.' });
+
+    const headers = getHeaderMap(sheet);
 
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try {
-      if (findOrderRow(sheet, order.order_reference)) {
-        return jsonResponse({ ok: true, order_reference: order.order_reference, duplicate: true });
+      const existing = findExisting(sheet, headers, order.idempotency_key, order.order_reference);
+
+      // DEV-04: same idempotency key, identical payload → the browser retried
+      // after an ambiguous failure. Return the original success, not a new row.
+      if (existing.byKey) {
+        if (existing.byKey.payloadHash === payloadHash) {
+          return jsonResponse({ ok: true, order_reference: existing.byKey.orderReference, duplicate: true });
+        }
+        // Same key, different content — a genuine conflict. Stop; do not store.
+        return jsonResponse({
+          ok: false, code: 'CONFLICT', order_reference: existing.byKey.orderReference,
+          error: 'Idempotency key reused with different order data.'
+        });
       }
 
+      // Same human-readable reference under a different key: astronomically
+      // unlikely, but store it anyway and flag it rather than silently
+      // discarding a real order.
+      let collisionNote = '';
+      if (existing.byReference && existing.byReference.idempotencyKey !== order.idempotency_key) {
+        collisionNote = 'Reference collision with row ' + existing.byReference.row + ' — verify manually.';
+      }
+
+      const pricing = computeVerifiedTotals(order.item_data, order.message_card_enabled === true, CATALOG);
+      const orderMode = resolveOrderMode(order.item_data);
+      const priceMismatch = Math.round(pricing.total) !== Math.round(Number(order.estimated_product_total) || -1);
       const isBali = order.location_type === 'bali';
-      sheet.appendRow([
-        safeText(order.order_reference), new Date(), safeText(order.buyer_name),
-        safeText(order.buyer_whatsapp), safeText(order.location_type),
-        isBali ? safeText(order.regency) : '', isBali ? safeText(order.delivery_method) : '',
-        isBali ? '' : safeText(order.address), isBali ? '' : safeText(order.city), isBali ? '' : safeText(order.postal_code),
-        safeText(order.preferred_date), safeText(order.order_mode), safeText(order.order_summary),
-        JSON.stringify(order.item_data || []), safeNumber(order.total_stems), safeText(order.wrap),
-        order.message_card_enabled ? 'Yes' : 'No', safeNumber(order.message_card_fee || 0),
-        safeText(order.gift_message), safeText(order.recipient_name), safeText(order.card_sender_name),
-        safeNumber(order.product_subtotal), safeNumber(order.estimated_product_total),
-        '', '', '', 'Awaiting confirmation', 'Not started', '', '', ''
-      ]);
+
+      const row = buildRow(headers, {
+        'Order Reference': order.order_reference,
+        'Idempotency Key': order.idempotency_key,
+        'Payload Hash': payloadHash,
+        'Catalog Version': CATALOG_VERSION,
+        'Submitted At': new Date(),
+        'Language': order.submitted_language,
+        'Currency': order.currency,
+        'Source': order.source,
+        'Acknowledged': order.acknowledgement === true ? 'Yes' : 'No',
+        'Buyer Name': safeText(order.buyer_name),
+        'Buyer WhatsApp': safeText(order.buyer_whatsapp),
+        'Location Type': order.location_type,
+        'Regency': isBali ? safeText(order.regency) : '',
+        'Delivery Method': isBali ? safeText(order.delivery_method) : '',
+        'Address': isBali ? '' : safeText(order.address),
+        'City': isBali ? '' : safeText(order.city),
+        'Postal Code': isBali ? '' : safeText(order.postal_code),
+        'Preferred Date': order.preferred_date,
+        'Order Mode': orderMode,
+        'Order Summary': safeText(order.order_summary),
+        'Item Data': JSON.stringify(order.item_data || []),
+        'Total Stems': pricing.totalStems,
+        'Wrap': order.wrap,
+        'Message Card': order.message_card_enabled ? 'Yes' : 'No',
+        'Gift Message': order.message_card_enabled ? safeText(order.gift_message) : '',
+        'Recipient Name': safeText(order.recipient_name),
+        'Card Sender Name': safeText(order.card_sender_name),
+        'Submitted Product Subtotal': safeNumber(order.product_subtotal),
+        'Submitted Message Card Fee': safeNumber(order.message_card_fee),
+        'Submitted Total': safeNumber(order.estimated_product_total),
+        'Verified Product Subtotal': pricing.productSubtotal,
+        'Verified Message Card Fee': pricing.messageCardFee,
+        'Verified Total': pricing.total,
+        'Price Mismatch': priceMismatch ? 'REVIEW' : '',
+        'Shipping Fee': '',
+        'Final Total': '',
+        'Midtrans Payment Link': '',
+        'Payment Status': 'Awaiting confirmation',
+        'Work Phase': 'Not started',
+        'Delivery Service': '',
+        'Tracking Link/Number': '',
+        'Internal Notes': collisionNote
+      });
+
+      sheet.appendRow(row);
+      const newRow = sheet.getLastRow();
+      setFinalTotalFormula(sheet, headers, newRow);
+      notifyOwner_(order.order_reference, orderMode, pricing.total, priceMismatch, sheet, newRow);
+
+      return jsonResponse({ ok: true, order_reference: order.order_reference });
     } finally {
       lock.releaseLock();
     }
-
-    return jsonResponse({ ok: true, order_reference: order.order_reference });
   } catch (error) {
-    return jsonResponse({ ok: false, error: String(error.message || error) });
+    return jsonResponse({ ok: false, code: 'STORAGE_ERROR', error: String((error && error.message) || error) });
   }
 }
 
+// ============================================================================
+// Validation (DEV-05, DEV-06, DEV-11)
+// ============================================================================
 function validateOrder(order) {
-  const required = [
-    'order_reference', 'buyer_name', 'buyer_whatsapp', 'location_type',
-    'preferred_date', 'order_mode', 'order_summary', 'wrap'
-  ];
-  required.forEach(function (field) {
-    if (!String(order[field] || '').trim()) throw new Error('Missing required field: ' + field);
-  });
-  if (!/^ALX-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(order.order_reference)) throw new Error('Invalid order reference.');
-  if (!/^[+0-9 ()-]{8,20}$/.test(order.buyer_whatsapp)) throw new Error('Invalid buyer WhatsApp number.');
-  if (!['bali', 'luar_bali'].includes(order.location_type)) throw new Error('Invalid location type.');
+  function fail(message) { return { ok: false, error: message }; }
+  if (!order || typeof order !== 'object') return fail('Missing order.');
+
+  if (!/^ALX-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(order.order_reference || '')) return fail('Invalid order reference.');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.idempotency_key || '')) return fail('Invalid idempotency key.');
+
+  if (['id', 'en'].indexOf(order.submitted_language) === -1) return fail('Invalid language.');
+  if (order.currency !== 'IDR') return fail('Invalid currency.');
+  if (order.source !== 'website') return fail('Invalid source.');
+  if (order.acknowledgement !== true) return fail('Acknowledgement is required.');
+
+  const buyerName = String(order.buyer_name || '').trim();
+  if (!buyerName || buyerName.length > MAX_TEXT.buyer_name) return fail('Invalid buyer name.');
+  if (!/^[+0-9 ()-]{8,20}$/.test(order.buyer_whatsapp || '')) return fail('Invalid buyer WhatsApp number.');
+
+  if (['bali', 'luar_bali'].indexOf(order.location_type) === -1) return fail('Invalid location type.');
   if (order.location_type === 'bali') {
-    if (BALI_REGENCIES.indexOf(order.regency) === -1) throw new Error('Invalid or missing regency for a Bali order.');
-    if (['grab_gojek', 'self_pickup'].indexOf(order.delivery_method) === -1) throw new Error('Invalid delivery method for a Bali order.');
+    if (BALI_REGENCIES.indexOf(order.regency) === -1) return fail('Invalid or missing regency for a Bali order.');
+    if (['grab_gojek', 'self_pickup'].indexOf(order.delivery_method) === -1) return fail('Invalid delivery method for a Bali order.');
   } else {
-    if (!String(order.address || '').trim()) throw new Error('Missing delivery address.');
-    if (!String(order.city || '').trim()) throw new Error('Missing city.');
-    if (!String(order.postal_code || '').trim()) throw new Error('Missing postal code.');
+    const address = String(order.address || '').trim();
+    const city = String(order.city || '').trim();
+    if (!address || address.length > MAX_TEXT.address) return fail('Invalid delivery address.');
+    if (!city || city.length > MAX_TEXT.city) return fail('Invalid city.');
+    if (!/^[0-9]{5}$/.test(order.postal_code || '')) return fail('Invalid postal code.');
   }
-  if (['stem', 'package', 'custom'].indexOf(order.order_mode) === -1) throw new Error('Invalid order mode.');
-  if (['kraft', 'cream', 'sage', 'blush'].indexOf(order.wrap) === -1) throw new Error('Invalid wrapping option.');
-  if (!order.acknowledgement) throw new Error('Acknowledgement is required.');
-  ['total_stems', 'product_subtotal', 'estimated_product_total'].forEach(function (field) {
-    if (!Number.isFinite(Number(order[field])) || Number(order[field]) < 0) throw new Error('Invalid number: ' + field);
+
+  if (!isValidLeadTimeDate(order.preferred_date)) return fail('Preferred date must meet the minimum production lead time.');
+  if (WRAP_IDS.indexOf(order.wrap) === -1) return fail('Invalid wrapping option.');
+
+  if (typeof order.message_card_enabled !== 'boolean') return fail('Invalid message card state.');
+  const giftMessage = String(order.gift_message || '');
+  if (giftMessage.length > MAX_TEXT.gift_message) return fail('Gift message is too long.');
+  if (!order.message_card_enabled && giftMessage.trim()) return fail('Gift message present without message card enabled.');
+  if (String(order.recipient_name || '').length > MAX_TEXT.recipient_name) return fail('Recipient name is too long.');
+  if (String(order.card_sender_name || '').length > MAX_TEXT.card_sender_name) return fail('Card sender name is too long.');
+
+  return validateItemData(order.item_data);
+}
+
+function isValidLeadTimeDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const todayStr = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  const today = new Date(todayStr + 'T00:00:00');
+  const minDate = new Date(today.getTime());
+  minDate.setDate(minDate.getDate() + MINIMUM_LEAD_DAYS);
+  const picked = new Date(value + 'T00:00:00');
+  return !isNaN(picked.getTime()) && picked.getTime() >= minDate.getTime();
+}
+
+function validateItemData(itemData) {
+  function fail(message) { return { ok: false, error: message }; }
+  if (!Array.isArray(itemData) || !itemData.length || itemData.length > MAX_LINES_PER_ORDER) return fail('Invalid item list.');
+
+  let totalQty = 0;
+  for (let i = 0; i < itemData.length; i += 1) {
+    const item = itemData[i];
+    if (!item || typeof item !== 'object') return fail('Invalid item entry.');
+    const qty = item.qty;
+    if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) return fail('Invalid item quantity.');
+    totalQty += qty;
+
+    if (item.type === 'stem') {
+      if (!hasOwn(CATALOG.flowerStemPrice, item.id)) return fail('Unknown flower.');
+    } else if (item.type === 'pot') {
+      if (!hasOwn(CATALOG.miniPotPrice, item.id)) return fail('Unknown mini pot.');
+    } else if (item.type === 'package') {
+      const idx = Number(item.id);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= CATALOG.packagePrice.length) return fail('Unknown package.');
+    } else if (item.type === 'custom') {
+      const stemsResult = validateCustomStems(item.stems);
+      if (!stemsResult.ok) return stemsResult;
+      const additionsResult = validateCustomAdditions(item.additions);
+      if (!additionsResult.ok) return additionsResult;
+    } else {
+      return fail('Unknown item type.');
+    }
+  }
+  if (totalQty > MAX_TOTAL_QTY) return fail('Order quantity too large.');
+  return { ok: true };
+}
+
+function validateCustomStems(stems) {
+  function fail(message) { return { ok: false, error: message }; }
+  if (!stems || typeof stems !== 'object') return fail('Invalid custom bouquet.');
+  let total = 0;
+  const keys = Object.keys(stems);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (!hasOwn(CATALOG.flowerStemPrice, key)) return fail('Unknown flower in custom bouquet.');
+    const count = stems[key];
+    if (!Number.isInteger(count) || count < 1) return fail('Invalid custom bouquet stem count.');
+    total += count;
+  }
+  if (total < CATALOG.minStems) return fail('Custom bouquet below minimum stem count.');
+  return { ok: true };
+}
+
+function validateCustomAdditions(additions) {
+  function fail(message) { return { ok: false, error: message }; }
+  if (additions === undefined || additions === null) return { ok: true };
+  if (typeof additions !== 'object') return fail('Invalid custom bouquet additions.');
+  const keys = Object.keys(additions);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (!hasOwn(CATALOG.additionPrice, key)) return fail('Unknown addition.');
+    const count = additions[key];
+    if (!Number.isInteger(count) || count < 0) return fail('Invalid addition quantity.');
+  }
+  return { ok: true };
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+// ============================================================================
+// Server-owned pricing (DEV-01, DEV-02) — mirrors app.js's computeCartTotals()
+// exactly, using ONLY this file's CATALOG, never the browser's numbers.
+// ============================================================================
+function resolveOrderMode(itemData) {
+  const seen = {};
+  const types = [];
+  (itemData || []).forEach(function (item) {
+    if (item && item.type && !seen[item.type]) {
+      seen[item.type] = true;
+      types.push(item.type);
+    }
   });
-  if (order.message_card_fee !== undefined && (!Number.isFinite(Number(order.message_card_fee)) || Number(order.message_card_fee) < 0)) {
-    throw new Error('Invalid number: message_card_fee');
-  }
-  if (!Array.isArray(order.item_data) || !order.item_data.length) throw new Error('Order items are missing.');
+  if (types.length > 1) return 'mixed';
+  return types[0] || 'custom';
 }
 
-function findOrderRow(sheet, reference) {
+function computeVerifiedTotals(itemData, messageCardEnabled, catalog) {
+  const items = Array.isArray(itemData) ? itemData : [];
+  let productSubtotal = 0;
+  let totalStems = 0;
+
+  items.forEach(function (item) {
+    const qty = Math.floor(Number(item.qty));
+    if (item.type === 'stem') {
+      productSubtotal += catalog.flowerStemPrice[item.id] * qty;
+      totalStems += qty;
+    } else if (item.type === 'pot') {
+      productSubtotal += catalog.miniPotPrice[item.id] * qty;
+    } else if (item.type === 'package') {
+      const idx = Number(item.id);
+      productSubtotal += catalog.packagePrice[idx] * qty;
+      totalStems += (catalog.packageStems[idx] || 0) * qty;
+    } else if (item.type === 'custom') {
+      let bouquetStems = 0;
+      let bouquetSubtotal = 0;
+      const stems = item.stems || {};
+      Object.keys(stems).forEach(function (flowerKey) {
+        const count = Math.floor(Number(stems[flowerKey]));
+        bouquetStems += count;
+        bouquetSubtotal += count * catalog.flowerStemPrice[flowerKey];
+      });
+      const additions = item.additions || {};
+      Object.keys(additions).forEach(function (key) {
+        const count = Math.floor(Number(additions[key]));
+        bouquetSubtotal += count * catalog.additionPrice[key];
+      });
+      const wrapFee = bouquetStems > 0 ? Math.ceil(bouquetStems / catalog.wrapFeeUnitStems) * catalog.wrapFeePerUnit : 0;
+      productSubtotal += (bouquetSubtotal + wrapFee) * qty;
+      totalStems += bouquetStems * qty;
+    }
+  });
+
+  const messageCardFee = messageCardEnabled && items.length > 0 ? catalog.messageCardPrice : 0;
+  return { productSubtotal: productSubtotal, messageCardFee: messageCardFee, total: productSubtotal + messageCardFee, totalStems: totalStems };
+}
+
+// ============================================================================
+// Idempotency (DEV-04)
+// ============================================================================
+function computePayloadHash(order) {
+  const canonical = JSON.stringify({
+    order_reference: order.order_reference, item_data: order.item_data, wrap: order.wrap,
+    message_card_enabled: order.message_card_enabled, gift_message: order.gift_message,
+    recipient_name: order.recipient_name, card_sender_name: order.card_sender_name,
+    buyer_name: order.buyer_name, buyer_whatsapp: order.buyer_whatsapp, location_type: order.location_type,
+    regency: order.regency, delivery_method: order.delivery_method, address: order.address,
+    city: order.city, postal_code: order.postal_code, preferred_date: order.preferred_date
+  });
+  const digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, canonical, Utilities.Charset.UTF_8);
+  return digestBytes.map(function (b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+}
+
+function findExisting(sheet, headers, idempotencyKey, orderReference) {
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
-  const values = sheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
-  for (let index = 0; index < values.length; index += 1) {
-    if (values[index][0] === reference) return index + 2;
+  if (lastRow < 2) return { byKey: null, byReference: null };
+  const keyCol = headers.map['Idempotency Key'];
+  const refCol = headers.map['Order Reference'];
+  const hashCol = headers.map['Payload Hash'];
+  const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+
+  let byKey = null;
+  let byReference = null;
+  for (let i = 0; i < values.length; i += 1) {
+    const rowValues = values[i];
+    if (!byKey && keyCol !== undefined && rowValues[keyCol] === idempotencyKey) {
+      byKey = { row: i + 2, orderReference: rowValues[refCol], payloadHash: rowValues[hashCol] };
+    }
+    if (!byReference && refCol !== undefined && rowValues[refCol] === orderReference) {
+      byReference = { row: i + 2, idempotencyKey: rowValues[keyCol] };
+    }
+    if (byKey && byReference) break;
   }
-  return null;
+  return { byKey: byKey, byReference: byReference };
 }
 
+// ============================================================================
+// Sheet helpers (DEV-03) — every column is resolved by its header text, so
+// inserting or reordering columns later never silently corrupts the mapping.
+// ============================================================================
+function getHeaderMap(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const values = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const map = {};
+  values.forEach(function (name, idx) {
+    if (name) map[String(name).trim()] = idx;
+  });
+  return { map: map, length: lastCol };
+}
+
+function buildRow(headers, valuesByHeader) {
+  const row = new Array(headers.length).fill('');
+  Object.keys(valuesByHeader).forEach(function (name) {
+    const idx = headers.map[name];
+    if (idx !== undefined) row[idx] = valuesByHeader[name];
+  });
+  return row;
+}
+
+function setFinalTotalFormula(sheet, headers, row) {
+  const verifiedCol = headers.map['Verified Total'];
+  const shippingCol = headers.map['Shipping Fee'];
+  const finalCol = headers.map['Final Total'];
+  if (verifiedCol === undefined || shippingCol === undefined || finalCol === undefined) return;
+  const verifiedA1 = columnToLetter(verifiedCol + 1) + row;
+  const shippingA1 = columnToLetter(shippingCol + 1) + row;
+  // Blank until BOTH the verified total and the shipping fee exist (DEV-03) —
+  // written once, after appendRow(), directly into this row's own cell, never
+  // copied down in advance.
+  sheet.getRange(row, finalCol + 1).setFormula(
+    '=IF(OR(' + verifiedA1 + '="",' + shippingA1 + '=""),"",' + verifiedA1 + '+' + shippingA1 + ')'
+  );
+}
+
+function columnToLetter(column) {
+  let temp;
+  let letter = '';
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+  return letter;
+}
+
+// ============================================================================
+// Owner notification (DEV-21) — best-effort only; a failure here must never
+// turn an already-stored order into a failed response.
+// ============================================================================
+function notifyOwner_(orderReference, orderMode, verifiedTotal, priceMismatch, sheet, row) {
+  try {
+    const email = PropertiesService.getScriptProperties().getProperty('OWNER_NOTIFY_EMAIL');
+    if (!email) return;
+    const url = sheet.getParent().getUrl() + '#gid=' + sheet.getSheetId() + '&range=A' + row;
+    const subject = (priceMismatch ? '[REVIEW] ' : '') + 'New Alxanthia order ' + orderReference;
+    const body = 'Reference: ' + orderReference + '\nMode: ' + orderMode + '\nVerified total: Rp ' + verifiedTotal +
+      (priceMismatch ? '\n\nSubmitted and verified totals differ — review before sending a payment link.' : '') +
+      '\n\nOpen the row: ' + url;
+    MailApp.sendEmail(email, subject, body);
+  } catch (notifyError) {
+    // Intentionally swallowed — see OWNER-08 for the interim Sheet-native
+    // notification while you confirm this is delivering reliably.
+  }
+}
+
+// ============================================================================
+// Small utilities
+// ============================================================================
 function safeText(value) {
-  const text = String(value || '');
+  const text = String(value === undefined || value === null ? '' : value);
   return /^[=+\-@]/.test(text) ? "'" + text : text;
 }
 
 function safeNumber(value) {
   const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) throw new Error('Invalid number.');
-  return number;
+  return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
 function jsonResponse(value) {
@@ -188,21 +564,27 @@ function jsonResponse(value) {
 }
 ```
 
-5. Replace `REPLACE_WITH_YOUR_PRIVATE_RANDOM_SECRET` with a unique random value of at least 30 letters and numbers.
-6. Do not use the example text as the secret and do not share your secret.
+5. Click **Project Settings** (the gear icon), check **Show "appsscript.json" manifest file in editor**, then set the **Script time zone** to `Asia/Makassar` (GMT+08:00) if the field is visible there — otherwise the `TIMEZONE` constant at the top of the code above already fixes this independently of the project setting (OWNER-07).
+6. Open **Project Settings → Script Properties** and add:
+
+   | Property | Value |
+   | --- | --- |
+   | `WEBHOOK_SECRET` | A unique random value of at least 30 letters and numbers. Do not use example text and do not share it. |
+   | `OWNER_NOTIFY_EMAIL` | The inbox that should receive a short email for every new order (OWNER-03, OWNER-21). Leave blank to skip this — see OWNER-08 for the interim option. |
+
 7. Click **Save**. Do not click **Run**; `doPost` only works when it receives a web request.
 
 ### Deploy the Apps Script
 
-1. Click **Deploy → New deployment**.
-2. Click the gear beside **Select type**, then choose **Web app**.
+1. Click **Deploy → New deployment** (or **Manage deployments → Edit → New version** if you are updating an existing one).
+2. Click the gear beside **Select type**, then choose **Web app** (only needed the first time).
 3. Enter **Alxanthia order writer** as the description.
 4. Choose **Execute as: Me**.
 5. Choose **Who has access: Anyone**.
 6. Click **Deploy**, select your Google account, and approve the requested spreadsheet access.
 7. Copy the Web App URL ending in `/exec`. Keep it private for the next part.
 
-If you ever change the list of Bali kabupaten/kota in `site-content.js` (`baliRegencies`), update the matching `BALI_REGENCIES` list in this script too, then redeploy (**Deploy → Manage deployments → edit → New version**) — otherwise the script will reject valid orders from a newly added regency.
+If you ever change a price, add a product, or edit the Bali kabupaten/kota list in `site-content.js`, update the matching value in the `CATALOG`/`BALI_REGENCIES` constants at the top of this script too, bump `CATALOG_VERSION` (and the matching `catalogVersion` in `site-content.js`), then redeploy (**Deploy → Manage deployments → edit the pencil icon → New version**) — otherwise the script will reprice orders using stale numbers or reject valid new options.
 
 ---
 
@@ -210,7 +592,7 @@ If you ever change the list of Bali kabupaten/kota in `site-content.js` (`baliRe
 
 1. Sign in or create a free account at <https://dash.cloudflare.com>.
 2. Open **Workers & Pages → Create → Worker**.
-3. Name it **alxanthia-order-endpoint** and deploy the starter Worker.
+3. Name it **alxanthia-order-endpoint** and deploy the starter Worker (skip if updating an existing one).
 4. Open **Edit code**, delete the starter code, and paste:
 
 ```javascript
@@ -229,23 +611,92 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     if (request.method !== 'POST') return reply({ ok: false, error: 'Method not allowed' }, 405, headers);
 
+    let order;
     try {
-      const order = await request.json();
+      order = await request.json();
+    } catch (parseError) {
+      return reply({ ok: false, error: 'Some details could not be saved. Please check the form and try again.' }, 400, headers);
+    }
+
+    // DEV-07 / OWNER-05: Turnstile bot check. Skipped only while
+    // TURNSTILE_SECRET is not yet configured, so setup can proceed in
+    // stages — enforced for real once you complete OWNER-05.
+    if (env.TURNSTILE_SECRET) {
+      const token = order.cf_turnstile_token;
+      if (!token || !(await verifyTurnstile(token, env.TURNSTILE_SECRET, request.headers.get('CF-Connecting-IP')))) {
+        log(order.order_reference, 'TURNSTILE_FAILED', origin);
+        return reply({ ok: false, error: 'Verification failed. Please try again.' }, 403, headers);
+      }
+    }
+    delete order.cf_turnstile_token;
+
+    let googleResult;
+    try {
       const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order })
       });
-      const result = await googleResponse.json();
-      if (!googleResponse.ok || result.ok !== true || result.order_reference !== order.order_reference) {
-        return reply({ ok: false, error: result.error || 'Order was not stored' }, 502, headers);
-      }
-      return reply({ ok: true, order_reference: result.order_reference, duplicate: result.duplicate === true }, 200, headers);
-    } catch (error) {
-      return reply({ ok: false, error: 'Order could not be stored' }, 502, headers);
+      googleResult = await googleResponse.json();
+    } catch (upstreamError) {
+      log(order.order_reference, 'UPSTREAM_UNREACHABLE', origin);
+      return reply({ ok: false, error: 'Order could not be stored.' }, 502, headers);
     }
+
+    if (googleResult.ok === true) {
+      log(googleResult.order_reference, googleResult.duplicate ? 'DUPLICATE' : 'STORED', origin);
+      return reply({ ok: true, order_reference: googleResult.order_reference, duplicate: googleResult.duplicate === true }, 200, headers);
+    }
+
+    // DEV-07: fixed, public error codes — never relay the Apps Script's raw
+    // error text (which can describe internal validation details) to the browser.
+    const status = STATUS_BY_CODE[googleResult.code] || 502;
+    const publicMessage = PUBLIC_MESSAGE_BY_CODE[googleResult.code] || 'Order could not be stored.';
+    log(order.order_reference, googleResult.code || 'UNKNOWN_ERROR', origin);
+    return reply({ ok: false, error: publicMessage, order_reference: googleResult.order_reference }, status, headers);
   }
 };
+
+const STATUS_BY_CODE = {
+  VALIDATION: 400,
+  BAD_JSON: 400,
+  PAYLOAD_TOO_LARGE: 413,
+  // The browser never sends webhook_secret itself, so UNAUTHORIZED here means
+  // the Worker's and Apps Script's secrets are out of sync — an owner setup
+  // problem, not something the customer can fix, hence a 502 (ambiguous).
+  UNAUTHORIZED: 502,
+  CONFLICT: 409,
+  STORAGE_ERROR: 502
+};
+
+const PUBLIC_MESSAGE_BY_CODE = {
+  VALIDATION: 'Some details could not be saved. Please check the form and try again.',
+  BAD_JSON: 'Some details could not be saved. Please check the form and try again.',
+  PAYLOAD_TOO_LARGE: 'The order is too large to submit.',
+  CONFLICT: 'This order reference was already used with different details.',
+  STORAGE_ERROR: 'Order could not be stored.'
+};
+
+async function verifyTurnstile(token, secret, remoteIp) {
+  try {
+    const form = new FormData();
+    form.append('secret', secret);
+    form.append('response', token);
+    if (remoteIp) form.append('remoteip', remoteIp);
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
+    const result = await response.json();
+    return result.success === true;
+  } catch (verifyError) {
+    return false;
+  }
+}
+
+function log(reference, code, origin) {
+  // DEV-07: log the rejection code, reference, origin, and timestamp only —
+  // never the buyer's name, phone number, address, or gift message. Visible
+  // under Workers & Pages → your Worker → Logs.
+  console.log(JSON.stringify({ code: code, reference: reference || null, origin: origin, at: new Date().toISOString() }));
+}
 
 function reply(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers });
@@ -258,14 +709,38 @@ function reply(body, status, headers) {
 
 | Name | Value | Visibility |
 | --- | --- | --- |
-| `ALLOWED_ORIGIN` | Your exact website origin, such as `https://example.com`, with no trailing slash | Plain text |
+| `ALLOWED_ORIGIN` | Your exact website origin, such as `https://alxanthia.com`, with no trailing slash | Plain text |
 | `GOOGLE_SCRIPT_URL` | The Google Apps Script URL ending in `/exec` | Secret if available |
-| `WEBHOOK_SECRET` | The exact random secret used in Apps Script | Secret |
+| `WEBHOOK_SECRET` | The exact random secret used in Apps Script's Script Properties | Secret |
+| `TURNSTILE_SECRET` | The Turnstile **secret key** from OWNER-05, once created. Leave unset until then — Turnstile checking is skipped while this is empty. | Secret |
 
 8. Save the variables and redeploy if Cloudflare asks.
 9. Copy the public Worker URL, such as `https://alxanthia-order-endpoint.your-name.workers.dev`.
 
-The Worker code itself never needs to change when you add fields, rename regencies, or adjust prices — it forwards whatever the website sends. Only Part 1 (Sheet columns) and Part 2 (Apps Script validation) need updating for that kind of change.
+The Worker code itself never needs to change when you add fields, rename regencies, or adjust prices — it forwards whatever the website sends and lets the Apps Script decide what is valid. Only Part 1 (Sheet columns) and Part 2 (Apps Script `CATALOG`/`BALI_REGENCIES`) need updating for that kind of change.
+
+### Part 3a — Create the Turnstile widget (OWNER-05)
+
+This step is what actually turns on the bot check the Worker code above is ready for. Skipping it is safe (checkout keeps working without it) but means DEV-07's abuse control is not active yet — do this before removing the passcode/`noindex` staging gates (OWNER-11).
+
+1. In the Cloudflare dashboard, open **Turnstile** in the left sidebar (search "Turnstile" if you don't see it).
+2. Click **Add widget**.
+3. Name it `Alxanthia checkout` and add your domain (`alxanthia.com`, plus `www.alxanthia.com` if you use it).
+4. Choose the **Managed** widget mode (the default) and create it.
+5. Copy the **Site Key** (safe to publish) and paste it into `site-content.js`:
+
+   ```javascript
+   turnstileSiteKey: "your-site-key-here",
+   ```
+
+6. Copy the **Secret Key** and add it as the Worker's `TURNSTILE_SECRET` variable from the table above (Secret visibility). Never put the secret key in `site-content.js` or anywhere else in this repository.
+7. Deploy the updated website (with the site key filled in) and redeploy the Worker (with the secret key set) together, then submit one real test order to confirm the widget appears on the order form and the order still saves.
+
+### Confirm rate limiting (OWNER-06)
+
+1. In the Cloudflare dashboard for your domain, open **Security → WAF → Rate limiting rules** (the exact path can vary by plan).
+2. Create or confirm a rule scoped to the Worker's route (or to `POST` requests to the Worker's hostname) that limits requests to roughly **10 per minute per IP address**, blocking or challenging requests over that rate.
+3. This repository cannot verify a dashboard-only rule exists — confirm it manually and re-check occasionally as you watch real traffic (Worker **Logs**) after launch, adjusting the number up or down from what you observe.
 
 ---
 
@@ -283,52 +758,70 @@ Change it to your public Worker URL:
 orderSubmissionUrl: "https://alxanthia-order-endpoint.your-name.workers.dev",
 ```
 
-Only the Worker URL belongs here. Do not add the webhook secret, Apps Script URL, Google credentials, or Midtrans credentials.
+Only the Worker URL (and, once created, the Turnstile **site** key from Part 3a) belong in this file. Do not add the webhook secret, Turnstile secret key, Apps Script URL, Google credentials, or Midtrans credentials.
 
-If you prefer, send the public Worker URL to the developer maintaining the website. It is safe to share the public Worker URL; it is not safe to share any secret.
+If you prefer, send the public Worker URL to the developer maintaining the website. It is safe to share the public Worker URL and the Turnstile site key; it is not safe to share any secret.
 
 ---
 
-## Part 5 — Test one order
+## Part 5 — Test orders
 
-1. Deploy the updated website.
-2. Open the production website and select one Gerbera.
-3. Optionally check **Tambahkan kartu ucapan** and write a message, and fill in an optional recipient/sender name.
-4. Open **Tinjau pesanan** and write down the reference.
-5. Continue to the form. Fill in your name and WhatsApp number.
-6. Test the **Di Bali** path: pick a kabupaten/kota and a delivery method (try both Grab/Gojek and Ambil sendiri).
-7. Switch to **Luar Bali** and confirm the address/city/postal code fields appear instead, with the courier note beneath them.
-8. Try picking a date before today — it must be rejected. Pick today or a later date.
-9. Accept the acknowledgement and click **Simpan pesanan**.
-10. Confirm the button temporarily reads **Menyimpan…**.
-11. Confirm the website displays **Pesanan Anda sudah dicatat**.
-12. Open the `Orders` sheet and confirm exactly one row was added with the same reference, with the location columns filled correctly for the path you tested (Bali columns filled and address columns blank, or vice versa).
-13. Confirm Payment Status is **Awaiting confirmation** and Work Phase is **Not started**.
-14. Click **Lanjut ke WhatsApp** and confirm the message has the reference, name, order, total, and date—but not the address, WhatsApp number, gift message, or recipient/sender name.
+Deploy the updated website, then, using test data only:
+
+1. Submit a single finished stem.
+2. Submit a mini pot on its own — confirm it is accepted (this used to be rejected before DEV-01) and that **Order Mode** reads `pot`.
+3. Submit a cart mixing a stem, a mini pot, and a package in one order — confirm **Order Mode** reads `mixed`, not `custom`.
+4. Submit a custom bouquet with an addition and a paid message card.
+5. For each, confirm:
+   - the **Verified Total** matches what the page showed you, and **Price Mismatch** is blank;
+   - **Total Stems**, **Order Mode**, and **Item Data** look correct;
+   - the location columns are filled correctly for the path you tested (Bali columns filled and address columns blank, or vice versa);
+   - **Payment Status** is **Awaiting confirmation** and **Work Phase** is **Not started**;
+   - **Final Total** is blank until you fill in **Shipping Fee**, then appears automatically;
+   - exactly one row was added — resubmitting the same still-open checkout (e.g. clicking Save twice, or retrying after closing/reopening a slow connection) must never add a second row for the same attempt;
+   - if `OWNER_NOTIFY_EMAIL` is set, an email arrived with the reference and a link to the row, and no private customer fields.
+6. Try picking a date before the minimum lead time — it must be rejected both by the page and, if you bypass the page, by the Apps Script.
+7. Click **Lanjut ke WhatsApp** and confirm the message has the reference, name, order, total, and date—but not the address, WhatsApp number, gift message, or recipient/sender name.
 
 ## Troubleshooting
 
-### "Penyimpanan pesanan belum dikonfigurasi"
+### "Penyimpanan pesanan belum dikonfigurasi" / "Order saving is not configured yet"
 
 The Worker URL is still missing from `site-content.js`, or the updated website has not been deployed.
 
-### "Kami belum dapat memastikan pesanan tersimpan"
+### The order form shows a "verification" error and will not save
 
-1. Look in the Sheet for the displayed reference before retrying.
-2. Open the Cloudflare Worker logs.
+Turnstile is configured on the Worker (`TURNSTILE_SECRET` is set) but the matching `turnstileSiteKey` is missing, wrong, or the deployed website is older than the change — confirm both were deployed together (Part 3a, step 7).
+
+### An order is stuck saying its status is uncertain
+
+1. Look in the Sheet for the displayed reference before retrying — resubmitting reuses the same idempotency key automatically, so it is safe to click Save again.
+2. Open the Cloudflare Worker **Logs** and find the entry for that reference; the `code` field says why it was rejected.
 3. Confirm `ALLOWED_ORIGIN` exactly matches the website URL, including `www` if used and without a trailing slash.
 4. Confirm `GOOGLE_SCRIPT_URL` ends in `/exec`.
-5. Confirm the secrets in Apps Script and Cloudflare match exactly.
+5. Confirm `WEBHOOK_SECRET` in Cloudflare matches the Script Property of the same name in Apps Script exactly.
 6. Confirm the Apps Script deployment executes as you and allows Anyone.
 
 ### Google Sheet stays empty
 
-Confirm the worksheet is named exactly `Orders`, the Apps Script was created from that spreadsheet, and the deployed URL—not the editor URL—was placed in Cloudflare.
+Confirm the worksheet is named exactly `Orders`, the Apps Script was created from that spreadsheet, the header row matches Part 1 exactly (the script looks up columns by header text), and the deployed URL—not the editor URL—was placed in Cloudflare.
 
 ### A valid-looking Bali order is rejected
 
 Check that the regency the customer picked is spelled exactly the same in `site-content.js`'s `baliRegencies` list and in the Apps Script's `BALI_REGENCIES` list — a mismatch after either one was edited is the most common cause.
 
-## Safety reminder
+### A valid-looking order is rejected right after a price change
 
-Browser totals can be edited by a technically skilled visitor. Treat every submission as an order request. Before sending a Midtrans Payment Link, verify the current product price, stock/capacity, delivery details, delivery fee, and final total. Mark an order Paid only after Midtrans itself confirms the payment.
+Check that `CATALOG_VERSION` and every price in the Apps Script's `CATALOG` match `site-content.js` exactly, and that you redeployed a **New version** of the Apps Script (not just saved it) after editing.
+
+## Migrating an existing deployment
+
+If you already had an earlier version of this endpoint running (before pot/mixed carts, server-side repricing, and real idempotency existed), do this in one maintenance window (OWNER-04):
+
+1. Keep the passcode curtain active, or otherwise pause public ordering, for the duration of this migration.
+2. **File → Make a copy** of your current spreadsheet as a backup, and leave that copy untouched.
+3. On the live spreadsheet, delete the old `Final Total` formula from every existing row below the header (select the whole column's data rows and press Delete) — the old guide had you copy this formula down in advance, which now conflicts with `appendRow()`.
+4. Add the new columns from Part 1 that did not exist before (`Idempotency Key`, `Payload Hash`, `Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged`, `Verified Product Subtotal`, `Verified Message Card Fee`, `Verified Total`, `Price Mismatch`). Existing rows can stay blank in these new columns — they were not part of the older orders.
+5. Replace the Apps Script code with Part 2's version in full, replace the Worker code with Part 3's version in full, then deploy **New version**/**Save and deploy** for both.
+6. Submit one test order (Part 5) and verify every column before reopening public ordering.
+7. Re-apply the column protections from Part 1 if they were lost when columns were added.

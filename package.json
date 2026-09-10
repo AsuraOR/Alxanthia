@@ -5,7 +5,9 @@
     "start": "python -m http.server 8080",
     "dev": "python -m http.server 8080",
     "serve": "npx -y serve -l 8080 .",
-    "test": "node tests/verify-ordering.js"
+    "test": "node tests/verify-ordering.js && node tests/verify-server-pricing.js",
+    "test:browser": "node tests/run-browser-runner.js",
+    "test:all": "npm test && npm run test:browser"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

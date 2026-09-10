@@ -11,13 +11,15 @@
   // Constants & Storage Keys
   const LANG_KEY = 'alxanthia.lang';
   const AUTH_KEY = 'alxanthia_unlocked';
+  const CART_KEY = 'alxanthia_cart_v1';
+  const CARD_NOTE_MAX = 200;
 
   // State
   let currentLang = 'id';
   let selectedFlower = 'Sunflower';
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
-  let customAdditions = { rounded: false, fern: false };
+  let customAdditions = { rounded: 0, fern: 0 }; // quantity per addition, not a boolean toggle
   let customMessageCard = false;
   let cart = []; // line items: { id, type: 'stem'|'pot'|'package'|'custom', ...type-specific fields, qty }
   let nextLineId = 1;
@@ -25,6 +27,7 @@
   let orderNote = '';
   let siteData = null;
   let checkoutAttempt = null;
+  let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
 
   /**
    * Currency formatter helper (Indonesian Rupiah standard)
@@ -39,6 +42,99 @@
   function loadData() {
     if (window.ALXANTHIA_DATA) {
       siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
+    }
+  }
+
+  /**
+   * Persist the cart and finishing draft so a reload, accidental back-nav,
+   * or an OS memory purge on mobile doesn't silently discard it (UX-02).
+   * Prices are never stored — only identifiers and quantities — so an
+   * owner's price edit always reaches a returning visitor.
+   */
+  function persistCart() {
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify({
+        cart, wrapKey: selectedWrap, orderNote, customCounts
+      }));
+    } catch (e) {}
+  }
+
+  /**
+   * Restore cart/draft state from localStorage, called once at startup
+   * before the first render. A stale or hand-edited payload must never
+   * break the page: every line is revalidated against the current
+   * siteData, and any failure falls back to an empty cart silently.
+   */
+  function restoreCartFromStorage() {
+    try {
+      const raw = localStorage.getItem(CART_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+
+      const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+      const restoredLines = [];
+
+      (Array.isArray(parsed.cart) ? parsed.cart : []).forEach(line => {
+        if (!line || typeof line !== 'object') return;
+        const qty = Math.floor(Number(line.qty));
+        if (!(qty > 0)) return;
+
+        if (line.type === 'stem' && siteData.flowers[line.flowerKey]) {
+          restoredLines.push({ type: 'stem', flowerKey: line.flowerKey, qty, _id: line.id });
+        } else if (line.type === 'pot' && (siteData.miniPots || []).some(p => p.key === line.potKey)) {
+          restoredLines.push({ type: 'pot', potKey: line.potKey, qty, _id: line.id });
+        } else if (line.type === 'package' && Number.isInteger(line.pkgIndex) && line.pkgIndex >= 0 && line.pkgIndex < (siteData.packages || []).length) {
+          restoredLines.push({ type: 'package', pkgIndex: line.pkgIndex, qty, _id: line.id });
+        } else if (line.type === 'custom') {
+          const counts = {};
+          order.forEach(key => {
+            const c = Math.floor(Number(line.counts && line.counts[key]));
+            if (c > 0) counts[key] = c;
+          });
+          if (Object.keys(counts).length === 0) return;
+          const additions = {};
+          (siteData.customAdditions || []).forEach(addition => {
+            const c = Math.floor(Number(line.additions && line.additions[addition.key]));
+            if (c > 0) additions[addition.key] = c;
+          });
+          restoredLines.push({ type: 'custom', counts, additions, messageCard: !!line.messageCard, qty, _id: line.id });
+        }
+      });
+
+      let maxOriginalId = 0;
+      restoredLines.forEach(line => {
+        if (Number.isInteger(line._id) && line._id > 0) maxOriginalId = Math.max(maxOriginalId, line._id);
+      });
+      let nextFreshId = maxOriginalId + 1;
+      const assignedIds = new Set();
+      restoredLines.forEach(line => {
+        if (Number.isInteger(line._id) && line._id > 0 && !assignedIds.has(line._id)) {
+          line.id = line._id;
+        } else {
+          line.id = nextFreshId++;
+        }
+        assignedIds.add(line.id);
+        delete line._id;
+      });
+
+      cart = restoredLines;
+      nextLineId = Math.max(maxOriginalId, nextFreshId - 1) + 1;
+
+      if (typeof parsed.wrapKey === 'string' && (siteData.wraps || []).some(w => w.key === parsed.wrapKey)) {
+        selectedWrap = parsed.wrapKey;
+      }
+      if (typeof parsed.orderNote === 'string') {
+        orderNote = parsed.orderNote.slice(0, CARD_NOTE_MAX);
+      }
+      if (parsed.customCounts && typeof parsed.customCounts === 'object') {
+        order.forEach(key => {
+          const c = Math.floor(Number(parsed.customCounts[key]));
+          customCounts[key] = c > 0 ? c : 0;
+        });
+      }
+    } catch (e) {
+      cart = [];
     }
   }
 
@@ -179,7 +275,7 @@
     const wrapFee = siteData.wrapFee ?? 35000;
     const minStems = siteData.minStems ?? 3;
     const additionsSubtotal = (siteData.customAdditions || []).reduce((sum, addition) =>
-      sum + (customAdditions[addition.key] ? (addition.price || 0) : 0), 0);
+      sum + (customAdditions[addition.key] || 0) * (addition.price || 0), 0);
 
     const discount = stems >= bulkFrom ? Math.round(flowersSubtotal * bulkRate) : 0;
     const total = flowersSubtotal - discount + wrapFee + additionsSubtotal;
@@ -240,7 +336,8 @@
           bouquetSubtotal += qty * price;
         });
         (siteData.customAdditions || []).forEach(addition => {
-          if (line.additions && line.additions[addition.key]) bouquetSubtotal += addition.price || 0;
+          const count = (line.additions && line.additions[addition.key]) || 0;
+          bouquetSubtotal += count * (addition.price || 0);
         });
         if (bouquetStems < minStems) everyCustomLineValid = false;
         stems = bouquetStems * line.qty;
@@ -280,15 +377,19 @@
     }
     if (line.type === 'package') {
       const pkg = siteData.packages[line.pkgIndex];
-      const variety = line.varietyKey && line.varietyKey !== 'mix'
-        ? ` — ${((siteData.flowers[line.varietyKey] || {})[lang] || {}).name || line.varietyKey}` : '';
-      return `${line.qty} × ${t.pkgNames[line.pkgIndex]} (${pkg ? pkg.stems : 0} ${t.stemsWord})${variety}`;
+      return `${line.qty} × ${t.pkgNames[line.pkgIndex]} (${pkg ? pkg.stems : 0} ${t.stemsWord})`;
     }
     const parts = (siteData.flowerOrder || []).filter(key => line.counts && line.counts[key] > 0).map(key => {
       const flower = siteData.flowers[key];
       return `${line.counts[key]} × ${(flower[lang] || flower.en).name}`;
     });
-    const additionParts = (siteData.customAdditions || []).filter(addition => line.additions && line.additions[addition.key]).map(addition => (addition[lang] || addition.en).name);
+    const additionParts = (siteData.customAdditions || [])
+      .filter(addition => line.additions && line.additions[addition.key] > 0)
+      .map(addition => {
+        const count = line.additions[addition.key];
+        const name = (addition[lang] || addition.en).name;
+        return count > 1 ? `${count} × ${name}` : name;
+      });
     if (line.messageCard) additionParts.push(t.messageCardSelected);
     const additions = additionParts.length ? ` · ${t.additionsLabel}: ${additionParts.join(', ')}` : '';
     return `${line.qty > 1 ? `${line.qty} × ` : ''}${lang === 'en' ? 'Custom bouquet' : 'Buket custom'} (${parts.join(', ')})${additions}`;
@@ -300,7 +401,7 @@
     const itemData = cart.map(line => {
       if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
       if (line.type === 'pot') return { type: 'pot', id: line.potKey, qty: line.qty };
-      if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty, variety: line.varietyKey || 'mix' };
+      if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty };
       return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, message_card: !!line.messageCard, stems: siteData.flowerOrder.reduce((out, key) => {
         const qty = (line.counts && line.counts[key]) || 0;
         if (qty) out[key] = qty;
@@ -394,6 +495,14 @@
   }
 
   /**
+   * Total individual units in the cart (stems, pots, packages, bouquets),
+   * as opposed to cart.length which counts merged cart *lines* (UX-06).
+   */
+  function cartUnitCount() {
+    return cart.reduce((sum, l) => sum + l.qty, 0);
+  }
+
+  /**
    * Announce a cart mutation via the single #order-announcer live region.
    * Throttled to at most one DOM write per 500ms so holding a stepper
    * button doesn't flood the queue — a rapid burst still ends with one
@@ -447,10 +556,11 @@
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+    persistCart();
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const { title } = describeLine(line, t);
-    announceToScreenReader(fillTemplate(t.announceLineAdded || '{item} added. {n} item(s) in cart.', { item: title, n: cart.length }));
+    announceToScreenReader(fillTemplate(t.announceLineAdded || '{item} added. {n} item(s) in cart.', { item: title, n: cartUnitCount() }));
 
     return line;
   }
@@ -468,8 +578,9 @@
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+    persistCart();
 
-    announceToScreenReader(fillTemplate(t.announceLineRemoved || '{item} removed. {n} item(s) in cart.', { item: title, n: cart.length }));
+    announceToScreenReader(fillTemplate(t.announceLineRemoved || '{item} removed. {n} item(s) in cart.', { item: title, n: cartUnitCount() }));
 
     const linesEl = document.getElementById('cart-lines');
     if (linesEl) {
@@ -498,10 +609,11 @@
     renderCartLines();
     renderBouquetsUI();
     renderOrderSection();
+    persistCart();
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const { title } = describeLine(line, t);
-    announceToScreenReader(fillTemplate(t.announceQtyChanged || '{item} updated to {qty}. {n} item(s) in cart.', { item: title, qty: newQty, n: cart.length }));
+    announceToScreenReader(fillTemplate(t.announceQtyChanged || '{item} updated to {qty}. {n} item(s) in cart.', { item: title, qty: newQty, n: cartUnitCount() }));
   }
 
   /**
@@ -541,7 +653,7 @@
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
-    addLine({ type: 'package', pkgIndex: selectedPackage, variety: 'mix', qty: 1 });
+    addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
     if (restoreFocus) {
       const activeBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
       if (activeBtn) activeBtn.focus({ preventScroll: true });
@@ -595,6 +707,7 @@
     customCounts[flowerKey] = Math.max(0, cur + delta);
     renderCustomBuilder();
     renderBouquetsUI();
+    persistCart();
   }
 
   /**
@@ -604,15 +717,17 @@
     (siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera']).forEach(k => {
       customCounts[k] = 0;
     });
-    Object.keys(customAdditions).forEach(key => { customAdditions[key] = false; });
+    Object.keys(customAdditions).forEach(key => { customAdditions[key] = 0; });
     customMessageCard = false;
     renderCustomBuilder();
     renderBouquetsUI();
+    persistCart();
   }
 
-  function toggleCustomAddition(key, checked) {
+  function bumpCustomAddition(key, delta) {
     if (!Object.prototype.hasOwnProperty.call(customAdditions, key)) return;
-    customAdditions[key] = !!checked;
+    const cur = customAdditions[key] || 0;
+    customAdditions[key] = Math.max(0, cur + delta);
     renderCustomBuilder();
   }
 
@@ -622,18 +737,7 @@
   function selectWrap(wrapKey) {
     selectedWrap = wrapKey;
     renderOrderSection();
-  }
-
-  /**
-   * Order action: choose a variety (or studio mix) for a package cart line.
-   * Additive only — computeCartTotals ignores variety, since it never
-   * changes price (P1-07).
-   */
-  function selectPackageVariety(lineId, variety) {
-    const line = cart.find(l => l.id === lineId && l.type === 'package');
-    if (!line) return;
-    line.variety = variety;
-    renderOrderSection();
+    persistCart();
   }
 
   /**
@@ -847,10 +951,13 @@
       const trans = pot[currentLang] || pot.en;
       const card = document.createElement('article');
       card.className = 'mini-pot-card';
+      const heightBadge = pot.heightCm
+        ? fillTemplate(t.miniPotHeight || '~{h} cm', { h: pot.heightCm })
+        : t.miniPotMaterial;
       card.innerHTML = `
         <div class="mini-pot-photo-wrapper"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
         <div class="mini-pot-info">
-          <span class="mini-pot-material">${t.miniPotMaterial}</span>
+          <span class="mini-pot-material">${heightBadge}</span>
           <h4 class="mini-pot-title">${trans.name}</h4>
           <p class="mini-pot-blurb">${trans.blurb}</p>
           <p class="mini-pot-price">${formatRp(pot.price)}</p>
@@ -964,7 +1071,7 @@
         : '';
 
       card.innerHTML = `
-        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${trans.name}">
+        <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
           ${photoBadgeHtml}
@@ -1150,18 +1257,44 @@
 
     const additionsGrid = document.getElementById('custom-additions-grid');
     if (additionsGrid) {
+      // Record currently focused stepper button, if any, so a bump doesn't eject focus.
+      const activeEl = document.activeElement;
+      const activeAddition = activeEl ? activeEl.getAttribute('data-addition') : null;
+      const isAddInc = activeEl ? activeEl.classList.contains('btn-addition-inc') : false;
+      const isAddDec = activeEl ? activeEl.classList.contains('btn-addition-dec') : false;
+
       additionsGrid.innerHTML = '';
       (siteData.customAdditions || []).forEach(addition => {
         const trans = addition[currentLang] || addition.en;
-        const label = document.createElement('label');
-        label.className = `custom-addition-card ${customAdditions[addition.key] ? 'is-selected' : ''}`;
-        label.innerHTML = `
+        const count = customAdditions[addition.key] || 0;
+        const card = document.createElement('div');
+        card.className = `custom-addition-card ${count > 0 ? 'is-selected' : ''}`;
+        card.innerHTML = `
           <img src="${addition.photo}" width="1254" height="1254" alt="${trans.name}" loading="lazy" />
-          <span class="custom-addition-copy"><strong>${trans.name}</strong><small>+ ${formatRp(addition.price)}</small></span>
-          <input type="checkbox" data-addition="${addition.key}" ${customAdditions[addition.key] ? 'checked' : ''} aria-label="${trans.name}" />`;
-        label.querySelector('input').addEventListener('change', event => toggleCustomAddition(addition.key, event.target.checked));
-        additionsGrid.appendChild(label);
+          <span class="custom-addition-copy"><strong>${trans.name}</strong><small>${formatRp(addition.price)} / ${currentLang === 'en' ? 'piece' : 'lembar'}</small></span>
+          <div class="stepper-controls custom-addition-stepper">
+            <button type="button" class="btn-stepper btn-addition-dec" data-addition="${addition.key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+            <span class="stepper-count" aria-live="polite">${count}</span>
+            <button type="button" class="btn-stepper btn-addition-inc" data-addition="${addition.key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+          </div>`;
+        card.querySelector('.btn-addition-dec').addEventListener('click', () => bumpCustomAddition(addition.key, -1));
+        card.querySelector('.btn-addition-inc').addEventListener('click', () => bumpCustomAddition(addition.key, 1));
+        additionsGrid.appendChild(card);
       });
+
+      if (activeAddition) {
+        let selector = isAddInc
+          ? `.btn-addition-inc[data-addition="${activeAddition}"]`
+          : isAddDec
+            ? `.btn-addition-dec[data-addition="${activeAddition}"]`
+            : null;
+        let btnToFocus = selector ? additionsGrid.querySelector(selector) : null;
+        // The "−" that just reached 0 disables itself — land on "+" instead of losing focus.
+        if (isAddDec && btnToFocus && btnToFocus.disabled) {
+          btnToFocus = additionsGrid.querySelector(`.btn-addition-inc[data-addition="${activeAddition}"]`);
+        }
+        if (btnToFocus) btnToFocus.focus();
+      }
     }
 
     const messageCardInput = document.getElementById('custom-message-card');
@@ -1203,7 +1336,7 @@
             </div>
           </div>
           <div class="stepper-controls">
-            <button type="button" class="btn-stepper btn-dec" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+            <button type="button" class="btn-stepper btn-dec" data-flower="${key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
             <span class="stepper-count" aria-live="polite">${count}</span>
             <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
           </div>
@@ -1222,7 +1355,11 @@
             ? `.btn-dec[data-flower="${activeFlower}"]`
             : null;
         if (selector) {
-          const btnToFocus = rowsList.querySelector(selector);
+          let btnToFocus = rowsList.querySelector(selector);
+          // The "−" that just reached 0 disables itself — land on "+" instead of losing focus.
+          if (isDec && btnToFocus && btnToFocus.disabled) {
+            btnToFocus = rowsList.querySelector(`.btn-inc[data-flower="${activeFlower}"]`);
+          }
           if (btnToFocus) btnToFocus.focus();
         }
       }
@@ -1235,14 +1372,16 @@
       resetBtn.onclick = resetCustomCounts;
     }
 
-    // Live Estimate Breakdown
+    // Live Estimate Breakdown — below the stem minimum, no row shows a
+    // concrete number beside a dashed total (UX-07): the whole list dashes
+    // together, since none of these figures are final until it's valid.
     setText('#custom-est-label', t.estimateLabel);
     setText('#est-flowers-label', `${t.flowersLabel} (${tot.stems})`);
-    setText('#est-flowers-val', formatRp(tot.flowersSubtotal));
+    setText('#est-flowers-val', tot.isValid ? formatRp(tot.flowersSubtotal) : '—');
 
     const discountRow = document.getElementById('est-discount-row');
     if (discountRow) {
-      if (tot.discount > 0) {
+      if (tot.isValid && tot.discount > 0) {
         discountRow.style.display = 'flex';
         setText('#est-discount-label', interpolateRules(t.discountLabel));
         setText('#est-discount-val', `− ${formatRp(tot.discount)}`);
@@ -1252,9 +1391,9 @@
     }
 
     setText('#est-wrap-label', t.wrapFeeLabel);
-    setText('#est-wrap-val', formatRp(tot.wrapFee));
+    setText('#est-wrap-val', tot.isValid ? formatRp(tot.wrapFee) : '—');
     setText('#est-additions-label', t.additionsLabel);
-    setText('#est-additions-val', formatRp(tot.additionsSubtotal));
+    setText('#est-additions-val', tot.isValid ? formatRp(tot.additionsSubtotal) : '—');
 
     setText('#est-total-label', t.estTotalLabel);
     setText('#est-total-val', tot.isValid ? formatRp(tot.total) : '—');
@@ -1401,12 +1540,6 @@
   /**
    * Cart line title/photo helper — resolves what a line represents for display.
    */
-  function varietyName(varietyKey, t) {
-    if (!varietyKey || varietyKey === 'mix') return t.pkgVarietyMix || 'Studio mix';
-    const flower = siteData.flowers[varietyKey];
-    return flower ? (flower[currentLang] || flower.en).name : varietyKey;
-  }
-
   function describeLine(line, t) {
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
@@ -1420,10 +1553,7 @@
     }
     if (line.type === 'package') {
       const pkg = siteData.packages[line.pkgIndex];
-      const pkgName = t.pkgNames[line.pkgIndex] || `Package ${line.pkgIndex + 1}`;
-      const title = (line.variety && line.variety !== 'mix')
-        ? `${pkgName} — ${varietyName(line.variety, t)}`
-        : pkgName;
+      const title = t.pkgNames[line.pkgIndex] || `Package ${line.pkgIndex + 1}`;
       return { title, photoSrc: pkg ? (pkg.photoWebp || pkg.photo) : '', photoAlt: title };
     }
     // custom
@@ -1432,93 +1562,6 @@
     const title = `${t.customTitleShort} (${bouquetStems} ${t.stemsWord})`;
     const illustrativePkg = siteData.packages[1];
     return { title, photoSrc: illustrativePkg ? (illustrativePkg.photoWebp || illustrativePkg.photo) : '', photoAlt: title };
-  }
-
-  /**
-   * Locate a rendered cart-line <li> by its line id, from a stable ancestor
-   * (#cart-lines survives re-renders; the <li>s inside it don't).
-   */
-  function findCartLineEl(linesEl, lineId) {
-    const items = Array.from(linesEl.querySelectorAll('.cart-line'));
-    return items.find(el => el.getAttribute('data-line-id') === String(lineId)) || null;
-  }
-
-  /**
-   * Package variety chooser — one radio per flower plus "studio mix".
-   * Reuses the #wrap-chips roving-tabindex / arrow-key pattern exactly
-   * (same role="radio", aria-checked, keyboard handling) rather than a
-   * second implementation (P1-07).
-   */
-  function renderVarietyChooser(line, t, linesEl) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'cart-line-variety';
-
-    const label = document.createElement('p');
-    label.className = 'cart-line-variety-label';
-    label.textContent = t.pkgVarietyLabel || 'Pilih varietas';
-    wrapper.appendChild(label);
-
-    const optionsEl = document.createElement('div');
-    optionsEl.className = 'cart-line-variety-options';
-    optionsEl.setAttribute('role', 'radiogroup');
-    optionsEl.setAttribute('aria-label', t.pkgVarietyLabel || 'Pilih varietas');
-
-    const options = ['mix', ...(siteData.flowerOrder || [])];
-    const currentVariety = line.variety || 'mix';
-
-    options.forEach((key, idx) => {
-      const active = currentVariety === key;
-      const name = varietyName(key, t);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `chip-wrap chip-variety ${active ? 'active' : ''}`;
-      btn.setAttribute('role', 'radio');
-      btn.setAttribute('aria-checked', active ? 'true' : 'false');
-      btn.setAttribute('tabindex', active ? '0' : '-1');
-      btn.setAttribute('data-variety-index', String(idx));
-
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = name;
-      btn.appendChild(nameSpan);
-      if (active) {
-        const check = document.createElement('span');
-        check.className = 'wrap-check';
-        check.setAttribute('aria-hidden', 'true');
-        check.textContent = '✓';
-        btn.appendChild(check);
-      }
-
-      const focusActiveChip = () => {
-        const freshLi = findCartLineEl(linesEl, line.id);
-        const freshOptions = freshLi ? freshLi.querySelector('.cart-line-variety-options') : null;
-        const activeChip = freshOptions ? freshOptions.querySelector('.chip-variety.active') : null;
-        if (activeChip) activeChip.focus();
-      };
-
-      btn.addEventListener('click', () => {
-        selectPackageVariety(line.id, key);
-        focusActiveChip();
-      });
-      btn.addEventListener('keydown', (e) => {
-        let targetIdx = -1;
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          targetIdx = (idx + 1) % options.length;
-        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          targetIdx = (idx - 1 + options.length) % options.length;
-        }
-        if (targetIdx >= 0) {
-          selectPackageVariety(line.id, options[targetIdx]);
-          focusActiveChip();
-        }
-      });
-
-      optionsEl.appendChild(btn);
-    });
-
-    wrapper.appendChild(optionsEl);
-    return wrapper;
   }
 
   /**
@@ -1532,7 +1575,26 @@
     const linesEl = document.getElementById('cart-lines');
     if (!linesEl) return;
 
+    // Record the currently focused stepper button, if any, so the rebuild
+    // below doesn't eject keyboard focus to <body> (UX-04) — same pattern
+    // as renderCustomBuilder()'s flower-row steppers, keyed on line id.
+    const activeEl = document.activeElement;
+    const activeLineEl = activeEl ? activeEl.closest('.cart-line') : null;
+    const activeLineId = activeLineEl ? activeLineEl.getAttribute('data-line-id') : null;
+    const isLineInc = activeEl ? activeEl.classList.contains('btn-line-inc') : false;
+    const isLineDec = activeEl ? activeEl.classList.contains('btn-line-dec') : false;
+
     while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
+
+    if (cart.length === 0) {
+      const emptyLi = document.createElement('li');
+      emptyLi.className = 'cart-line-empty';
+      emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
+        ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
+        : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
+      linesEl.appendChild(emptyLi);
+      return;
+    }
 
     const cartTotals = computeCartTotals(cart);
 
@@ -1596,12 +1658,18 @@
       removeBtn.addEventListener('click', () => removeLine(line.id));
       li.appendChild(removeBtn);
 
-      if (line.type === 'package') {
-        li.appendChild(renderVarietyChooser(line, t, linesEl));
-      }
-
       linesEl.appendChild(li);
     });
+
+    if (activeLineId && (isLineInc || isLineDec)) {
+      const selector = isLineInc
+        ? `.cart-line[data-line-id="${activeLineId}"] .btn-line-inc`
+        : `.cart-line[data-line-id="${activeLineId}"] .btn-line-dec`;
+      const btnToFocus = linesEl.querySelector(selector);
+      // If the line no longer exists (qty hit 0), removeLine() already owns
+      // focus restoration for that case — don't fight it here.
+      if (btnToFocus) btnToFocus.focus();
+    }
   }
 
   /**
@@ -1656,6 +1724,9 @@
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
     setText('#order-picker-label', t.orderPickerLabel || 'Pilih produk');
+    setText('#order-picker-flowers-label', t.catOneTitle || 'Bunga jadi');
+    setText('#order-picker-pots-label', t.catTwoTitle || 'Mini pot');
+    setText('#order-picker-packages-label', t.catThreeTitle || 'Buket');
 
     const flowersEl = document.getElementById('order-picker-flowers');
     if (flowersEl) {
@@ -1706,6 +1777,16 @@
         }));
       });
     }
+
+    // Hide a group's heading (and the group itself) when its grid ended up empty (UX-03)
+    [
+      ['order-picker-group-flowers', flowersEl],
+      ['order-picker-group-pots', potsEl],
+      ['order-picker-group-packages', packagesEl]
+    ].forEach(([groupId, gridEl]) => {
+      const groupEl = document.getElementById(groupId);
+      if (groupEl) groupEl.style.display = (gridEl && gridEl.children.length > 0) ? '' : 'none';
+    });
   }
 
   /**
@@ -1726,7 +1807,7 @@
     setText('#selection-label', t.selectionLabel);
     setText('#includes-label', t.includesLabel);
     setText('#step3-label', t.continueLabel);
-    setText('#btn-edit-selection', t.btnEditSelection || 'Ubah pilihan ↑');
+    setText('#btn-edit-selection', t.btnEditSelection || 'Ubah pilihan');
     setText('#summary-shipping-note', t.shippingExcl || '(belum termasuk ongkir)');
 
     // 2. Wrap colour selection chips (WAI-ARIA Radio Group pattern - A3)
@@ -1777,15 +1858,27 @@
 
     // 3. Message card textarea
     const noteInput = document.getElementById('card-note-input');
+    const noteCounterEl = document.getElementById('card-note-counter');
+    const updateNoteCounter = () => {
+      if (noteCounterEl) noteCounterEl.textContent = fillTemplate(t.cardNoteCounter || '{n}/{max}', { n: orderNote.length, max: CARD_NOTE_MAX });
+    };
     if (noteInput) {
       noteInput.placeholder = t.cardPlaceholder;
+      noteInput.maxLength = CARD_NOTE_MAX;
       if (noteInput.value !== orderNote) {
         noteInput.value = orderNote;
       }
+      updateNoteCounter();
       noteInput.oninput = (e) => {
-        orderNote = e.target.value;
+        // maxlength stops normal typing, but a paste can still exceed it —
+        // clamp again here so the summary line and WhatsApp link never see
+        // more than CARD_NOTE_MAX characters either (UX-15).
+        orderNote = e.target.value.slice(0, CARD_NOTE_MAX);
+        if (e.target.value !== orderNote) e.target.value = orderNote;
+        updateNoteCounter();
         renderSummaryIncludes();
         updateWhatsAppLink();
+        persistCart();
       };
     }
 
@@ -1793,6 +1886,7 @@
     //    generic "go add or change something" affordance, not one line's editor.
     const editBtn = document.getElementById('btn-edit-selection');
     if (editBtn) {
+      editBtn.style.display = cartHasSelection ? '' : 'none';
       editBtn.onclick = () => {
         scrollToSection('#collection');
       };
@@ -1816,7 +1910,7 @@
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
         : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
-      if (action) action.textContent = currentLang === 'en' ? 'continue →' : 'lanjut →';
+      if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
     const priceEl = document.getElementById('summary-price');
@@ -1907,20 +2001,18 @@
 
     if (btnShopee) {
       if (siteData.store.channels?.showShopee === false) {
-        btnShopee.style.display = 'none';
+        // .btn-shopee sets "display: flex !important", which a plain
+        // style.display assignment cannot override — a dedicated class
+        // beats it on specificity instead.
+        btnShopee.classList.add('btn-shopee-hidden');
       } else if (!shopeeActive) {
-        btnShopee.style.display = 'flex';
-        btnShopee.removeAttribute('href');
-        btnShopee.setAttribute('aria-disabled', 'true');
-        btnShopee.classList.add('btn-disabled');
-        const shopName = btnShopee.querySelector('.channel-name');
-        if (shopName) shopName.textContent = t.shopeeLabel || 'Shopee';
-        const shopSub = document.getElementById('shopee-channel-sub');
-        if (shopSub) shopSub.textContent = currentLang === 'en' ? 'Official Store · Coming soon' : 'Toko Resmi · Segera hadir';
-        const shopAction = document.getElementById('shopee-channel-action');
-        if (shopAction) shopAction.textContent = t.channelComingSoon || (currentLang === 'en' ? 'coming soon' : 'segera hadir');
+        // The "coming soon" fact already lives in #marketplace-status-box
+        // right below — showing a second, disabled Shopee button here just
+        // repeats it (UX-28). The button returns the moment shopeeUrl is
+        // configured, via the isShopeeReady() branch below.
+        btnShopee.classList.add('btn-shopee-hidden');
       } else {
-        btnShopee.style.display = 'flex';
+        btnShopee.classList.remove('btn-shopee-hidden');
         btnShopee.classList.remove('btn-disabled');
         btnShopee.removeAttribute('aria-disabled');
         btnShopee.href = siteData.store.shopeeUrl;
@@ -2026,8 +2118,12 @@
             return `${line.counts[k]} × ${(fl ? (fl[currentLang] || fl.en) : { name: k }).name}`;
           });
           const additionNames = (siteData.customAdditions || [])
-            .filter(addition => line.additions && line.additions[addition.key])
-            .map(addition => (addition[currentLang] || addition.en).name);
+            .filter(addition => line.additions && line.additions[addition.key] > 0)
+            .map(addition => {
+              const count = line.additions[addition.key];
+              const name = (addition[currentLang] || addition.en).name;
+              return count > 1 ? `${count} × ${name}` : name;
+            });
           if (line.messageCard) additionNames.push(t.messageCardSelected);
           const customItems = [...flowerNames, ...additionNames.map(item => `${t.additionsLabel}: ${item}`)];
           const flowerList = customItems.map(item => `• ${item}`).join('\n');
@@ -2121,6 +2217,8 @@
       setText('#sticky-order-price', formatRp(cartTotals.total));
       setText('#sticky-order-cta', `${t.navOrder || (currentLang === 'en' ? 'Order' : 'Pesan')} →`);
     }
+
+    if (refreshStickyVisibility) refreshStickyVisibility();
   }
 
   /**
@@ -2253,8 +2351,13 @@
     const header = document.querySelector('.site-header');
     const footer = document.querySelector('.site-footer');
     const stickyBar = document.getElementById('sticky-order-bar');
+    const skipLink = document.querySelector('.skip-link');
 
-    [mainContent, header, footer, stickyBar].forEach(el => {
+    // The skip-link sits before the lock screen in the DOM (so it stays
+    // reachable at the very top when unlocked); while locked it's part of
+    // the page the curtain exists to hide, so it must be caught here too,
+    // or Tab escapes the passcode field into it (UX-19).
+    [mainContent, header, footer, stickyBar, skipLink].forEach(el => {
       if (el) {
         if (isLocked) {
           el.setAttribute('aria-hidden', 'true');
@@ -2265,6 +2368,8 @@
         }
       }
     });
+
+    document.body.classList.toggle('lock-scroll-off', isLocked);
   }
 
   /**
@@ -2348,6 +2453,14 @@
     if (relockBtn) {
       relockBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        // Low priority, optional (UX-31): a stray click during staging
+        // review would otherwise lock out the viewer mid-demo with no
+        // way back. The auth.enabled gate that hides this button entirely
+        // at public launch is untouched.
+        const confirmMsg = currentLang === 'en'
+          ? 'Lock the site again? You will need the passcode to view it.'
+          : 'Kunci situs ini lagi? Anda memerlukan kata sandi untuk membukanya kembali.';
+        if (!window.confirm(confirmMsg)) return;
         try {
           localStorage.removeItem(AUTH_KEY);
         } catch (err) {}
@@ -2362,6 +2475,27 @@
         }
       });
     }
+
+    // Belt-and-suspenders on top of inert: with everything else on the page
+    // excluded, some browsers let Tab land on <body> itself at the wrap
+    // boundary instead of cycling straight back to the passcode field.
+    // Trap the wrap-around explicitly so Tab only ever moves between the
+    // passcode input and the unlock button while locked (UX-19).
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || !lockScreen || lockScreen.classList.contains('unlocked')) return;
+      const focusables = Array.from(lockScreen.querySelectorAll('input, button, select, textarea, a[href]'))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
   }
 
   /**
@@ -2380,7 +2514,7 @@
 
     function updateSticky() {
       const focusInside = stickyBar.contains(document.activeElement);
-      if ((!heroVisible && !orderVisible && !footerVisible) || focusInside) {
+      if (focusInside || (cart.length > 0 && !heroVisible && !orderVisible && !footerVisible)) {
         stickyBar.classList.add('visible');
         stickyBar.setAttribute('aria-hidden', 'false');
       } else {
@@ -2388,6 +2522,8 @@
         stickyBar.setAttribute('aria-hidden', 'true');
       }
     }
+
+    refreshStickyVisibility = updateSticky;
 
     stickyBar.addEventListener('focusin', updateSticky);
     stickyBar.addEventListener('focusout', () => {
@@ -2485,6 +2621,18 @@
     const navMenu = document.getElementById('nav-menu');
     const navScrim = document.getElementById('nav-scrim');
 
+    // While the menu is open, the rest of the page sits behind a scrim and
+    // must not be reachable by Tab — mirrors updateLockA11y()'s technique
+    // for the lock curtain (UX-18).
+    function setBehindMenuInert(isInert) {
+      const mainContent = document.getElementById('main-content');
+      const footer = document.querySelector('.site-footer');
+      const stickyBar = document.getElementById('sticky-order-bar');
+      [mainContent, footer, stickyBar].forEach(el => {
+        if (el && 'inert' in el) el.inert = isInert;
+      });
+    }
+
     function openNavMenu() {
       if (!navMenu || !navToggle) return;
       navMenu.classList.add('open');
@@ -2492,6 +2640,7 @@
       document.body.classList.add('nav-open');
       navToggle.setAttribute('aria-expanded', 'true');
       navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Close navigation menu' : 'Tutup menu navigasi');
+      setBehindMenuInert(true);
       const firstLink = navMenu.querySelector('.nav-link');
       if (firstLink) firstLink.focus();
     }
@@ -2503,6 +2652,7 @@
       document.body.classList.remove('nav-open');
       navToggle.setAttribute('aria-expanded', 'false');
       navToggle.setAttribute('aria-label', currentLang === 'en' ? 'Open navigation menu' : 'Buka menu navigasi');
+      setBehindMenuInert(false);
     }
 
     if (navToggle && navMenu) {
@@ -2694,7 +2844,15 @@
     const list = document.getElementById('checkout-items');
     if (list) {
       list.textContent = '';
-      state.items.forEach(item => { const li = document.createElement('li'); li.textContent = item; list.appendChild(li); });
+      // Show a per-line price here (UX-13) — richer than state.items, which
+      // stays plain text for the WhatsApp/submission summaries that reuse it.
+      const cartTotals = computeCartTotals(cart);
+      cart.forEach((line, idx) => {
+        const li = document.createElement('li');
+        const lineTotal = cartTotals.lines[idx] ? cartTotals.lines[idx].total : 0;
+        li.textContent = `${checkoutLineLabel(line)} — ${formatRp(lineTotal)}`;
+        list.appendChild(li);
+      });
     }
     setText('#checkout-subtotal-label', en ? 'Product subtotal' : 'Subtotal produk');
     setText('#checkout-subtotal', formatRp(state.productSubtotal));
@@ -2705,7 +2863,8 @@
     setText('#checkout-total-label', en ? 'Estimated product total' : 'Estimasi total produk');
     setText('#checkout-total', formatRp(state.estimatedProductTotal));
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}. ${en ? 'Card message' : 'Pesan kartu'}: ${orderNote.trim() || (en ? 'No card message' : 'Tidak ada pesan kartu')}`);
+    const cardNoteText = orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
+    setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
     setText('#checkout-notice', en ? 'No payment is required at this stage. We will confirm your address, delivery fee, and final total through WhatsApp.' : 'Belum ada pembayaran pada tahap ini. Kami akan mengonfirmasi alamat, ongkos kirim, dan total akhir melalui WhatsApp.');
     setText('#checkout-edit', en ? 'Edit order' : 'Ubah pesanan');
     setText('#checkout-continue', en ? 'Continue order' : 'Lanjutkan pemesanan');
@@ -2764,15 +2923,90 @@
     setOptions('preferred_window', en ? ['Flexible', 'Morning', 'Afternoon', 'Evening'] : ['Fleksibel', 'Pagi', 'Siang', 'Sore']);
   }
 
+  /**
+   * In-app checkout form validation (UX-14) — replaces the native
+   * reportValidity() bubble (English-only, one field at a time, overlaps
+   * the field's own label) with a persistent, Indonesian-first message
+   * beside every invalid field. `novalidate` on the form suppresses the
+   * native UI; the underlying validity API still works without it.
+   */
+  function fieldErrorId(field) {
+    return `err-${field.name}`;
+  }
+
+  function ensureFieldErrorEl(field) {
+    let el = document.getElementById(fieldErrorId(field));
+    if (!el) {
+      el = document.createElement('span');
+      el.id = fieldErrorId(field);
+      el.className = 'field-error';
+      el.setAttribute('role', 'alert');
+      el.hidden = true;
+      const container = field.closest('label') || field.parentElement;
+      container.appendChild(el);
+    }
+    return el;
+  }
+
+  function fieldValidationMessage(field) {
+    const en = currentLang === 'en';
+    if (field.validity.valueMissing) {
+      if (field.type === 'checkbox') return en ? 'Please check this box to continue.' : 'Centang kotak ini untuk melanjutkan.';
+      if (field.tagName === 'SELECT') return en ? 'Please choose an option.' : 'Silakan pilih salah satu.';
+      return en ? 'This field is required.' : 'Kolom ini wajib diisi.';
+    }
+    if (field.validity.patternMismatch) {
+      return en ? 'Enter a valid WhatsApp number.' : 'Masukkan nomor WhatsApp yang valid.';
+    }
+    if (field.validity.typeMismatch) {
+      return en ? 'Enter a valid email address.' : 'Masukkan alamat email yang valid.';
+    }
+    return en ? 'This field needs attention.' : 'Kolom ini perlu diperiksa.';
+  }
+
+  function setFieldError(field, message) {
+    const el = ensureFieldErrorEl(field);
+    el.textContent = message || '';
+    el.hidden = !message;
+    if (message) {
+      field.setAttribute('aria-invalid', 'true');
+    } else {
+      field.removeAttribute('aria-invalid');
+    }
+    const described = (field.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+    if (!described.includes(el.id)) {
+      field.setAttribute('aria-describedby', [...described, el.id].join(' '));
+    }
+  }
+
+  function validateCheckoutForm(form) {
+    const invalidFields = [];
+    Array.from(form.elements).forEach(field => {
+      if (!field.name || field.disabled || field.type === 'hidden') return;
+      if (field.checkValidity()) {
+        setFieldError(field, '');
+      } else {
+        setFieldError(field, fieldValidationMessage(field));
+        invalidFields.push(field);
+      }
+    });
+    return invalidFields;
+  }
+
   async function submitWebsiteOrder(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      error.textContent = currentLang === 'en' ? 'Please complete the required fields.' : 'Mohon lengkapi semua kolom wajib.';
+    const invalidFields = validateCheckoutForm(form);
+    if (invalidFields.length > 0) {
+      const en = currentLang === 'en';
+      error.textContent = en
+        ? `${invalidFields.length} field${invalidFields.length === 1 ? '' : 's'} need${invalidFields.length === 1 ? 's' : ''} to be completed.`
+        : `${invalidFields.length} kolom perlu dilengkapi.`;
+      invalidFields[0].focus();
       return;
     }
+    error.textContent = '';
     const endpoint = String(siteData.store.orderSubmissionUrl || '').trim();
     if (!endpoint) {
       error.textContent = currentLang === 'en' ? 'Order saving is not configured yet. Please contact the studio.' : 'Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.';
@@ -2816,11 +3050,29 @@
     const toggleGiftFields = () => {
       const isGift = orderFor.value === 'gift';
       giftFields.hidden = !isGift;
-      giftFields.querySelectorAll('input, select').forEach(field => { field.required = isGift; });
+      giftFields.querySelectorAll('input, select').forEach(field => {
+        field.required = isGift;
+        // A field that was invalid while required must not keep showing
+        // a stale error once toggling makes it optional again.
+        if (document.getElementById(fieldErrorId(field))) {
+          setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
+        }
+      });
       if (isGift) giftFields.querySelector('input')?.focus();
     };
     orderFor.addEventListener('change', toggleGiftFields);
-    document.getElementById('checkout-form').addEventListener('submit', submitWebsiteOrder);
+    const checkoutFormEl = document.getElementById('checkout-form');
+    checkoutFormEl.addEventListener('submit', submitWebsiteOrder);
+    // Filling in a field that already shows an error clears only that
+    // field's message — never re-validates the whole form (UX-14).
+    const revalidateOnInteraction = (e) => {
+      const field = e.target;
+      if (field && field.name && document.getElementById(fieldErrorId(field))) {
+        setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
+      }
+    };
+    checkoutFormEl.addEventListener('input', revalidateOnInteraction);
+    checkoutFormEl.addEventListener('change', revalidateOnInteraction);
     document.getElementById('copy-reference').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(checkoutAttempt.reference);
@@ -2893,6 +3145,7 @@
    */
   function init() {
     loadData();
+    restoreCartFromStorage();
     initLang();
     setupEventListeners();
     setupReducedMotionListener();
@@ -2941,7 +3194,7 @@
       selectMiniPot: selectMiniPot,
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
-      toggleCustomAddition: toggleCustomAddition,
+      bumpCustomAddition: bumpCustomAddition,
       setCustomMessageCard: (checked) => {
         customMessageCard = !!checked;
         renderCustomBuilder();
@@ -2949,10 +3202,10 @@
       resetCustom: resetCustomCounts,
       useCustom: useCustomBouquet,
       selectWrap: selectWrap,
-      selectPackageVariety: selectPackageVariety,
       setOrderNote: (note) => {
         orderNote = typeof note === 'string' ? note : '';
         renderOrderSection();
+        persistCart();
       },
       resetToInitial: () => {
         cart = [];
@@ -2960,7 +3213,7 @@
         selectedFlower = 'Sunflower';
         selectedPackage = 1;
         customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
-        customAdditions = { rounded: false, fern: false };
+        customAdditions = { rounded: 0, fern: 0 };
         customMessageCard = false;
         selectedWrap = 'kraft';
         orderNote = '';
@@ -2976,6 +3229,8 @@
       buildOrderSubmission: buildOrderSubmission,
       getCart: () => cart.map(l => ({ ...l })),
       _setCartForTest: (c) => { cart = c; },
+      persistCart: persistCart,
+      restoreCartFromStorage: restoreCartFromStorage,
       addLine: addLine,
       removeLine: removeLine,
       bumpLineQty: bumpLineQty,

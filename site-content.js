@@ -97,9 +97,9 @@ window.ALXANTHIA_DATA = {
 
   // Mini Pot Catalog (placeholder prices — easy to update later)
   miniPots: [
-    { key: "sunflower", price: 125000, photo: "img/mini-pot-sunflower.webp", accent: "#C89A3C", en: { name: "Sunflower Mini Pot", blurb: "A sunny chenille bloom in a hand-coiled miniature pot." }, id: { name: "Mini Pot Bunga Matahari", blurb: "Bunga matahari cerah dalam pot mini yang seluruhnya dibuat dari chenille." } },
-    { key: "lily-of-the-valley", price: 125000, photo: "img/mini-pot-lily-of-the-valley.webp", accent: "#78906A", en: { name: "Lily of the Valley Mini Pot", blurb: "Delicate white bells gathered in a soft chenille pot." }, id: { name: "Mini Pot Lily of the Valley", blurb: "Lonceng putih mungil yang dirangkai lembut di dalam pot chenille." } },
-    { key: "daisy", price: 125000, photo: "img/mini-pot-daisy.webp", accent: "#D7A932", en: { name: "Daisy Mini Pot", blurb: "A cheerful white daisy with a golden centre, made to brighten small spaces." }, id: { name: "Mini Pot Daisy", blurb: "Daisy putih dengan pusat keemasan untuk memberi warna di sudut kecil." } }
+    { key: "sunflower", price: 125000, heightCm: 14, photo: "img/mini-pot-sunflower.webp", accent: "#C89A3C", en: { name: "Sunflower Mini Pot", blurb: "A sunny chenille bloom in a hand-coiled miniature pot." }, id: { name: "Mini Pot Bunga Matahari", blurb: "Bunga matahari cerah dalam pot mini yang seluruhnya dibuat dari chenille." } },
+    { key: "lily-of-the-valley", price: 125000, heightCm: 11, photo: "img/mini-pot-lily-of-the-valley.webp", accent: "#78906A", en: { name: "Lily of the Valley Mini Pot", blurb: "Delicate white bells gathered in a soft chenille pot." }, id: { name: "Mini Pot Lily of the Valley", blurb: "Lonceng putih mungil yang dirangkai lembut di dalam pot chenille." } },
+    { key: "daisy", price: 125000, heightCm: 13, photo: "img/mini-pot-daisy.webp", accent: "#D7A932", en: { name: "Daisy Mini Pot", blurb: "A cheerful white daisy with a golden centre, made to brighten small spaces." }, id: { name: "Mini Pot Daisy", blurb: "Daisy putih dengan pusat keemasan untuk memberi warna di sudut kecil." } }
   ],
 
   // Optional custom-bouquet additions (placeholder prices)
@@ -164,14 +164,14 @@ window.ALXANTHIA_DATA = {
         size: "45 cm stem",
         detail: "12 cm head",
         blurb: "Our signature. Layered ochre petals and a dense seeded crown.",
-        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
+        singleNote: "Price per finished stem"
       },
       id: {
         name: "Bunga Matahari",
         size: "tangkai 45 cm",
         detail: "kepala 12 cm",
         blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat.",
-        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
+        singleNote: "Harga per 1 tangkai jadi"
       }
     },
     Rose: {
@@ -190,14 +190,14 @@ window.ALXANTHIA_DATA = {
         size: "40 cm stem",
         detail: "spiralled head",
         blurb: "Petals wound one by one into a spiral. The most patient flower we make.",
-        singleNote: "Price per finished stem · Photo shows 3 stems styled together"
+        singleNote: "Price per finished stem"
       },
       id: {
         name: "Mawar",
         size: "tangkai 40 cm",
         detail: "kepala melingkar",
         blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran.",
-        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 tangkai yang ditata bersama"
+        singleNote: "Harga per 1 tangkai jadi"
       }
     },
     Tulip: {
@@ -216,14 +216,14 @@ window.ALXANTHIA_DATA = {
         size: "38 cm stem",
         detail: "6 petals",
         blurb: "Six clean petals and a single leaf. Quiet enough for any room.",
-        singleNote: "Price per finished stem · Photo shows 4 stems styled together"
+        singleNote: "Price per finished stem"
       },
       id: {
         name: "Tulip",
         size: "tangkai 38 cm",
         detail: "6 kelopak",
         blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun.",
-        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 4 tangkai yang ditata bersama"
+        singleNote: "Harga per 1 tangkai jadi"
       }
     },
     Gerbera: {
@@ -242,14 +242,14 @@ window.ALXANTHIA_DATA = {
         size: "40 cm stem",
         detail: "coral, two-tone",
         blurb: "Two rings of narrow coral petals around a seeded brown centre.",
-        singleNote: "Price per finished stem · Photo shows 3 color references"
+        singleNote: "Price per finished stem"
       },
       id: {
         name: "Gerbera",
         size: "tangkai 40 cm",
         detail: "koral, dua nada",
         blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
-        singleNote: "Harga per 1 tangkai jadi · Foto menampilkan 3 varian warna"
+        singleNote: "Harga per 1 tangkai jadi"
       }
     },
     Lavender: {
@@ -292,7 +292,7 @@ window.ALXANTHIA_DATA = {
 
       heroEyebrow: "Bunga jadi & buket · benang chenille",
       heroTitle: "Bunga yang tak pernah layu — kami rangkai untuk Anda.",
-      heroSub: "Setiap tangkai kami bentuk dan rangkai sendiri, lalu dikemas siap dipajang. Ambil satu tangkai, salah satu paket buket kami, atau susun campuran Anda sendiri. Based in Bali, Indonesia",
+      heroSub: "Setiap tangkai kami bentuk dan rangkai sendiri, lalu dikemas siap dipajang. Ambil satu tangkai, salah satu paket buket kami, atau susun campuran Anda sendiri.",
       heroPlateCaption: "Helianthus annuus",
       heroPlatePl: "PL. I",
       ctaBrowse: "Lihat bunganya",
@@ -315,7 +315,8 @@ window.ALXANTHIA_DATA = {
       tr4d: "Detail pesanan & pengiriman dikonfirmasi langsung via WhatsApp studio.",
 
       colEyebrow: "Koleksi",
-      colTitle: "Tiga cara memesan",
+      zoomPhotoLabel: "Perbesar foto {name}",
+      colTitle: "Cara memesan",
       colIntro: "Pilih tangkai jadi, mini pot, atau buket — versi kami atau versi Anda.",
       catOneLabel: "Kategori 01",
       catOneTitle: "Bunga jadi",
@@ -327,15 +328,16 @@ window.ALXANTHIA_DATA = {
       catThreeTitle: "Buket",
       catThreeNote: "Empat paket siap pesan, atau campuran custom yang Anda hitung sendiri.",
       miniPotMaterial: "100% kerajinan chenille",
+      miniPotHeight: "Tinggi ~{h} cm",
       miniPotBtn: "Tambahkan mini pot",
 
-      orderStemLabel: "Pesan tangkai ini",
+      orderStemLabel: "Tambahkan tangkai ini",
       perStemPrefix: "per tangkai",
       shippingExcl: "(belum termasuk ongkir)",
 
       pkgNames: ["Buket Mini", "Buket Sedang", "Buket Besar", "Buket Istimewa"],
       pkgBlurbs: [
-        "Tiga tangkai — pilihan satu jenis bunga atau campuran variasi studio. Pas untuk meja dan nakas.",
+        "Tiga tangkai campuran variasi studio. Pas untuk meja dan nakas.",
         "Lima tangkai dengan komposisi bertingkat yang seimbang. Pilihan buket klasik studio.",
         "Sembilan tangkai, warna campur pilihan studio. Termasuk potongan hemat 10%.",
         "Lima belas tangkai mekar penuh untuk momen istimewa. Termasuk potongan hemat 10%."
@@ -347,13 +349,11 @@ window.ALXANTHIA_DATA = {
         "Dikemas rapi dalam kotak pelindung",
         "Kartu petunjuk perawatan disertakan"
       ],
-      pkgBtn: "Pilih buket ini",
+      pkgBtn: "Tambahkan buket ini",
       pkgBtnActive: "✓ Dipilih",
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
-      pkgVarietyLabel: "Pilih varietas",
-      pkgVarietyMix: "Campuran studio",
 
       customEyebrow: "Buket custom",
       customTitle: "Atau hitung sendiri isinya",
@@ -411,12 +411,14 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Pesan",
       orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
-      orderPickerLabel: "Pilih produk",
+      orderPickerLabel: "Belum ada pilihan — pilih produk di sini",
+      cartEmpty: "Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.",
       finishLabel: "Sentuhan akhir",
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
       cardPlaceholder: "mis. Selamat wisuda, Sagita — sukses selalu!",
       cardNote: "Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil, tanpa biaya tambahan.",
+      cardNoteCounter: "{n}/{max} karakter",
       selectionLabel: "Pilihan Anda",
       includesLabel: "Termasuk",
       continueLabel: "Lanjut ke pemesanan",
@@ -447,7 +449,7 @@ window.ALXANTHIA_DATA = {
       waDraftNotice: "Membuka draf pesan di WhatsApp (tidak terkirim otomatis sampai Anda menekan tombol kirim di aplikasi).",
       waLabel: "WhatsApp — Konfirmasi Pesanan",
       orderNote: "Total pesanan dan ongkos kirim akan dikonfirmasikan langsung melalui chat WhatsApp studio sebelum Anda melakukan transfer.",
-      btnEditSelection: "Ubah pilihan ↑",
+      btnEditSelection: "Ubah pilihan",
       customMinErrorSummary: "Tambahkan minimal {minStems} tangkai untuk melanjutkan pesanan buket custom.",
       customMinHint: "Minimal {n} tangkai",
       removeLineLabel: "Hapus {item} dari keranjang",
@@ -537,7 +539,8 @@ window.ALXANTHIA_DATA = {
       tr4d: "Order details and delivery confirmed directly via studio WhatsApp.",
 
       colEyebrow: "The collection",
-      colTitle: "Three ways to order",
+      zoomPhotoLabel: "Enlarge photo of {name}",
+      colTitle: "Ways to order",
       colIntro: "Choose a finished stem, a mini pot, or a bouquet — ours or yours.",
       catOneLabel: "Category 01",
       catOneTitle: "Finished flowers",
@@ -549,15 +552,16 @@ window.ALXANTHIA_DATA = {
       catThreeTitle: "Bouquets",
       catThreeNote: "Four ready packages, or a custom mix you count out yourself.",
       miniPotMaterial: "100% chenille craft",
+      miniPotHeight: "~{h} cm tall",
       miniPotBtn: "Add mini pot",
 
-      orderStemLabel: "Order this stem",
+      orderStemLabel: "Add this stem",
       perStemPrefix: "per stem",
       shippingExcl: "(excludes delivery fee)",
 
       pkgNames: ["The Posy", "The Handful", "The Armful", "The Grand"],
       pkgBlurbs: [
-        "Three stems — choice of single flower variety or studio mix. Ideal for desk and bedside display.",
+        "Three stems in a studio mix. Ideal for desk and bedside display.",
         "Five stems arranged with gentle height at the centre. A balanced classic studio bouquet.",
         "Nine stems in a harmonious studio mix. 10% volume savings applied.",
         "Fifteen full blooming stems for standout celebrations. 10% volume savings applied."
@@ -569,13 +573,11 @@ window.ALXANTHIA_DATA = {
         "Securely boxed for delivery",
         "Care guide card included"
       ],
-      pkgBtn: "Choose this bouquet",
+      pkgBtn: "Add this bouquet",
       pkgBtnActive: "✓ Selected",
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
-      pkgVarietyLabel: "Choose a variety",
-      pkgVarietyMix: "Studio mix",
 
       customEyebrow: "Custom bouquet",
       customTitle: "Or count out your own",
@@ -633,12 +635,14 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Order",
       orderTitle: "Finish your order, then confirm via chat",
-      orderPickerLabel: "Choose a product",
+      orderPickerLabel: "Nothing selected — pick a product here",
+      cartEmpty: "Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.",
       finishLabel: "Finishing",
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
       cardPlaceholder: "e.g. Happy graduation, Sagita — from all of us!",
       cardNote: "Leave it blank if you'd rather not have one. Handwritten on a small card, no extra charge.",
+      cardNoteCounter: "{n}/{max} characters",
       selectionLabel: "Your selection",
       includesLabel: "Includes",
       continueLabel: "Continue to order",
@@ -669,7 +673,7 @@ window.ALXANTHIA_DATA = {
       waDraftNotice: "Opens a draft message in WhatsApp (does not send automatically until you press send in WhatsApp).",
       waLabel: "WhatsApp — Confirm Order",
       orderNote: "Total and shipping costs are confirmed directly with our studio via WhatsApp chat before payment.",
-      btnEditSelection: "Edit selection ↑",
+      btnEditSelection: "Edit selection",
       customMinErrorSummary: "Add at least {minStems} stems to proceed with a custom bouquet.",
       customMinHint: "Minimum {n} stems",
       removeLineLabel: "Remove {item} from cart",

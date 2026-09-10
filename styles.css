@@ -2951,6 +2951,90 @@ details.is-closing > .faq-answer-wrapper {
   }
 }
 
+/* Floating cart status pill: a small always-on-top indicator (top-right,
+   under the header) so an add/remove is visibly confirmed without forcing
+   a scroll back to the cart. Hidden while the cart is empty. */
+.floating-cart-pill {
+  position: fixed;
+  top: 86px;
+  right: 20px;
+  z-index: 85;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--accent-green);
+  color: var(--bg-main);
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(35, 32, 27, 0.2);
+  cursor: pointer;
+  transform: translateY(-8px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform var(--motion-duration-disclosure) var(--motion-ease-out),
+              opacity var(--motion-duration-disclosure) var(--motion-ease-out),
+              visibility var(--motion-duration-disclosure) var(--motion-ease-out),
+              background-color var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.floating-cart-pill.visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.floating-cart-pill:hover {
+  background: var(--accent-green-hover);
+}
+
+.floating-cart-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@keyframes floatingCartBump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+.floating-cart-pill.bump {
+  animation: floatingCartBump 380ms var(--motion-ease-out);
+}
+
+@media (max-width: 860px) {
+  /* The hero's two action buttons sit right under the header on mobile
+     (stacked, full-width), so a top-right pill would sit on top of them.
+     Bottom-right, clear of the slim sticky order bar, is safe instead. */
+  .floating-cart-pill {
+    top: auto;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    right: 14px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    transform: translateY(8px) scale(0.92);
+  }
+
+  .floating-cart-pill.visible {
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ==========================================================================
    RESPONSIVENESS & TOUCH REFINEMENTS
    ========================================================================== */
@@ -3734,8 +3818,13 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   /* Disclosures: instant menu, instant order bar, instant FAQ */
-  .sticky-order-bar {
+  .sticky-order-bar,
+  .floating-cart-pill {
     transition: none !important;
+  }
+
+  .floating-cart-pill.bump {
+    animation: none !important;
   }
 
   .nav-group {

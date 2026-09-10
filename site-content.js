@@ -492,6 +492,8 @@ window.ALXANTHIA_DATA = {
       increaseLineLabel: "Tambah jumlah {item}",
       announceLineAdded: "{item} ditambahkan. {n} item di keranjang.",
       announceLineRemoved: "{item} dihapus. {n} item di keranjang.",
+      floatingCartLabel: "di keranjang",
+      floatingCartAriaLabel: "Lihat keranjang — {n} item",
       announceQtyChanged: "{item} diperbarui menjadi {qty}. {n} item di keranjang.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
@@ -800,6 +802,8 @@ window.ALXANTHIA_DATA = {
       increaseLineLabel: "Increase {item} quantity",
       announceLineAdded: "{item} added. {n} item(s) in cart.",
       announceLineRemoved: "{item} removed. {n} item(s) in cart.",
+      floatingCartLabel: "in cart",
+      floatingCartAriaLabel: "View cart — {n} item(s)",
       announceQtyChanged: "{item} updated to {qty}. {n} item(s) in cart.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },

@@ -32,6 +32,7 @@
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
   let turnstileToken = ''; // DEV-07: current Cloudflare Turnstile token, if the widget is configured
   let turnstileWidgetId = null;
+  let lastFloatingCartCount = null; // null until first render, so the pill doesn't bump on initial paint
 
   /**
    * Resets every piece of in-memory ordering state to its startup default.
@@ -1948,6 +1949,43 @@
   }
 
   /**
+   * Floating cart status pill: an always-on-top indicator of how many units
+   * are in the cart, so an add/remove is visibly confirmed even though (per
+   * P1-05) the page no longer auto-scrolls to the cart after the first item.
+   * Hidden while the cart is empty; bumps briefly whenever the count changes.
+   */
+  function renderFloatingCartBadge(t) {
+    const pill = document.getElementById('floating-cart-pill');
+    if (!pill) return;
+    const countEl = document.getElementById('floating-cart-count');
+    const labelEl = document.getElementById('floating-cart-label');
+    const n = cartUnitCount();
+
+    if (countEl) countEl.textContent = String(n);
+    if (labelEl) labelEl.textContent = t.floatingCartLabel || (currentLang === 'en' ? 'in cart' : 'di keranjang');
+    pill.setAttribute('aria-label', fillTemplate(
+      t.floatingCartAriaLabel || (currentLang === 'en' ? 'View cart — {n} item(s)' : 'Lihat keranjang — {n} item'),
+      { n }
+    ));
+
+    const isVisible = n > 0;
+    pill.classList.toggle('visible', isVisible);
+    pill.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    pill.tabIndex = isVisible ? 0 : -1;
+
+    if (isVisible && lastFloatingCartCount !== null && n !== lastFloatingCartCount) {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReducedMotion) {
+        pill.classList.remove('bump');
+        if (typeof pill.offsetWidth === 'number') void pill.offsetWidth;
+        pill.classList.add('bump');
+        setTimeout(() => pill.classList.remove('bump'), 400);
+      }
+    }
+    lastFloatingCartCount = n;
+  }
+
+  /**
    * Render Order / Finishing Section
    */
   function renderOrderSection() {
@@ -2105,6 +2143,7 @@
 
     // 5. Cart-level price and includes (renderCartLines handles per-line display)
     renderCartLines();
+    renderFloatingCartBadge(t);
 
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
@@ -3009,6 +3048,13 @@
             scrollToSection('#custom-builder');
           }
         }
+      });
+    }
+
+    const floatingCartPill = document.getElementById('floating-cart-pill');
+    if (floatingCartPill) {
+      floatingCartPill.addEventListener('click', () => {
+        scrollToSection('#order', '.summary-box');
       });
     }
 

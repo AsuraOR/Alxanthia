@@ -3950,9 +3950,9 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 /* Native checkout dialog (DEV-16: fixed header, scrollable content, sticky mobile footer) */
-.checkout-modal { width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border-medium); background: var(--bg-main); color: var(--text-dark); }
+.checkout-modal { box-sizing: border-box; width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border-medium); background: var(--bg-main); color: var(--text-dark); overflow: hidden; }
 .checkout-modal::backdrop { background: rgba(25, 31, 24, .72); }
-.checkout-panel { display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
+.checkout-panel { box-sizing: border-box; display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
 .checkout-panel-header { position: relative; display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; padding: 14px clamp(20px, 5vw, 32px); border-bottom: 1px solid var(--border-medium); }
 .checkout-panel-header .image-modal-close { position: static; width: 40px; height: 40px; font-size: 20px; flex: 0 0 auto; }
 .checkout-step-indicator { margin: 0; color: var(--text-muted); font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }

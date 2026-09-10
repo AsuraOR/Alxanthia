@@ -712,12 +712,13 @@
    * Order action: Choose a single finished stem
    */
   function selectStemOrder(flowerKey, scroll = true) {
+    const wasCartEmpty = cart.length === 0;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
     addLine({ type: 'stem', flowerKey: selectedFlower, qty: 1 });
     if (scroll) {
-      scrollToSection('#order', '.order-controls-col');
+      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
         finishLabel.focus({ preventScroll: true });
@@ -734,16 +735,18 @@
   }
 
   function selectMiniPot(potKey, scroll = true) {
+    const wasCartEmpty = cart.length === 0;
     const pot = (siteData.miniPots || []).find(item => item.key === potKey);
     if (!pot) return;
     addLine({ type: 'pot', potKey, qty: 1 });
-    if (scroll) scrollToSection('#order', '.order-controls-col');
+    if (scroll && wasCartEmpty) scrollToSection('#order', '.order-controls-col');
   }
 
   /**
    * Order action: Select a bouquet package
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
+    const wasCartEmpty = cart.length === 0;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
     addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
     if (restoreFocus) {
@@ -751,7 +754,7 @@
       if (activeBtn) activeBtn.focus({ preventScroll: true });
     }
     if (scroll) {
-      scrollToSection('#order', '.order-controls-col');
+      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
         finishLabel.focus({ preventScroll: true });
@@ -1352,24 +1355,48 @@
       const isAddInc = activeEl ? activeEl.classList.contains('btn-addition-inc') : false;
       const isAddDec = activeEl ? activeEl.classList.contains('btn-addition-dec') : false;
 
-      additionsGrid.innerHTML = '';
-      (siteData.customAdditions || []).forEach(addition => {
-        const trans = addition[currentLang] || addition.en;
-        const count = customAdditions[addition.key] || 0;
-        const card = document.createElement('div');
-        card.className = `custom-addition-card ${count > 0 ? 'is-selected' : ''}`;
-        card.innerHTML = `
-          <img src="${addition.photo}" width="1254" height="1254" alt="${trans.name}" loading="lazy" />
-          <span class="custom-addition-copy"><strong>${trans.name}</strong><small>${formatRp(addition.price)} / ${currentLang === 'en' ? 'piece' : 'lembar'}</small></span>
-          <div class="stepper-controls custom-addition-stepper">
-            <button type="button" class="btn-stepper btn-addition-dec" data-addition="${addition.key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
-            <span class="stepper-count" aria-live="polite">${count}</span>
-            <button type="button" class="btn-stepper btn-addition-inc" data-addition="${addition.key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
-          </div>`;
-        card.querySelector('.btn-addition-dec').addEventListener('click', () => bumpCustomAddition(addition.key, -1));
-        card.querySelector('.btn-addition-inc').addEventListener('click', () => bumpCustomAddition(addition.key, 1));
-        additionsGrid.appendChild(card);
-      });
+      const expectedAdditions = siteData.customAdditions || [];
+      const existingAdditionCards = additionsGrid.querySelectorAll('.custom-addition-card');
+
+      // This grid re-renders on every cart mutation (it lives inside
+      // renderCustomBuilder, called from renderBouquetsUI's fast path), not
+      // just when an addition itself changes. When the same set of addition
+      // cards is already in place for the current language, update counts
+      // in place instead of tearing every card (and its <img>) down and
+      // rebuilding, which used to flicker every addition photo on any
+      // unrelated add/remove.
+      if (existingAdditionCards.length === expectedAdditions.length
+        && (expectedAdditions.length === 0 || existingAdditionCards[0].getAttribute('data-lang') === currentLang)) {
+        existingAdditionCards.forEach((card, i) => {
+          const addition = expectedAdditions[i];
+          const count = customAdditions[addition.key] || 0;
+          card.classList.toggle('is-selected', count > 0);
+          const countEl = card.querySelector('.stepper-count');
+          if (countEl) countEl.textContent = String(count);
+          const decBtn = card.querySelector('.btn-addition-dec');
+          if (decBtn) decBtn.disabled = count === 0;
+        });
+      } else {
+        additionsGrid.innerHTML = '';
+        expectedAdditions.forEach(addition => {
+          const trans = addition[currentLang] || addition.en;
+          const count = customAdditions[addition.key] || 0;
+          const card = document.createElement('div');
+          card.className = `custom-addition-card ${count > 0 ? 'is-selected' : ''}`;
+          card.setAttribute('data-lang', currentLang);
+          card.innerHTML = `
+            <img src="${addition.photo}" width="1254" height="1254" alt="${trans.name}" loading="lazy" />
+            <span class="custom-addition-copy"><strong>${trans.name}</strong><small>${formatRp(addition.price)} / ${currentLang === 'en' ? 'piece' : 'lembar'}</small></span>
+            <div class="stepper-controls custom-addition-stepper">
+              <button type="button" class="btn-stepper btn-addition-dec" data-addition="${addition.key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+              <span class="stepper-count" aria-live="polite">${count}</span>
+              <button type="button" class="btn-stepper btn-addition-inc" data-addition="${addition.key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+            </div>`;
+          card.querySelector('.btn-addition-dec').addEventListener('click', () => bumpCustomAddition(addition.key, -1));
+          card.querySelector('.btn-addition-inc').addEventListener('click', () => bumpCustomAddition(addition.key, 1));
+          additionsGrid.appendChild(card);
+        });
+      }
 
       if (activeAddition) {
         let selector = isAddInc
@@ -1395,37 +1422,54 @@
       const isInc = activeEl ? activeEl.classList.contains('btn-inc') : false;
       const isDec = activeEl ? activeEl.classList.contains('btn-dec') : false;
 
-      rowsList.innerHTML = '';
       const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+      const existingRows = rowsList.querySelectorAll('.custom-row-item');
 
-      order.forEach(key => {
-        const flower = siteData.flowers[key];
-        if (!flower) return;
-        const trans = flower[currentLang] || flower.en;
-        const count = customCounts[key] || 0;
-        const priceStr = `${formatRp(flower.stemPrice || 55000)} / ${t.stemWord}`;
+      // Same reasoning as the additions grid above: this list re-renders on
+      // every cart mutation, so update counts in place when the row set
+      // already matches instead of rebuilding every row from scratch.
+      if (existingRows.length === order.length
+        && (order.length === 0 || existingRows[0].getAttribute('data-lang') === currentLang)) {
+        existingRows.forEach((li, i) => {
+          const key = order[i];
+          const count = customCounts[key] || 0;
+          const countEl = li.querySelector('.stepper-count');
+          if (countEl) countEl.textContent = String(count);
+          const decBtn = li.querySelector('.btn-dec');
+          if (decBtn) decBtn.disabled = count === 0;
+        });
+      } else {
+        rowsList.innerHTML = '';
+        order.forEach(key => {
+          const flower = siteData.flowers[key];
+          if (!flower) return;
+          const trans = flower[currentLang] || flower.en;
+          const count = customCounts[key] || 0;
+          const priceStr = `${formatRp(flower.stemPrice || 55000)} / ${t.stemWord}`;
 
-        const li = document.createElement('li');
-        li.className = 'custom-row-item';
-        li.innerHTML = `
-          <div class="custom-flower-meta">
-            <span class="custom-flower-dot" style="background:${flower.accent}" aria-hidden="true"></span>
-            <div>
-              <p class="custom-flower-name">${trans.name}</p>
-              <p class="custom-flower-price">${priceStr}</p>
+          const li = document.createElement('li');
+          li.className = 'custom-row-item';
+          li.setAttribute('data-lang', currentLang);
+          li.innerHTML = `
+            <div class="custom-flower-meta">
+              <span class="custom-flower-dot" style="background:${flower.accent}" aria-hidden="true"></span>
+              <div>
+                <p class="custom-flower-name">${trans.name}</p>
+                <p class="custom-flower-price">${priceStr}</p>
+              </div>
             </div>
-          </div>
-          <div class="stepper-controls">
-            <button type="button" class="btn-stepper btn-dec" data-flower="${key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
-            <span class="stepper-count" aria-live="polite">${count}</span>
-            <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
-          </div>
-        `;
+            <div class="stepper-controls">
+              <button type="button" class="btn-stepper btn-dec" data-flower="${key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+              <span class="stepper-count" aria-live="polite">${count}</span>
+              <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+            </div>
+          `;
 
-        li.querySelector('.btn-dec').addEventListener('click', () => bumpCustomCount(key, -1));
-        li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
-        rowsList.appendChild(li);
-      });
+          li.querySelector('.btn-dec').addEventListener('click', () => bumpCustomCount(key, -1));
+          li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
+          rowsList.appendChild(li);
+        });
+      }
 
       // Restore focus if a stepper button was clicked
       if (activeFlower) {
@@ -1639,106 +1683,151 @@
    * textContent only — cart lines are the one region whose content is
    * derived from a growing data structure, so it stays out of innerHTML.
    */
+  function buildCartLineEl(line, t, title, photoSrc, photoAlt, linePrice) {
+    const li = document.createElement('li');
+    li.className = 'cart-line';
+    li.setAttribute('data-line-id', String(line.id));
+
+    const thumb = document.createElement('img');
+    thumb.className = 'cart-line-photo';
+    thumb.src = photoSrc;
+    thumb.alt = photoAlt;
+    thumb.width = 56;
+    thumb.height = 56;
+    thumb.loading = 'lazy';
+    li.appendChild(thumb);
+
+    const info = document.createElement('div');
+    info.className = 'cart-line-info';
+    const titleEl = document.createElement('p');
+    titleEl.className = 'cart-line-title';
+    titleEl.textContent = title;
+    const priceEl = document.createElement('p');
+    priceEl.className = 'cart-line-price';
+    priceEl.textContent = formatRp(linePrice);
+    info.appendChild(titleEl);
+    info.appendChild(priceEl);
+    li.appendChild(info);
+
+    const stepper = document.createElement('div');
+    stepper.className = 'stepper-controls cart-line-stepper';
+    const decBtn = document.createElement('button');
+    decBtn.type = 'button';
+    decBtn.className = 'btn-stepper btn-line-dec';
+    decBtn.textContent = '−';
+    decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
+    decBtn.addEventListener('click', () => bumpLineQty(line.id, -1));
+    const countEl = document.createElement('span');
+    countEl.className = 'stepper-count';
+    countEl.setAttribute('aria-live', 'polite');
+    countEl.textContent = String(line.qty);
+    const incBtn = document.createElement('button');
+    incBtn.type = 'button';
+    incBtn.className = 'btn-stepper btn-line-inc';
+    incBtn.textContent = '+';
+    incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
+    incBtn.addEventListener('click', () => bumpLineQty(line.id, 1));
+    stepper.appendChild(decBtn);
+    stepper.appendChild(countEl);
+    stepper.appendChild(incBtn);
+    li.appendChild(stepper);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn-remove-line';
+    removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => removeLine(line.id));
+    li.appendChild(removeBtn);
+
+    return li;
+  }
+
+  /**
+   * Update an existing cart-line <li> in place (title/price/qty/labels only).
+   * The <img> node is left untouched — its src never changes for a line that
+   * already existed, so reusing the node avoids a decode/repaint flicker on
+   * every unrelated add/remove.
+   */
+  function updateCartLineEl(li, t, title, photoSrc, photoAlt, linePrice, qty) {
+    const img = li.querySelector('.cart-line-photo');
+    if (img) {
+      if (img.src !== photoSrc) img.src = photoSrc;
+      if (img.alt !== photoAlt) img.alt = photoAlt;
+    }
+    const titleEl = li.querySelector('.cart-line-title');
+    if (titleEl) titleEl.textContent = title;
+    const priceEl = li.querySelector('.cart-line-price');
+    if (priceEl) priceEl.textContent = formatRp(linePrice);
+    const countEl = li.querySelector('.stepper-count');
+    if (countEl) countEl.textContent = String(qty);
+    const decBtn = li.querySelector('.btn-line-dec');
+    if (decBtn) decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
+    const incBtn = li.querySelector('.btn-line-inc');
+    if (incBtn) incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
+    const removeBtn = li.querySelector('.btn-remove-line');
+    if (removeBtn) removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
+  }
+
   function renderCartLines() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const linesEl = document.getElementById('cart-lines');
     if (!linesEl) return;
 
-    // Record the currently focused stepper button, if any, so the rebuild
-    // below doesn't eject keyboard focus to <body> (UX-04) — same pattern
-    // as renderCustomBuilder()'s flower-row steppers, keyed on line id.
-    const activeEl = document.activeElement;
-    const activeLineEl = activeEl ? activeEl.closest('.cart-line') : null;
-    const activeLineId = activeLineEl ? activeLineEl.getAttribute('data-line-id') : null;
-    const isLineInc = activeEl ? activeEl.classList.contains('btn-line-inc') : false;
-    const isLineDec = activeEl ? activeEl.classList.contains('btn-line-dec') : false;
-
-    while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
-
     if (cart.length === 0) {
-      const emptyLi = document.createElement('li');
-      emptyLi.className = 'cart-line-empty';
-      emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
-        ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
-        : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
-      linesEl.appendChild(emptyLi);
+      const alreadyEmpty = linesEl.children.length === 1 && linesEl.children[0].classList.contains('cart-line-empty');
+      if (!alreadyEmpty) {
+        while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
+        const emptyLi = document.createElement('li');
+        emptyLi.className = 'cart-line-empty';
+        emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
+          ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
+          : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
+        linesEl.appendChild(emptyLi);
+      }
       return;
     }
 
+    // Drop the empty-state placeholder, if the cart just went from 0 to 1 item.
+    if (linesEl.children.length === 1 && linesEl.children[0].classList.contains('cart-line-empty')) {
+      linesEl.removeChild(linesEl.children[0]);
+    }
+
+    // Reuse existing <li> nodes for lines that already existed (matched by id)
+    // instead of tearing down and rebuilding the whole list on every
+    // add/remove/qty change — recreating every <img> in the cart each time
+    // caused every existing line's thumbnail to flicker, not just the one
+    // that changed, and also stole keyboard focus from stepper buttons.
+    const existingById = new Map();
+    Array.from(linesEl.children).forEach(li => {
+      const id = li.getAttribute('data-line-id');
+      if (id) existingById.set(id, li);
+    });
+
     const cartTotals = computeCartTotals(cart);
+    const seenIds = new Set();
 
     cart.forEach((line, index) => {
+      const idStr = String(line.id);
+      seenIds.add(idStr);
       const { title, photoSrc, photoAlt } = describeLine(line, t);
       const linePrice = cartTotals.lines[index].total;
 
-      const li = document.createElement('li');
-      li.className = 'cart-line';
-      li.setAttribute('data-line-id', String(line.id));
-
-      const thumb = document.createElement('img');
-      thumb.className = 'cart-line-photo';
-      thumb.src = photoSrc;
-      thumb.alt = photoAlt;
-      thumb.width = 56;
-      thumb.height = 56;
-      thumb.loading = 'lazy';
-      li.appendChild(thumb);
-
-      const info = document.createElement('div');
-      info.className = 'cart-line-info';
-      const titleEl = document.createElement('p');
-      titleEl.className = 'cart-line-title';
-      titleEl.textContent = title;
-      const priceEl = document.createElement('p');
-      priceEl.className = 'cart-line-price';
-      priceEl.textContent = formatRp(linePrice);
-      info.appendChild(titleEl);
-      info.appendChild(priceEl);
-      li.appendChild(info);
-
-      const stepper = document.createElement('div');
-      stepper.className = 'stepper-controls cart-line-stepper';
-      const decBtn = document.createElement('button');
-      decBtn.type = 'button';
-      decBtn.className = 'btn-stepper btn-line-dec';
-      decBtn.textContent = '−';
-      decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
-      decBtn.addEventListener('click', () => bumpLineQty(line.id, -1));
-      const countEl = document.createElement('span');
-      countEl.className = 'stepper-count';
-      countEl.setAttribute('aria-live', 'polite');
-      countEl.textContent = String(line.qty);
-      const incBtn = document.createElement('button');
-      incBtn.type = 'button';
-      incBtn.className = 'btn-stepper btn-line-inc';
-      incBtn.textContent = '+';
-      incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
-      incBtn.addEventListener('click', () => bumpLineQty(line.id, 1));
-      stepper.appendChild(decBtn);
-      stepper.appendChild(countEl);
-      stepper.appendChild(incBtn);
-      li.appendChild(stepper);
-
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn-remove-line';
-      removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
-      removeBtn.textContent = '✕';
-      removeBtn.addEventListener('click', () => removeLine(line.id));
-      li.appendChild(removeBtn);
-
-      linesEl.appendChild(li);
+      // Cart lines are only ever appended (new) or spliced out (removed) —
+      // the relative order among surviving lines never changes — so an
+      // existing line is updated in place and left exactly where it already
+      // sits in the DOM; only a genuinely new line needs appending.
+      const existingLi = existingById.get(idStr);
+      if (existingLi) {
+        updateCartLineEl(existingLi, t, title, photoSrc, photoAlt, linePrice, line.qty);
+      } else {
+        linesEl.appendChild(buildCartLineEl(line, t, title, photoSrc, photoAlt, linePrice));
+      }
     });
 
-    if (activeLineId && (isLineInc || isLineDec)) {
-      const selector = isLineInc
-        ? `.cart-line[data-line-id="${activeLineId}"] .btn-line-inc`
-        : `.cart-line[data-line-id="${activeLineId}"] .btn-line-dec`;
-      const btnToFocus = linesEl.querySelector(selector);
-      // If the line no longer exists (qty hit 0), removeLine() already owns
-      // focus restoration for that case — don't fight it here.
-      if (btnToFocus) btnToFocus.focus();
-    }
+    existingById.forEach((li, id) => {
+      if (!seenIds.has(id)) linesEl.removeChild(li);
+    });
   }
 
   /**
@@ -1810,7 +1899,7 @@
           title: trans.name,
           priceStr,
           ariaLabel: `${t.orderStemLabel} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectStemOrder(key, false)
+          onSelect: () => selectStemOrder(key, true)
         }));
       });
     }
@@ -1826,7 +1915,7 @@
           title,
           priceStr,
           ariaLabel: `${t.pkgBtn} — ${title}, ${priceStr}`,
-          onSelect: () => selectPackageOrder(index, false)
+          onSelect: () => selectPackageOrder(index, true)
         }));
       });
     }
@@ -1842,7 +1931,7 @@
           title: trans.name,
           priceStr,
           ariaLabel: `${t.miniPotBtn} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectMiniPot(pot.key, false)
+          onSelect: () => selectMiniPot(pot.key, true)
         }));
       });
     }

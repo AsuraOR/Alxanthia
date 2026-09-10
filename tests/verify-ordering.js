@@ -1167,14 +1167,25 @@ const originalScrollTo = sandbox.scrollTo;
 sandbox.scrollTo = (opts) => { scrollCalls.push(opts); };
 
 scrollCalls = [];
-app.selectStem('Rose'); // default scroll = true
+app.selectStem('Rose'); // default scroll = true, cart starts empty
 const stemScrollCount = scrollCalls.length;
-assert(stemScrollCount > 0, 'Selecting a stem must scroll to #order by default');
+assert(stemScrollCount > 0, 'Selecting a stem into an empty cart must scroll to #order by default');
 
+// The cart is no longer empty (it holds the Rose stem just added), so a further
+// selection must not yank the page back down to #order — customers adding a
+// second/third item are usually still browsing and shouldn't be re-scrolled.
 scrollCalls = [];
-app.selectPackage(1); // default scroll = true as of P1-05
+app.selectPackage(1); // default scroll = true, but cart already has an item
+const pkgScrollIntoNonEmptyCart = scrollCalls.length;
+assert.strictEqual(pkgScrollIntoNonEmptyCart, 0, 'Selecting a package into a non-empty cart must not scroll to #order again');
+
+// Selecting a package as the very first item (empty cart) must still scroll,
+// matching stem behaviour (P1-05).
+app.resetToInitial();
+scrollCalls = [];
+app.selectPackage(1); // default scroll = true, cart starts empty
 const pkgScrollCount = scrollCalls.length;
-assert(pkgScrollCount > 0, 'Selecting a package must scroll to #order by default, matching stem behaviour (P1-05)');
+assert(pkgScrollCount > 0, 'Selecting a package into an empty cart must scroll to #order by default, matching stem behaviour (P1-05)');
 
 sandbox.scrollTo = originalScrollTo;
 
@@ -1295,14 +1306,17 @@ const pickerPackages = mockDocument.getElementById('order-picker-packages');
 assert.strictEqual(pickerFlowers.children.length, 4, 'Picker must render one tile per flower');
 assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
 
-// Clicking a picker tile adds a line without scrolling the page — the
-// customer is already at #order, so re-scrolling would be jarring.
+// Clicking a picker tile adds a line and scrolls to #order, same as every
+// other add-to-cart entry point when the cart starts empty. This also
+// replaces the instant layout collapse (the picker disappearing once the
+// cart is no longer empty) with an intentional smooth scroll, instead of
+// leaving the viewport to snap with no compensation.
 let pickerScrollCalls = [];
 const originalScrollToForPicker = sandbox.scrollTo;
 sandbox.scrollTo = (opts) => { pickerScrollCalls.push(opts); };
 
 pickerFlowers.children[0].click();
-assert.strictEqual(pickerScrollCalls.length, 0, 'Selecting from the inline picker must not scroll the page');
+assert(pickerScrollCalls.length > 0, 'Selecting the first item from the inline picker must scroll to #order');
 assert.strictEqual(app.getCart().length, 1, 'Clicking a picker tile must add a cart line');
 
 sandbox.scrollTo = originalScrollToForPicker;
@@ -1311,7 +1325,7 @@ sandbox.scrollTo = originalScrollToForPicker;
 assert.strictEqual(orderPicker.style.display, 'none', '#order-picker must hide once the cart is non-empty');
 assert.notStrictEqual(summaryPrice.style.display, 'none', '#summary-price must reappear once the cart has a line');
 
-console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and never scrolls on selection');
+console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and scrolls to #order on first selection');
 
 // ---------------------------------------------------------------------------
 // Suite 22: Predefined bouquets have no variety chooser (curated by studio)

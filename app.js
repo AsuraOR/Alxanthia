@@ -2965,10 +2965,14 @@
    * transition so the dialog's accessible name always matches what's on screen.
    */
   const CHECKOUT_STEPS = {
-    'checkout-review': { headingId: 'checkout-title', stepNumber: 1 },
-    'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2 },
-    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2 }
+    'checkout-review': { headingId: 'checkout-title', stepNumber: 1, footerId: 'checkout-review-footer' },
+    'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2, footerId: 'checkout-form-footer' },
+    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2, footerId: null }
   };
+  // DEV-16: each step's total+actions bar is a real, non-scrolling footer
+  // region (see .checkout-dialog-footer) rather than position:sticky inside
+  // the scrollable content, which used to render on top of later fields.
+  const CHECKOUT_FOOTER_IDS = ['checkout-review-footer', 'checkout-form-footer'];
 
   function showCheckoutStep(stepId) {
     Object.keys(CHECKOUT_STEPS).forEach(id => {
@@ -2976,6 +2980,10 @@
       if (section) section.hidden = id !== stepId;
     });
     const meta = CHECKOUT_STEPS[stepId];
+    CHECKOUT_FOOTER_IDS.forEach(footerId => {
+      const footer = document.getElementById(footerId);
+      if (footer) footer.hidden = !meta || meta.footerId !== footerId;
+    });
     const modal = document.getElementById('checkout-modal');
     if (modal && meta) modal.setAttribute('aria-labelledby', meta.headingId);
     const indicator = document.getElementById('checkout-step-indicator');

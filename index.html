@@ -945,13 +945,6 @@
         <p id="checkout-finish"></p>
         <p id="checkout-notice" class="checkout-notice"></p>
         <p id="checkout-error" class="checkout-error" role="alert"></p>
-        <div class="checkout-actions checkout-sticky-footer">
-          <strong class="checkout-footer-total" id="checkout-review-footer-total"></strong>
-          <div class="checkout-actions-buttons">
-            <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
-            <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
-          </div>
-        </div>
       </section>
       <section id="checkout-form-step" hidden>
         <p class="eyebrow" id="checkout-form-eyebrow">Formulir pesanan</p>
@@ -1004,13 +997,6 @@
               id="ack-label">Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman
               akan diperiksa melalui WhatsApp.</span></label>
           <p id="form-error" class="checkout-error" role="alert"></p>
-          <div class="checkout-actions checkout-sticky-footer">
-            <strong class="checkout-footer-total" id="checkout-form-footer-total"></strong>
-            <div class="checkout-actions-buttons">
-              <button type="button" id="checkout-back-to-review" class="btn-checkout-secondary">← Kembali ke tinjauan</button>
-              <button id="save-order" type="submit" class="btn-checkout-primary">Simpan pesanan</button>
-            </div>
-          </div>
         </form>
       </section>
       <section id="checkout-success" hidden>
@@ -1027,6 +1013,20 @@
         <p id="copy-fallback-text" class="copy-fallback-text" role="status" hidden tabindex="-1"></p>
         <button type="button" id="checkout-start-new" class="btn-checkout-tertiary">Mulai pesanan baru</button>
       </section>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-review-footer">
+        <strong class="checkout-footer-total" id="checkout-review-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
+          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
+        </div>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-form-footer" hidden>
+        <strong class="checkout-footer-total" id="checkout-form-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-back-to-review" class="btn-checkout-secondary">← Kembali ke tinjauan</button>
+          <button id="save-order" type="submit" form="checkout-form" class="btn-checkout-primary">Simpan pesanan</button>
+        </div>
       </div>
     </div>
   </dialog>

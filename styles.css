@@ -3969,11 +3969,15 @@ details.is-closing > .faq-answer-wrapper {
 .checkout-delivery-row { color: var(--text-muted); font-size: .88rem; font-style: italic; }
 .checkout-notice { padding: 14px; background: rgba(126, 143, 124, .14); line-height: 1.55; }
 .checkout-error { min-height: 1.4em; color: #9d3e32; font-weight: 600; }
-.checkout-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
 .checkout-actions-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
 .checkout-footer-total { font-size: 1.05rem; }
-.checkout-actions:empty { display: none; }
-.checkout-sticky-footer { position: sticky; bottom: -1px; z-index: 5; background: var(--bg-main); }
+/* DEV-16: a real non-scrolling footer region, outside .checkout-panel-scroll —
+   NOT position:sticky inside the scroll area, which used to visually overlap
+   the still-unscrolled fields behind it (the date/privacy/consent fields sit
+   later in the form than this footer, so a sticky-in-flow footer parked
+   itself over them instead of staying pinned below all of them). */
+.checkout-dialog-footer { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 14px clamp(20px, 5vw, 32px) calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border-medium); background: var(--bg-main); }
+.checkout-dialog-footer[hidden] { display: none; }
 .checkout-success-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 8px; }
 .btn-checkout-primary, .btn-checkout-secondary, .btn-checkout-tertiary { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 12px 18px; border: 1px solid var(--text-dark); font: 600 var(--fs-button) var(--font-sans); text-decoration: none; cursor: pointer; }
 .btn-checkout-primary { background: var(--text-dark); color: var(--bg-main); }
@@ -3986,6 +3990,7 @@ details.is-closing > .faq-answer-wrapper {
 .checkout-privacy-notice { margin-top: -6px; }
 .checkout-privacy-notice a { color: inherit; }
 .recent-order-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--border-medium); background: rgba(126, 143, 124, .1); font-size: .92rem; }
+.recent-order-banner[hidden] { display: none; }
 .recent-order-banner p { margin: 0; }
 .recent-order-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .recent-order-actions button { border: none; background: none; padding: 4px 2px; font: 600 .85rem var(--font-sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--text-dark); }
@@ -4000,6 +4005,7 @@ details.is-closing > .faq-answer-wrapper {
 #bali-fields:not([hidden]), #outside-bali-fields:not([hidden]) { display: grid; gap: 14px; }
 .form-help { margin: -4px 0 2px; color: var(--text-muted); font-size: .88rem; line-height: 1.45; }
 .field-error { display: block; margin: -3px 0 2px; color: #9d3e32; font-size: .85rem; font-weight: 600; line-height: 1.4; }
+.field-error[hidden] { display: none; }
 .checkout-form [aria-invalid="true"] { border-color: #9d3e32; }
 .check-label { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; flex-wrap: wrap; }
 .check-label input { width: 20px; height: 20px; flex: 0 0 auto; }
@@ -4010,10 +4016,7 @@ body:has(.checkout-modal[open]) { overflow: hidden; }
 @media (max-width: 640px) {
   .checkout-modal { width: 100%; max-width: 100%; max-height: 100dvh; height: 100dvh; border-inline: none; }
   .checkout-panel { max-height: 100dvh; height: 100%; }
-  .checkout-sticky-footer {
-    margin: 24px -20px -20px; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--border-medium); box-shadow: 0 -4px 12px rgba(25, 31, 24, .06);
-  }
+  .checkout-dialog-footer { box-shadow: 0 -4px 12px rgba(25, 31, 24, .06); }
   .checkout-actions-buttons, .checkout-success-actions { flex-direction: column; }
   .checkout-actions-buttons > *, .checkout-success-actions > *, .btn-checkout-tertiary { width: 100%; }
   .form-row { grid-template-columns: 1fr; }

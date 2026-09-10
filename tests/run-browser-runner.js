@@ -74,6 +74,18 @@ async function runCheckoutDialogChecks(browser) {
     await page.goto(URL.replace('/tests/browser-runner.html', '/index.html?unlock=22062024'), { waitUntil: 'load', timeout: 15000 });
     await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
 
+    // A `hidden`-attribute element must actually render hidden — regression
+    // guard for a real bug found in manual testing, where a custom CSS class's
+    // own `display:` declaration silently overrode the browser's default
+    // `[hidden] { display: none }`, so the element stayed visible (e.g. an
+    // empty recent-order banner on a page that had never recorded an order,
+    // and two dialog footers showing at once instead of one per step).
+    const recentOrderBannerHiddenOnFreshVisit = await page.evaluate(() => {
+      const el = document.getElementById('recent-order-banner');
+      return !!el && el.hidden && getComputedStyle(el).display === 'none';
+    });
+    assert('The recent-order banner is truly hidden (not just empty) on a fresh visit with no stored order', recentOrderBannerHiddenOnFreshVisit === true);
+
     async function openCheckoutOnFreshStem() {
       await page.evaluate(() => { window.AlxanthiaApp.resetToInitial(); window.AlxanthiaApp.selectStem('Rose', false); });
       await page.click('#btn-checkout');
@@ -86,6 +98,8 @@ async function runCheckoutDialogChecks(browser) {
     let activeId = await page.evaluate(() => document.activeElement && document.activeElement.id);
     assert('Review step: dialog aria-labelledby points at the visible heading', labelledBy === 'checkout-title', `got ${labelledBy}`);
     assert('Review step: focus lands on the step heading', activeId === 'checkout-title', `active was ${activeId}`);
+    let visibleFooters = await page.evaluate(() => [...document.querySelectorAll('.checkout-dialog-footer')].filter(el => getComputedStyle(el).display !== 'none').map(el => el.id));
+    assert('Review step: exactly the review footer is visible (not both dialog footers)', visibleFooters.length === 1 && visibleFooters[0] === 'checkout-review-footer', `visible: ${visibleFooters.join(',')}`);
 
     await page.click('#checkout-continue');
     await page.waitForSelector('#checkout-form-step:not([hidden])');
@@ -93,6 +107,8 @@ async function runCheckoutDialogChecks(browser) {
     activeId = await page.evaluate(() => document.activeElement && document.activeElement.id);
     assert('Form step: dialog aria-labelledby updates to the form heading', labelledBy === 'checkout-form-title', `got ${labelledBy}`);
     assert('Form step: focus moves to the form heading', activeId === 'checkout-form-title', `active was ${activeId}`);
+    visibleFooters = await page.evaluate(() => [...document.querySelectorAll('.checkout-dialog-footer')].filter(el => getComputedStyle(el).display !== 'none').map(el => el.id));
+    assert('Form step: exactly the form footer is visible (not both dialog footers)', visibleFooters.length === 1 && visibleFooters[0] === 'checkout-form-footer', `visible: ${visibleFooters.join(',')}`);
 
     // --- Fill the minimum valid form ------------------------------------
     async function fillValidForm() {

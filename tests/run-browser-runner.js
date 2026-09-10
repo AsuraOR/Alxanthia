@@ -182,6 +182,23 @@ async function runCheckoutDialogChecks(browser) {
     assert('DEV-14: success step moves focus to the success heading', successHeadingFocused === true);
     const waHref = await page.getAttribute('#checkout-whatsapp', 'href');
     assert('Success screen builds a WhatsApp link with the order reference', !!(waHref && waHref.includes('wa.me')));
+    const successItemsText = await page.locator('#success-items').textContent();
+    assert('Success screen shows what was ordered', !!(successItemsText && successItemsText.trim().length > 0), `items text: "${successItemsText}"`);
+    const successTotalText = await page.locator('#success-total').textContent();
+    assert('Success screen shows the order total', !!(successTotalText && successTotalText.trim().length > 0), `total text: "${successTotalText}"`);
+
+    // The recent-order banner must appear as soon as the dialog is closed —
+    // no page reload required (regression: checkoutAttempt.submitted used to
+    // stay true in memory and permanently suppress it until a real reload).
+    await page.click('#checkout-close');
+    await page.waitForTimeout(150);
+    const bannerVisibleNoReload = await page.evaluate(() => {
+      const el = document.getElementById('recent-order-banner');
+      return !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+    });
+    assert('DEV-10: the recent-order banner appears immediately after closing, without a page reload', bannerVisibleNoReload === true);
+    await page.click('#btn-checkout'); // reopen for the DEV-10 checks below
+    await page.waitForSelector('#checkout-modal[open]', { timeout: 5000 });
 
     // --- DEV-10: reopening after success shows the success screen again,
     //     not a fresh review with a new reference -------------------------

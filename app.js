@@ -1975,6 +1975,21 @@
       };
     }
 
+    // 4b. Clear cart: empties every line in one action (vs. removing lines
+    // one at a time), with a native confirm() since this is destructive.
+    const clearCartBtn = document.getElementById('btn-clear-cart');
+    if (clearCartBtn) {
+      setText('#btn-clear-cart', t.clearCartLabel || 'Kosongkan keranjang');
+      clearCartBtn.style.display = cartHasSelection ? '' : 'none';
+      clearCartBtn.onclick = () => {
+        if (!window.confirm(t.clearCartConfirm || 'Kosongkan keranjang?')) return;
+        resetAllState();
+        persistCart();
+        renderAll();
+        announceToScreenReader(t.clearCartAnnounce || 'Keranjang dikosongkan.');
+      };
+    }
+
     // 5. Cart-level price and includes (renderCartLines handles per-line display)
     renderCartLines();
 
@@ -2949,7 +2964,12 @@
     const banner = document.getElementById('recent-order-banner');
     if (!banner) return;
     const record = loadRecentOrder();
-    if (!record || (checkoutAttempt && checkoutAttempt.submitted)) {
+    // Show whenever a stored record exists — the checkout dialog sits on top
+    // of this banner anyway, so there is no redundancy to avoid by also
+    // checking in-memory checkoutAttempt state (that used to leave the
+    // banner hidden until a full page reload, since checkoutAttempt.submitted
+    // stays true for the rest of the session after a successful order).
+    if (!record) {
       banner.hidden = true;
       return;
     }
@@ -3114,6 +3134,18 @@
     setText('#checkout-success-copy', checkoutAttempt.duplicate ? ck('checkoutDuplicateCopy') : ck('checkoutSuccessCopy'));
     setText('#success-reference-label', ck('checkoutReferenceLabel'));
     setText('#success-reference', checkoutAttempt.reference);
+    setText('#success-order-label', ck('checkoutSuccessOrderLabel'));
+    const itemsList = document.getElementById('success-items');
+    if (itemsList) {
+      itemsList.textContent = '';
+      (checkoutAttempt.state.items || []).forEach(itemLabel => {
+        const li = document.createElement('li');
+        li.textContent = itemLabel;
+        itemsList.appendChild(li);
+      });
+    }
+    setText('#success-total-label', ck('checkoutSuccessTotalLabel'));
+    setText('#success-total', formatRp(checkoutAttempt.state.estimatedProductTotal || 0));
     setText('#checkout-whatsapp', ck('checkoutWhatsappButton'));
     setText('#copy-reference', ck('checkoutCopyReference'));
     setText('#checkout-start-new', ck('checkoutStartNewOrder'));

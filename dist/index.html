@@ -630,10 +630,19 @@
         <div class="order-controls-col">
           <!-- Inline Product Picker (visible only while the cart is empty) -->
           <div class="order-picker" id="order-picker">
-            <p class="step-label" id="order-picker-label">Pilih produk</p>
-            <div class="order-picker-grid" id="order-picker-flowers"></div>
-            <div class="order-picker-grid" id="order-picker-pots"></div>
-            <div class="order-picker-grid" id="order-picker-packages"></div>
+            <h3 class="step-label" id="order-picker-label">Belum ada pilihan — pilih produk di sini</h3>
+            <div class="order-picker-group" id="order-picker-group-flowers">
+              <p class="order-picker-group-label" id="order-picker-flowers-label"></p>
+              <div class="order-picker-grid" id="order-picker-flowers"></div>
+            </div>
+            <div class="order-picker-group" id="order-picker-group-pots">
+              <p class="order-picker-group-label" id="order-picker-pots-label"></p>
+              <div class="order-picker-grid" id="order-picker-pots"></div>
+            </div>
+            <div class="order-picker-group" id="order-picker-group-packages">
+              <p class="order-picker-group-label" id="order-picker-packages-label"></p>
+              <div class="order-picker-grid" id="order-picker-packages"></div>
+            </div>
           </div>
 
           <!-- Wrap Colour Chooser -->
@@ -645,19 +654,22 @@
           </div>
 
           <!-- Handwritten Message Card Textarea -->
-          <p class="step-label" id="card-label">Kartu ucapan</p>
-          <textarea id="card-note-input" class="card-note-textarea" rows="4"
+          <h3 class="step-label" id="card-label">Kartu ucapan</h3>
+          <textarea id="card-note-input" class="card-note-textarea" rows="4" maxlength="200"
             placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
-          <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil,
-            tanpa biaya tambahan.</p>
+          <div class="card-note-footer">
+            <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil,
+              tanpa biaya tambahan.</p>
+            <span class="card-note-counter" id="card-note-counter" aria-live="polite"></span>
+          </div>
         </div>
 
         <!-- Right Column: Live Order Summary Box -->
         <div class="summary-box">
           <div class="order-summary-card-inner">
             <div class="summary-top-row">
-              <p class="step-label" id="selection-label">Pilihan Anda</p>
-              <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan ↑</button>
+              <h3 class="step-label" id="selection-label">Pilihan Anda</h3>
+              <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
             </div>
 
             <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
@@ -667,7 +679,7 @@
               <span class="summary-shipping-note" id="summary-shipping-note">Belum termasuk ongkir</span>
             </div>
 
-            <p class="step-label" id="includes-label">Termasuk</p>
+            <h3 class="step-label" id="includes-label">Termasuk</h3>
             <ul class="summary-includes-list" id="summary-includes-list">
               <!-- Dynamically populated -->
             </ul>
@@ -678,7 +690,7 @@
               <p id="custom-min-warning-text">Tambahkan minimal 3 tangkai untuk melanjutkan pesanan buket custom.</p>
             </div>
 
-            <p class="step-label" id="step3-label">Lanjut ke pemesanan</p>
+            <h3 class="step-label" id="step3-label">Lanjut ke pemesanan</h3>
             <div class="channel-buttons">
               <div id="channels-disabled-box" class="channels-disabled-box" style="display: none;" role="alert"></div>
               <button type="button" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-checkout">

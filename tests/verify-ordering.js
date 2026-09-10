@@ -241,6 +241,15 @@ function createMockElement(tagName, id = '', className = '') {
         cur = cur.parentElement;
       }
       return null;
+    },
+
+    contains(node) {
+      let cur = node;
+      while (cur) {
+        if (cur === element) return true;
+        cur = cur.parentElement;
+      }
+      return false;
     }
   };
 
@@ -485,7 +494,8 @@ console.log('✔ Environment initialized: app.js loaded into high-fidelity DOM c
 // than a single summary title, since the cart can now hold multiple lines.
 // ---------------------------------------------------------------------------
 function cartLineEls() {
-  return mockDocument.getElementById('cart-lines').children;
+  // Exclude the UX-01 empty-state placeholder <li> — callers care about real cart lines.
+  return Array.from(mockDocument.getElementById('cart-lines').children).filter(el => el.classList.contains('cart-line'));
 }
 function cartLineTitle(index) {
   const li = cartLineEls()[index];
@@ -523,7 +533,9 @@ const stickyTitle = mockDocument.getElementById('sticky-order-title');
 const stickyPrice = mockDocument.getElementById('sticky-order-price');
 const stickyCta = mockDocument.getElementById('sticky-order-cta');
 
-assert.strictEqual(cartLines.children.length, 0, 'Cart must start with no lines (P1-06)');
+assert.strictEqual(cartLines.children.length, 1, 'Empty cart must render exactly one empty-state message, not zero lines (UX-01)');
+assert(cartLines.textContent.trim().length > 0, 'Empty cart message must have non-empty text (UX-01)');
+assert.strictEqual(cartLines.querySelectorAll('.cart-line').length, 0, 'Cart must start with no real cart lines (P1-06)');
 assert.strictEqual(summaryPrice.style.display, 'none', 'Price must be hidden (not a "—" placeholder) while the cart is empty (P1-08)');
 assert.strictEqual(includesList.children.length, 0, 'Includes list must stay empty rather than show instructions in place of inclusions (T2-8)');
 assert.strictEqual(includesLabel.style.display, 'none', '"Termasuk" label must be hidden when there is nothing to include yet (T2-8)');
@@ -818,10 +830,12 @@ const mktTag = mockDocument.getElementById('mkt-soon-tag');
 const mktText = mockDocument.getElementById('marketplace-status-text');
 const footerShopee = mockDocument.getElementById('footer-link-shopee');
 
-// With unconfirmed shopeeUrl (empty string):
-assert.strictEqual(shopeeBtn.getAttribute('aria-disabled'), 'true', 'Shopee button must be disabled when URL unconfirmed');
-assert(shopeeBtn.classList.contains('btn-disabled'));
-assert.strictEqual(shopeeBtn.getAttribute('href'), null, 'Shopee button must NOT have href');
+// With unconfirmed shopeeUrl (empty string): the disabled channel button is
+// hidden entirely rather than shown alongside a duplicate "coming soon" —
+// that fact lives once, in the marketplace status box below it (UX-28).
+// A dedicated class is used (not style.display) since .btn-shopee sets
+// "display: flex !important" in the stylesheet.
+assert(shopeeBtn.classList.contains('btn-shopee-hidden'), 'Shopee button must be hidden while unready, not shown disabled');
 assert(mktText.textContent.includes('Listing Shopee sedang disiapkan'), 'Notice box must honestly state listing in preparation');
 assert.strictEqual(footerShopee.getAttribute('aria-disabled'), 'true');
 assert(footerShopee.innerHTML.includes('segera hadir'));
@@ -830,7 +844,7 @@ assert(footerShopee.innerHTML.includes('segera hadir'));
 const dataCopy = JSON.parse(JSON.stringify(app.getData()));
 dataCopy.store.channels.showShopee = false;
 app.setData(dataCopy);
-assert.strictEqual(shopeeBtn.style.display, 'none', 'Shopee button must hide when showShopee is false');
+assert(shopeeBtn.classList.contains('btn-shopee-hidden'), 'Shopee button must hide when showShopee is false');
 assert.strictEqual(footerShopee.style.display, 'none', 'Footer Shopee link must hide when showShopee is false');
 
 // Toggle showWhatsapp: false
@@ -1296,67 +1310,21 @@ assert.notStrictEqual(summaryPrice.style.display, 'none', '#summary-price must r
 console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and never scrolls on selection');
 
 // ---------------------------------------------------------------------------
-// Suite 22: Package Variety Chooser (P1-07)
+// Suite 22: Predefined bouquets have no variety chooser (curated by studio)
 // ---------------------------------------------------------------------------
-console.log('\n--- SUITE 22: Package Variety Chooser (P1-07) ---');
+console.log('\n--- SUITE 22: Predefined Bouquets Have No Variety Chooser ---');
 app.resetToInitial();
 app.selectPackage(1, false); // Buket Sedang
 let pkgCart = app.getCart();
-assert.strictEqual(pkgCart[0].variety, 'mix', 'Package line must default to studio mix variety');
+assert.strictEqual(pkgCart[0].variety, undefined, 'Package lines no longer carry a variety field');
+assert.strictEqual(cartLineTitle(0), 'Buket Sedang', 'Package title is just the curated bouquet name');
+assert.strictEqual(cartLineEls()[0].querySelector('.cart-line-variety-options'), null, 'Package cart line must not render a variety chooser');
 
-let varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
-assert(varietyOptionsEl, 'Package cart line must render a variety chooser');
-assert.strictEqual(varietyOptionsEl.getAttribute('role'), 'radiogroup');
-let varietyChips = varietyOptionsEl.children;
-assert.strictEqual(varietyChips.length, 5, 'Chooser must offer studio mix + one option per flower');
-assert.strictEqual(varietyChips[0].getAttribute('role'), 'radio');
-assert.strictEqual(varietyChips[0].getAttribute('aria-checked'), 'true', 'Studio mix must be checked by default');
-assert.strictEqual(varietyChips[0].getAttribute('tabindex'), '0', 'Only the checked option is in the tab order');
-assert.strictEqual(varietyChips[1].getAttribute('tabindex'), '-1');
-
-assert.strictEqual(cartLineTitle(0), 'Buket Sedang', 'Title omits variety while it is still studio mix');
-const preVarietyHref = decodeURIComponent(waBtn.getAttribute('href'));
-assert(!preVarietyHref.includes('Tulip'), 'WhatsApp text must not mention a variety before one is chosen');
-const preVarietyTotal = app.computeCartTotals(app.getCart()).total;
-
-// Choose "Tulip" — flowerOrder index 2, so chip index 3 after "studio mix"
-varietyChips[3].click();
-
-pkgCart = app.getCart();
-assert.strictEqual(pkgCart[0].variety, 'Tulip', "Clicking a variety chip must set the line's variety");
-assert.strictEqual(cartLineTitle(0), 'Buket Sedang — Tulip', 'Cart-line title must reflect the chosen variety');
-
-varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
-varietyChips = varietyOptionsEl.children;
-assert.strictEqual(varietyChips[3].getAttribute('aria-checked'), 'true', 'aria-checked must move to the newly chosen option');
-assert.strictEqual(varietyChips[3].getAttribute('tabindex'), '0');
-assert.strictEqual(varietyChips[0].getAttribute('aria-checked'), 'false', 'Previously checked option must be unchecked');
-assert.strictEqual(varietyChips[0].getAttribute('tabindex'), '-1');
-
-const postVarietyHref = decodeURIComponent(waBtn.getAttribute('href'));
-assert(postVarietyHref.includes('Tulip'), 'WhatsApp message must mention the chosen variety');
-assert.strictEqual(app.computeCartTotals(app.getCart()).total, preVarietyTotal, 'Choosing a variety must never change the price');
-
-// Arrow-key navigation moves the checked option (same roving-tabindex pattern as #wrap-chips)
-varietyChips[3].dispatchEvent({ type: 'keydown', key: 'ArrowRight', preventDefault: () => {} });
-varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
-varietyChips = varietyOptionsEl.children;
-assert.strictEqual(varietyChips[4].getAttribute('aria-checked'), 'true', 'ArrowRight must move the checked option forward');
-assert.strictEqual(varietyChips[4].getAttribute('tabindex'), '0');
-assert.strictEqual(varietyChips[3].getAttribute('aria-checked'), 'false');
-assert.strictEqual(app.getCart()[0].variety, 'Gerbera');
-
-// Both languages render correct labels
 app.setLanguage('en');
-varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
-varietyChips = varietyOptionsEl.children;
-assert(varietyChips[0].textContent.includes('Studio mix'), 'EN label for the mix option must localize');
-assert.strictEqual(cartLineTitle(0), 'The Handful — Gerbera', 'EN cart-line title must localize the package name');
+assert.strictEqual(cartLineTitle(0), 'The Handful', 'EN cart-line title must localize the package name with no variety suffix');
 app.setLanguage('id');
-varietyOptionsEl = cartLineEls()[0].querySelector('.cart-line-variety-options');
-assert(varietyOptionsEl.children[0].textContent.includes('Campuran studio'), 'ID label for the mix option must localize');
 
-console.log('✔ Suite 22 Passed: Package variety chooser defaults to studio mix, updates the summary and WhatsApp text without changing price, and supports arrow-key navigation');
+console.log('✔ Suite 22 Passed: Predefined bouquets render as a single curated product with no variety chooser');
 
 // ---------------------------------------------------------------------------
 // Suite 23: Cart Mutations Are Announced (P2-02)
@@ -1435,22 +1403,98 @@ assert(app.normalizedCheckoutState().items[0].includes('Mini Pot Daisy'), 'Mini 
 
 app.resetToInitial();
 app.bumpCustom('Sunflower', 3);
-app.toggleCustomAddition('rounded', true);
-app.toggleCustomAddition('fern', true);
+app.bumpCustomAddition('rounded', 1);
+app.bumpCustomAddition('fern', 1);
 app.setCustomMessageCard(true);
 assert.strictEqual(app.getCustomTotals().additionsSubtotal, 24000, 'Both leaf additions must be included in the estimate');
 assert.strictEqual(app.getCustomTotals().total, 224000, 'Custom total must include stems, wrap, and selected leaves');
+
+// Additions are a quantity, not a toggle — bumping past 1 must multiply the price
+app.bumpCustomAddition('rounded', 1);
+assert.strictEqual(app.getCustomTotals().additionsSubtotal, 36000, 'A second unit of the same addition must add its price again');
+app.bumpCustomAddition('rounded', -1);
+app.bumpCustomAddition('rounded', -5);
+assert.strictEqual(app.getCustomTotals().additionsSubtotal, 12000, 'Addition quantity must clamp at zero, never go negative');
+app.bumpCustomAddition('rounded', 1);
+
 app.useCustom();
 const custom25 = app.normalizedCheckoutState();
-assert.strictEqual(custom25.itemData[0].additions.rounded, true);
-assert.strictEqual(custom25.itemData[0].additions.fern, true);
+assert.strictEqual(custom25.itemData[0].additions.rounded, 1);
+assert.strictEqual(custom25.itemData[0].additions.fern, 1);
 assert.strictEqual(custom25.itemData[0].message_card, true);
 assert(custom25.items[0].includes('Daun Bulat') && custom25.items[0].includes('Daun Pakis') && custom25.items[0].includes('Kartu ucapan'));
-console.log('✔ Suite 25 Passed: Mini pots and both leaf/message-card additions flow through pricing and checkout data');
+console.log('✔ Suite 25 Passed: Mini pots and both leaf/message-card additions flow through pricing and checkout data as quantities');
+
+// ---------------------------------------------------------------------------
+// Suite 26: Cart Persistence Survives Reload (UX-02)
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 26: Cart Persistence Survives Reload (UX-02) ---');
+const CART_STORAGE_KEY = 'alxanthia_cart_v1';
+
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Tulip', false);
+app.bumpLineQty(app.getCart()[0].id, 1); // qty 2
+app.selectPackage(1, false); // Buket Sedang
+app.selectWrap('sage');
+app.setOrderNote('Selamat ulang tahun!');
+
+const preReloadCart = app.getCart();
+assert.strictEqual(preReloadCart.length, 2, 'Setup must have two cart lines before simulating a reload');
+
+// Simulate a reload: wipe in-memory state, then restore from storage exactly as init() does.
+app.resetToInitial();
+assert.strictEqual(app.getCart().length, 0, 'In-memory cart must be empty right after the simulated reload wipe');
+app.restoreCartFromStorage();
+
+const restoredCart = app.getCart();
+assert.strictEqual(restoredCart.length, 2, 'Both lines must survive the simulated reload');
+const restoredTulip = restoredCart.find(l => l.type === 'stem' && l.flowerKey === 'Tulip');
+assert(restoredTulip, 'Restored cart must still contain the Tulip stem line');
+assert.strictEqual(restoredTulip.qty, 2, 'Restored quantity must match the pre-reload quantity');
+assert(!Object.hasOwn(restoredTulip, 'price') && !Object.hasOwn(restoredTulip, 'total'), 'Restored lines must carry no stored price — totals are always recomputed from current siteData');
+assert.strictEqual(app.computeCartTotals(restoredCart).total, app.computeCartTotals(preReloadCart).total, 'Recomputed total after restore must match the pre-reload total');
+assert.strictEqual(app.getState().selectedWrap, 'sage', 'Wrap colour choice must survive the simulated reload');
+assert.strictEqual(app.getState().orderNote, 'Selamat ulang tahun!', 'Gift note must survive the simulated reload');
+
+// Removing the last line clears storage too — reload afterward must stay empty
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.removeLine(app.getCart()[0].id);
+app.resetToInitial();
+app.restoreCartFromStorage();
+assert.strictEqual(app.getCart().length, 0, 'Removing the only line, then reloading, must still yield an empty cart');
+
+// A corrupt stored payload must never break the page — falls back to empty cart silently
+mockLocalStorage.setItem(CART_STORAGE_KEY, '{{{not json');
+assert.doesNotThrow(() => app.restoreCartFromStorage(), 'A hand-corrupted payload must not throw');
+assert.strictEqual(app.getCart().length, 0, 'A corrupt payload must fall back to an empty cart');
+
+// Stale references (unknown flower, out-of-range package) must be dropped, not restored blindly
+mockLocalStorage.setItem(CART_STORAGE_KEY, JSON.stringify({
+  cart: [
+    { id: 1, type: 'stem', flowerKey: 'Orchid', qty: 2 },        // unknown flower key
+    { id: 2, type: 'package', pkgIndex: 99, qty: 1 },            // out-of-range package
+    { id: 3, type: 'stem', flowerKey: 'Rose', qty: 3 }           // valid — must survive
+  ],
+  wrapKey: 'not-a-real-wrap',
+  orderNote: 'ok note'
+}));
+app.resetToInitial();
+app.restoreCartFromStorage();
+const survivorCart = app.getCart();
+assert.strictEqual(survivorCart.length, 1, 'Only the valid line must survive validation against current siteData');
+assert.strictEqual(survivorCart[0].flowerKey, 'Rose');
+assert.strictEqual(app.getState().selectedWrap, 'kraft', 'An unrecognised wrap key must not be restored');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 26 Passed: Cart, wrap and gift note survive a reload; stale or corrupt storage is validated and never breaks the page');
 
 // ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 25 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 26 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -499,6 +499,29 @@
     return url.toString();
   }
 
+  /**
+   * Collapses any way a customer might type an Indonesian number — 089...,
+   * 89..., 62..., +62 81-2345-..., with spaces/dashes/parens — into a single
+   * canonical E.164 form (+62...) so only one format ever reaches the sheet.
+   * Numbers that already carry a different country code are left untouched.
+   */
+  function normalizeIndonesianPhone(raw) {
+    let digits = String(raw || '').trim().replace(/[^\d+]/g, '');
+    digits = digits.replace(/(?!^)\+/g, '');
+    if (digits.startsWith('+62')) {
+      digits = '+62' + digits.slice(3).replace(/^0+/, '');
+    } else if (digits.startsWith('62')) {
+      digits = '+62' + digits.slice(2).replace(/^0+/, '');
+    } else if (digits.startsWith('0')) {
+      digits = '+62' + digits.slice(1);
+    } else if (digits.startsWith('+')) {
+      return digits;
+    } else if (digits) {
+      digits = '+62' + digits;
+    }
+    return digits;
+  }
+
   function buildOrderSubmission(formData, reference, state = normalizedCheckoutState(), idempotencyKey = '') {
     const customer = {};
     formData.forEach((value, key) => { customer[key] = String(value); });
@@ -506,6 +529,7 @@
     // when unchecked) inside FormData — normalize it to a real Boolean before it ever
     // reaches the server, which must still enforce that it is exactly `true`.
     customer.acknowledgement = customer.acknowledgement === 'on' || customer.acknowledgement === 'true';
+    if (customer.buyer_whatsapp) customer.buyer_whatsapp = normalizeIndonesianPhone(customer.buyer_whatsapp);
     return {
       order_reference: reference,
       idempotency_key: idempotencyKey,
@@ -3716,6 +3740,7 @@
       generateOrderReference: generateOrderReference,
       buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
       buildOrderSubmission: buildOrderSubmission,
+      normalizeIndonesianPhone: normalizeIndonesianPhone,
       getCart: () => cart.map(l => ({ ...l })),
       _setCartForTest: (c) => { cart = c; },
       persistCart: persistCart,

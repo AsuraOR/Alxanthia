@@ -160,6 +160,7 @@ function doPost(event) {
     }
 
     const order = request.order || {};
+    if (order.buyer_whatsapp) order.buyer_whatsapp = normalizeIndonesianPhone(order.buyer_whatsapp);
     const validation = validateOrder(order);
     if (!validation.ok) {
       return jsonResponse({ ok: false, code: 'VALIDATION', error: validation.error });
@@ -278,7 +279,7 @@ function validateOrder(order) {
 
   const buyerName = String(order.buyer_name || '').trim();
   if (!buyerName || buyerName.length > MAX_TEXT.buyer_name) return fail('Invalid buyer name.');
-  if (!/^[+0-9 ()-]{8,20}$/.test(order.buyer_whatsapp || '')) return fail('Invalid buyer WhatsApp number.');
+  if (!/^\+62\d{8,13}$/.test(order.buyer_whatsapp || '')) return fail('Invalid buyer WhatsApp number.');
 
   if (['bali', 'luar_bali'].indexOf(order.location_type) === -1) return fail('Invalid location type.');
   if (order.location_type === 'bali') {
@@ -552,6 +553,27 @@ function notifyOwner_(orderReference, orderMode, verifiedTotal, priceMismatch, s
 function safeText(value) {
   const text = String(value === undefined || value === null ? '' : value);
   return /^[=+\-@]/.test(text) ? "'" + text : text;
+}
+
+// Mirrors app.js's normalizeIndonesianPhone. The website already normalizes
+// buyer_whatsapp before submitting, but this endpoint can be called directly
+// (or by an older/cached client), so it re-normalizes here too — the sheet
+// must only ever see one canonical format (+62...), never 089..., 89..., etc.
+function normalizeIndonesianPhone(raw) {
+  var digits = String(raw || '').trim().replace(/[^\d+]/g, '');
+  digits = digits.replace(/(?!^)\+/g, '');
+  if (digits.indexOf('+62') === 0) {
+    digits = '+62' + digits.slice(3).replace(/^0+/, '');
+  } else if (digits.indexOf('62') === 0) {
+    digits = '+62' + digits.slice(2).replace(/^0+/, '');
+  } else if (digits.indexOf('0') === 0) {
+    digits = '+62' + digits.slice(1);
+  } else if (digits.indexOf('+') === 0) {
+    return digits;
+  } else if (digits) {
+    digits = '+62' + digits;
+  }
+  return digits;
 }
 
 function safeNumber(value) {

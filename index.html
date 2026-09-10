@@ -682,7 +682,10 @@
           <div class="order-summary-card-inner">
             <div class="summary-top-row">
               <h3 class="step-label" id="selection-label">Pilihan Anda</h3>
-              <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
+              <div class="summary-top-actions">
+                <button type="button" class="btn-clear-cart" id="btn-clear-cart">Kosongkan keranjang</button>
+                <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
+              </div>
             </div>
 
             <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
@@ -1005,6 +1008,10 @@
         <p id="checkout-success-copy"></p>
         <p class="checkout-reference"><span id="success-reference-label">Referensi pesanan</span>: <strong
             id="success-reference"></strong></p>
+        <p id="success-order-label" class="success-order-label">Pesanan Anda</p>
+        <ul id="success-items" class="checkout-items"></ul>
+        <p class="success-order-total"><span id="success-total-label">Estimasi total produk</span>: <strong
+            id="success-total"></strong></p>
         <div class="checkout-success-actions">
           <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
           <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>

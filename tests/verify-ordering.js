@@ -374,6 +374,7 @@ registerEl('div', 'nav-menu');
 registerEl('div', 'nav-scrim');
 registerEl('a', 'brand-link');
 registerEl('button', 'btn-edit-selection');
+registerEl('h3', 'cat1-title');
 registerEl('h3', 'finish-label');
 registerEl('textarea', 'card-note-input');
 registerEl('textarea', 'order-note-input');
@@ -1667,8 +1668,65 @@ app.resetToInitial();
 console.log('✔ Suite 30 Passed: card recipient/sender/gift-message fields are excluded from submission whenever the card is disabled, while the draft itself survives for re-enabling');
 
 // ---------------------------------------------------------------------------
+console.log('\n--- SUITE 31: Edit Selection Reveals a Visible Category (ALX-15) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.setCategory('pots'); // hides #collection entirely
+const colSectionBeforeEdit = mockDocument.getElementById('collection');
+assert.strictEqual(colSectionBeforeEdit.style.display, 'none', 'Setup: the pots filter must actually hide #collection');
+
+const editSelectionBtn = mockDocument.getElementById('btn-edit-selection');
+editSelectionBtn.click();
+assert.strictEqual(colSectionBeforeEdit.style.display, '', 'Clicking Edit selection must reveal #collection even when a category filter was hiding it');
+assert.strictEqual(app.getState().activeCategory, 'all', 'Edit selection must switch back to the "all" category so every product family is visible');
+assert.strictEqual(mockDocument.activeElement, mockDocument.getElementById('cat1-title'), 'Focus must land on a visible heading after Edit selection, for keyboard users');
+assert.strictEqual(app.getCart().length, 1, 'Edit selection must never discard the existing cart');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 31 Passed: Edit selection reveals a visible category from any filter, focuses a real heading, and never touches the cart');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 32: Cart Labels Describe the Action and the Products (ALX-16) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+
+// A mini-pot-only cart carries no stems — the sticky bar must not claim "0 tangkai".
+app.selectMiniPot('daisy', false);
+const potOnlySticky = mockDocument.getElementById('sticky-order-title').textContent;
+assert(!potOnlySticky.includes('0'), `A pot-only cart's sticky title must not show a stem count of 0: "${potOnlySticky}"`);
+assert(potOnlySticky.toLowerCase().includes('daisy') || potOnlySticky.toLowerCase().includes('daisi'), `A single-line cart's sticky title should name the actual product: "${potOnlySticky}"`);
+
+// A second, different product makes this a real multi-item cart — the
+// sticky bar must show a real item count, not a stem total that would
+// still be wrong for a mixed pot+stem cart.
+app.selectStem('Rose', false);
+const mixedSticky = mockDocument.getElementById('sticky-order-title').textContent;
+assert.strictEqual(app.getCart().length, 2, 'Setup: the cart must now have two distinct lines');
+assert(mixedSticky.includes('2'), `A two-line cart's sticky title must reflect the real line count: "${mixedSticky}"`);
+
+// The package "choose" button's active-state label used to read "✓ Selected"
+// even though clicking it again increments the quantity rather than
+// toggling it off. Verified in this suite via the underlying template
+// logic directly (the mock DOM's simplified HTML parser can't reliably
+// reconstruct this card's deeply-nested markup); the real-browser suite
+// (browser-runner.html) verifies the rendered button text end to end.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectPackage(0, false);
+assert.strictEqual(app.getCart()[0].qty, 1, 'Setup: one package must be in the cart');
+const pkgBtnActiveTemplate = app.getData().translations.id.pkgBtnActive;
+assert(!pkgBtnActiveTemplate.toLowerCase().includes('dipilih') && !pkgBtnActiveTemplate.toLowerCase().includes('selected'), `The active package button's label must not be a static "Selected"/"Dipilih" that conceals the increment action: "${pkgBtnActiveTemplate}"`);
+assert(pkgBtnActiveTemplate.includes('{qty}'), 'The active package button label must include a quantity placeholder so the customer sees the real count');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 32 Passed: the sticky bar shows the real product/item count, and the package button label no longer implies a toggle it isn\'t');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 30 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 32 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -381,7 +381,7 @@ window.ALXANTHIA_DATA = {
         "Kartu petunjuk perawatan disertakan"
       ],
       pkgBtn: "Tambahkan buket ini",
-      pkgBtnActive: "✓ Dipilih",
+      pkgBtnActive: "✓ {qty} di keranjang — tambah lagi",
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
@@ -406,6 +406,7 @@ window.ALXANTHIA_DATA = {
       estTotalLabel: "Estimasi total",
       stemsWord: "tangkai",
       stemWord: "tangkai",
+      stickyMultiItemLabel: "{n} produk",
       minHint: "Tambahkan minimal {minStems} tangkai untuk memesan buket custom.",
       okHint: "Estimasi — total akhir dan ongkir kami konfirmasikan via chat sebelum pembayaran.",
       customAddAnotherHint: "Buket custom yang sudah ada di keranjang tidak akan berubah — ini menambahkan buket baru.",
@@ -698,7 +699,7 @@ window.ALXANTHIA_DATA = {
         "Care guide card included"
       ],
       pkgBtn: "Add this bouquet",
-      pkgBtnActive: "✓ Selected",
+      pkgBtnActive: "✓ {qty} in cart — add another",
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
@@ -723,6 +724,7 @@ window.ALXANTHIA_DATA = {
       estTotalLabel: "Estimated total",
       stemsWord: "stems",
       stemWord: "stem",
+      stickyMultiItemLabel: "{n} products",
       minHint: "Add at least {minStems} stems to order a custom bouquet.",
       okHint: "An estimate — final totals and shipping are confirmed via chat before payment.",
       customAddAnotherHint: "Custom bouquets already in your cart won't change — this adds a new one.",

@@ -128,6 +128,24 @@
             doc.activeElement === finishLabel,
             `active: ${doc.activeElement ? (doc.activeElement.id || doc.activeElement.className) : 'none'}`
           );
+
+          // ALX-16: the active-state label used to read a static "✓ Selected"
+          // even though clicking the button again increments the quantity
+          // rather than toggling it off — re-query the same button (it may
+          // have been re-rendered) and check its real text.
+          const activeCard = targetBtn.closest('.bouquet-card');
+          const activeBtn = activeCard ? activeCard.querySelector('.btn-choose-bouquet') : targetBtn;
+          const activeLabel = (activeBtn.textContent || '').trim();
+          assert(
+            'ALX-16: the active package button label is not a static "Selected"/"Dipilih"',
+            !/selected|dipilih/i.test(activeLabel),
+            `label: "${activeLabel}"`
+          );
+          assert(
+            'ALX-16: the active package button label shows the real cart quantity',
+            /\b1\b/.test(activeLabel),
+            `label: "${activeLabel}"`
+          );
         } else {
           assert('Package choose buttons and #finish-label present', false);
         }

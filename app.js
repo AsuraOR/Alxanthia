@@ -1363,7 +1363,8 @@
     const expectedCount = (siteData.packages || []).length;
     if (existingCards.length === expectedCount && existingCards[0].getAttribute('data-lang') === currentLang) {
       existingCards.forEach((card, index) => {
-        const active = cart.some(l => l.type === 'package' && l.pkgIndex === index);
+        const activeLine = cart.find(l => l.type === 'package' && l.pkgIndex === index);
+        const active = !!activeLine;
         const wasActive = card.classList.contains('active');
 
         if (active) {
@@ -1385,7 +1386,9 @@
 
         const chooseBtn = card.querySelector('.btn-choose-bouquet');
         if (chooseBtn) {
-          chooseBtn.textContent = active ? t.pkgBtnActive : t.pkgBtn;
+          // ALX-16: "✓ Selected" implied a toggle, but clicking again still
+          // increments the line's quantity — label the actual action instead.
+          chooseBtn.textContent = active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn;
           chooseBtn.classList.toggle('is-active', active);
           if (active && !wasActive) {
             chooseBtn.classList.remove('is-active-pop');
@@ -1410,7 +1413,8 @@
     grid.innerHTML = '';
 
     (siteData.packages || []).forEach((pkg, index) => {
-      const active = cart.some(l => l.type === 'package' && l.pkgIndex === index);
+      const activeLine = cart.find(l => l.type === 'package' && l.pkgIndex === index);
+      const active = !!activeLine;
       const isPopular = index === 1; // Handful / 5-stem package is classic studio favorite
       const name = t.pkgNames[index] || `Package ${index + 1}`;
       const blurb = t.pkgBlurbs[index] || '';
@@ -1432,7 +1436,7 @@
           ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
           <div class="pkg-actions-col">
             <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
-              ${active ? t.pkgBtnActive : t.pkgBtn}
+              ${active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn}
             </button>
           </div>
         </div>
@@ -2250,7 +2254,16 @@
     if (editBtn) {
       editBtn.style.display = cartHasSelection ? '' : 'none';
       editBtn.onclick = () => {
+        // ALX-15: a category filter (e.g. "Mini Pots") hides #collection
+        // entirely, so scrolling straight there could land on a section
+        // with display:none and nothing visible. Reveal every category
+        // first — this only changes visibility, never the cart — so the
+        // button always lands somewhere with visible products, regardless
+        // of whichever filter was active when the customer clicked it.
+        setCategory('all', false);
         scrollToSection('#collection');
+        const heading = document.getElementById('cat1-title');
+        if (heading) heading.focus({ preventScroll: true });
       };
     }
 
@@ -2599,7 +2612,15 @@
       setText('#sticky-order-price', minPrompt);
       setText('#sticky-order-cta', t.configureStemsCta || (currentLang === 'en' ? 'Configure stems ↑' : 'Atur bunga ↑'));
     } else {
-      setText('#sticky-order-title', `${cartTotals.stems} ${t.stemsWord}`);
+      // ALX-16: cartTotals.stems is 0 for an all-mini-pot cart (pots carry
+      // no stem count) and undercounts any cart mixing pots/packages with
+      // stems, so it was never a correct summary for anything but an
+      // all-stems cart. Show the actual product name for one line, or a
+      // real line count for several.
+      const stickyTitle = cart.length === 1
+        ? describeLine(cart[0], t).title
+        : fillTemplate(t.stickyMultiItemLabel || '{n}', { n: cart.length });
+      setText('#sticky-order-title', stickyTitle);
       setText('#sticky-order-price', formatRp(cartTotals.total));
       setText('#sticky-order-cta', `${t.navOrder || (currentLang === 'en' ? 'Order' : 'Pesan')} →`);
     }

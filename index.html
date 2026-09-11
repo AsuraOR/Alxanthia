@@ -354,6 +354,28 @@
       <p id="lock-error" class="lock-error" aria-live="polite" role="alert"></p>
     </div>
   </div>
+
+  <!-- ========================================================================
+       STATIC FALLBACK — shown when JavaScript is disabled (ALX-24) or the
+       site fails to initialize (ALX-22). Deliberately hardcoded: it must
+       stay readable even when site-content.js itself is what's broken.
+       ======================================================================== -->
+  <div id="site-unavailable" class="site-unavailable">
+    <div class="site-unavailable-card">
+      <p class="site-unavailable-brand">Alxanthia</p>
+      <p class="site-unavailable-message">
+        Situs sedang tidak dapat dimuat. Hubungi kami melalui WhatsApp untuk memesan.<br />
+        The site can't load right now. Contact us on WhatsApp to place an order.
+      </p>
+      <a class="site-unavailable-link" href="https://wa.me/628972000622" target="_blank" rel="noopener noreferrer">WhatsApp: +62 897-2000-622</a>
+    </div>
+  </div>
+  <noscript>
+    <style>
+      .lock-screen { display: none !important; }
+      .site-unavailable { display: flex !important; }
+    </style>
+  </noscript>
   <script>
     // Instant unlock check to prevent flash of lock screen for verified visitors
     try {

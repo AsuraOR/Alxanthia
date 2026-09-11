@@ -3948,6 +3948,62 @@ details.is-closing > .faq-answer-wrapper {
   pointer-events: none;
 }
 
+.site-unavailable {
+  position: fixed;
+  inset: 0;
+  z-index: 100000; /* above .lock-screen, so it stays visible while the curtain stays up (ALX-22) */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: rgba(35, 32, 27, 0.55);
+}
+
+.site-unavailable.is-visible {
+  display: flex;
+}
+
+.site-unavailable-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0;
+  padding: 40px 32px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(35, 32, 27, 0.2);
+}
+
+.site-unavailable-brand {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  letter-spacing: 0.2em;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--text-dark);
+  margin: 0 0 16px;
+}
+
+.site-unavailable-message {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body-sm, 14px);
+  color: var(--text-dark);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.site-unavailable-link {
+  display: inline-block;
+  padding: 12px 24px;
+  background: var(--accent-ochre);
+  color: var(--bg-card);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+}
+
 .lock-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);

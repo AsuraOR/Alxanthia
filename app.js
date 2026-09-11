@@ -66,9 +66,12 @@
    * Load data directly from site-content.js (window.ALXANTHIA_DATA)
    */
   function loadData() {
-    if (window.ALXANTHIA_DATA) {
-      siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
+    if (!window.ALXANTHIA_DATA) {
+      // A vague "Cannot read properties of null" surfaces later, from every
+      // call site that reads siteData — name the real cause here instead (ALX-22).
+      throw new Error('site-content.js failed to load or has a syntax error: window.ALXANTHIA_DATA is missing.');
     }
+    siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
   }
 
   /**
@@ -2635,6 +2638,10 @@
     const relockBtn = document.getElementById('btn-lock-site');
 
     const authConfig = siteData.auth || { enabled: true, passcode: '22062024' };
+    // Single source of truth for the expected passcode (ALX-22) — computed
+    // once here, not re-read with its own fallback at every comparison site,
+    // so rotating it is one edit instead of three.
+    const expectedPasscode = String(authConfig.passcode || '22062024').trim();
 
     if (!authConfig.enabled) {
       if (lockScreen) lockScreen.classList.add('unlocked');
@@ -2644,14 +2651,8 @@
     }
 
     try {
-      if (typeof window !== 'undefined' && window.location && window.location.search) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const expected = String(authConfig.passcode || '22062024').trim();
-        if (urlParams.get('unlock') === expected) {
-          localStorage.setItem(AUTH_KEY, 'true');
-        }
-      }
-
+      // No `?unlock=` query-parameter branch here by design: it placed the
+      // passcode into browser history and outbound Referer headers (ALX-22).
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) {
           lockScreen.classList.add('unlocked');
@@ -2674,9 +2675,8 @@
       lockForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const entered = (passInput ? passInput.value : '').trim();
-        const expected = String(authConfig.passcode || '22062024').trim();
 
-        if (entered === expected) {
+        if (entered === expectedPasscode) {
           try {
             localStorage.setItem(AUTH_KEY, 'true');
           } catch (err) {}
@@ -4042,17 +4042,33 @@
    * Initialize App
    */
   function init() {
-    loadData();
-    restoreCartFromStorage();
-    initLang();
-    setupEventListeners();
-    setupReducedMotionListener();
-    setupAuth();
-    renderAll();
-    initCheckout();
-    initTurnstile();
-    renderRecentOrderBanner();
-    initScrollReveals();
+    try {
+      loadData();
+      restoreCartFromStorage();
+      initLang();
+      setupEventListeners();
+      setupReducedMotionListener();
+      setupAuth();
+      renderAll();
+      initCheckout();
+      initTurnstile();
+      renderRecentOrderBanner();
+      initScrollReveals();
+    } catch (err) {
+      // Fail closed (ALX-22): a broken site-content.js must never publish
+      // the unfinished draft. Keep the passcode curtain up regardless of
+      // its previous state, and surface a hardcoded (never siteData-driven)
+      // contact fallback, since nothing behind the curtain can be trusted.
+      console.error('Alxanthia failed to initialize — the site is showing its fallback state: ' + (err && err.message ? err.message : err));
+      const lockScreen = document.getElementById('lock-screen');
+      if (lockScreen) {
+        lockScreen.classList.remove('unlocked');
+        lockScreen.style.display = 'flex';
+      }
+      const fallback = document.getElementById('site-unavailable');
+      if (fallback) fallback.classList.add('is-visible');
+      return;
+    }
 
     try {
       if (typeof window !== 'undefined' && window.location && window.location.search) {

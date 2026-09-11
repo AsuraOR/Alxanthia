@@ -201,6 +201,10 @@ assert.strictEqual(validateOrder(validOrder({ wrap: 'rainbow' })).ok, false, 'An
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: false })).ok, false, 'A false acknowledgement must be rejected');
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: 'true' })).ok, false, 'Acknowledgement must be a real boolean, not the string "true"');
 assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, gift_message: 'sneaked in' })).ok, false, 'Gift text without the card enabled must be rejected');
+// ALX-13: recipient/card-sender names are card-specific fields too, same as gift_message.
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, recipient_name: 'sneaked in' })).ok, false, 'A recipient name without the card enabled must be rejected');
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, card_sender_name: 'sneaked in' })).ok, false, 'A card sender name without the card enabled must be rejected');
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: true, recipient_name: 'Ayu', card_sender_name: 'Sagita' })).ok, true, 'A recipient/sender name WITH the card enabled must be accepted');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'bali', regency: 'Nowhereville' })).ok, false, 'An unlisted Bali regency must be rejected');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'luar_bali', address: 'Jl. Aman 1', city: 'Jakarta', postal_code: '123' })).ok, false, 'A postal code that is not exactly 5 digits must be rejected');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'luar_bali', address: '', city: 'Jakarta', postal_code: '12345' })).ok, false, 'A missing out-of-Bali address must be rejected');
@@ -228,6 +232,12 @@ assert.strictEqual(isValidLeadTimeDate('2026-09-11'), false, 'One day of lead ti
 assert.strictEqual(isValidLeadTimeDate('2026-09-12'), true, 'Exactly the minimum lead time must be accepted');
 assert.strictEqual(isValidLeadTimeDate('2026-09-20'), true, 'A date further out must be accepted');
 assert.strictEqual(isValidLeadTimeDate('not-a-date'), false, 'A malformed date must be rejected');
+// ALX-12: new Date('2027-02-31') silently rolls forward to March 3rd —
+// a round-trip check against the original Y-M-D is what actually catches it.
+assert.strictEqual(new Date('2027-02-31T00:00:00').getMonth(), 2, 'sanity check: JS Date really does roll an impossible date forward instead of failing');
+assert.strictEqual(isValidLeadTimeDate('2027-02-31'), false, 'An impossible calendar date (Feb 31) must be rejected, not silently rolled forward to March 3rd');
+assert.strictEqual(isValidLeadTimeDate('2026-13-01'), false, 'An impossible month must be rejected');
+assert.strictEqual(isValidLeadTimeDate('2026-09-31'), false, 'A day that does not exist in the given month must be rejected');
 assert.strictEqual(validateOrder(validOrder({ preferred_date: '2026-09-11' })).ok, false, 'validateOrder must enforce the same lead time as isValidLeadTimeDate');
 console.log('✔ Suite S5 Passed: the server enforces the same minimum production lead time as the checkout form\n');
 

@@ -507,9 +507,13 @@
       wrapId: selectedWrap,
       messageCardEnabled,
       messageCardFee: totals.messageCardFee,
+      // ALX-13: recipient/sender names are card-specific fields, same as
+      // giftMessage above — the UI hides them the instant the card is
+      // unchecked, so the submitted payload must not keep sending names a
+      // customer believes they already removed.
       giftMessage: messageCardEnabled ? orderNote : '',
-      recipientName: orderRecipientName,
-      cardSenderName: orderCardSenderName,
+      recipientName: messageCardEnabled ? orderRecipientName : '',
+      cardSenderName: messageCardEnabled ? orderCardSenderName : '',
       productSubtotal: totals.subtotal + totals.wrapFee,
       estimatedProductTotal: totals.total,
       currency: 'IDR', language: currentLang, isValid: totals.isValid
@@ -517,7 +521,13 @@
   }
 
   function generateOrderReference(now = new Date()) {
-    const date = [String(now.getFullYear()).slice(-2), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
+    // ALX-12: the reference's YYMMDD segment used the visitor's local date,
+    // so a late-evening order from a western timezone could carry a
+    // reference dated a day before its Sheet timestamp. Anchored at the
+    // same Bali business date as the date picker's minimum, for the same
+    // reason.
+    const iso = todayBaliISO(now);
+    const date = iso.slice(2, 4) + iso.slice(5, 7) + iso.slice(8, 10);
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const bytes = new Uint8Array(4);
     if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
@@ -3571,9 +3581,29 @@
 
   function pad2(n) { return String(n).padStart(2, '0'); }
   function toISODate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
-  function todayLocalISO() {
-    const d = new Date();
-    return toISODate(d.getFullYear(), d.getMonth(), d.getDate());
+  /**
+   * ALX-12: the studio's business date (Asia/Makassar / WITA), not the
+   * visitor's local timezone. WITA runs an hour ahead of WIB, so between
+   * 23:00 and 24:00 WIB — covering most of Indonesia's population — Bali
+   * is already on the next calendar day; a visitor-local "today" produced
+   * a picker minimum one day earlier than the server's floor and every
+   * date the widget offered in that window then failed server validation
+   * with a message naming no field.
+   */
+  function todayBaliISO(now = new Date()) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Makassar', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  }
+
+  /**
+   * Calendar-day arithmetic on a fixed Y-M-D string, anchored at UTC
+   * midnight so the caller's own timezone can't skew the result — used to
+   * add the production lead time to todayBaliISO() without ever
+   * reconstructing a Date in the visitor's local zone.
+   */
+  function addDaysToISODate(iso, days) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
 
   /**
@@ -3584,6 +3614,14 @@
   function updateDateFieldValidity(field) {
     const value = (field.value || '').trim();
     if (!value || !ISO_DATE_RE.test(value)) { field.setCustomValidity(''); return; }
+    // ALX-12: reject an impossible calendar date the same way the server
+    // does — round-trip through Date and compare components, since
+    // new Date('2027-02-31') silently rolls forward to March 3rd instead
+    // of failing.
+    const parts = value.split('-').map(Number);
+    const picked = new Date(value + 'T00:00:00');
+    const isRealDate = !isNaN(picked.getTime()) && picked.getFullYear() === parts[0] && picked.getMonth() + 1 === parts[1] && picked.getDate() === parts[2];
+    if (!isRealDate) { field.setCustomValidity('date-out-of-range'); return; }
     field.setCustomValidity(field.min && value < field.min ? 'date-out-of-range' : '');
   }
 
@@ -3608,7 +3646,7 @@
     const weekdays = DATE_PICKER_WEEKDAYS[lang];
     const minISO = input.min || '';
     const selectedISO = ISO_DATE_RE.test(input.value) ? input.value : '';
-    const todayISO = todayLocalISO();
+    const todayISO = todayBaliISO();
 
     const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
     const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
@@ -3662,7 +3700,7 @@
     const input = document.getElementById('preferred-date-input');
     if (!popover || !input) return;
     const raw = input.value.trim();
-    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayLocalISO()) ? input.min : todayLocalISO());
+    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayBaliISO()) ? input.min : todayBaliISO());
     datePickerViewYear = Number(base.slice(0, 4));
     datePickerViewMonth = Number(base.slice(5, 7)) - 1;
     datePickerFocusISO = null;
@@ -3701,7 +3739,7 @@
 
   function moveDatePickerFocus(deltaDays) {
     const input = document.getElementById('preferred-date-input');
-    const current = datePickerFocusISO || todayLocalISO();
+    const current = datePickerFocusISO || todayBaliISO();
     const [y, m, d] = current.split('-').map(Number);
     const next = new Date(y, m - 1, d + deltaDays);
     const nextISO = toISODate(next.getFullYear(), next.getMonth(), next.getDate());
@@ -3840,9 +3878,11 @@
     // CONFIGURE-SUBMISSION-ENDPOINT.md's MINIMUM_LEAD_DAYS).
     const dateInput = form.elements['preferred_date'];
     if (dateInput) {
-      const minDate = new Date();
-      minDate.setDate(minDate.getDate() + (siteData.minimumLeadDays ?? 0));
-      dateInput.min = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
+      // ALX-12: anchor at the Bali business date (todayBaliISO), not the
+      // visitor's local "today" — then do calendar-day arithmetic on that
+      // fixed date via a UTC-midnight anchor, so the visitor's own
+      // timezone never re-enters the calculation.
+      dateInput.min = addDaysToISODate(todayBaliISO(), siteData.minimumLeadDays ?? 0);
       updateDateFieldValidity(dateInput);
       if (document.getElementById(fieldErrorId(dateInput))) {
         setFieldError(dateInput, dateInput.checkValidity() ? '' : fieldValidationMessage(dateInput));
@@ -4388,6 +4428,8 @@
       computeCartTotals: computeCartTotals,
       normalizedCheckoutState: normalizedCheckoutState,
       generateOrderReference: generateOrderReference,
+      todayBaliISO: todayBaliISO,
+      addDaysToISODate: addDaysToISODate,
       buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
       buildOrderSubmission: buildOrderSubmission,
       normalizeIndonesianPhone: normalizeIndonesianPhone,

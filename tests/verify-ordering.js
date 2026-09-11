@@ -1622,8 +1622,53 @@ app.resetToInitial();
 console.log('✔ Suite 28 Passed: website ordering availability follows one explicit rule, applied to the checkout button and independent of cosmetic channel visibility');
 
 // ---------------------------------------------------------------------------
+console.log('\n--- SUITE 29: Bali Business Date, Not Visitor-Local (ALX-12) ---');
+// 2026-09-11T16:30:00Z is 23:30 WIB (Jakarta) but already 00:30 WITA (Bali)
+// on the NEXT calendar day — exactly the window where a visitor-local
+// "today" used to disagree with the server's Asia/Makassar floor. Every
+// visitor, regardless of their own browser timezone, must get the same
+// answer here, because todayBaliISO() never reads the visitor's local zone.
+const pinnedInstant = new Date('2026-09-11T16:30:00Z');
+assert.strictEqual(app.todayBaliISO(pinnedInstant), '2026-09-12', 'todayBaliISO must resolve to the Bali calendar date at this instant, one day ahead of Jakarta\'s local date');
+assert.strictEqual(app.addDaysToISODate('2026-09-12', 2), '2026-09-14', 'addDaysToISODate must add calendar days without any timezone re-entering the calculation');
+const pinnedReference = app.generateOrderReference(pinnedInstant);
+assert(pinnedReference.startsWith('ALX-260912-'), `the order reference's date segment must use the Bali date (260912), not Jakarta's local date: "${pinnedReference}"`);
+console.log('✔ Suite 29 Passed: the business date used for the picker minimum and the order reference is the same Bali date regardless of the visitor\'s own timezone');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 30: Card Recipient/Sender Fields Excluded When Disabled (ALX-13) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.setOrderRecipientName('Ayu');
+app.setOrderCardSenderName('Sagita');
+app.setMessageCardEnabled(true);
+app.setOrderNote('Selamat ulang tahun!');
+const cardOnState = app.normalizedCheckoutState();
+assert.strictEqual(cardOnState.recipientName, 'Ayu', 'Recipient name must be submitted while the card is enabled');
+assert.strictEqual(cardOnState.cardSenderName, 'Sagita', 'Card sender name must be submitted while the card is enabled');
+
+// Uncheck the card — the UI hides these fields, so the submitted payload
+// must not keep sending names the customer believes they removed, even
+// though the draft values are left in place for re-enabling.
+app.setMessageCardEnabled(false);
+const cardOffState = app.normalizedCheckoutState();
+assert.strictEqual(cardOffState.recipientName, '', 'Recipient name must be excluded from the submitted payload once the card is disabled');
+assert.strictEqual(cardOffState.cardSenderName, '', 'Card sender name must be excluded from the submitted payload once the card is disabled');
+assert.strictEqual(cardOffState.giftMessage, '', 'Gift message must also be excluded once the card is disabled');
+assert.strictEqual(app.getState().orderRecipientName, 'Ayu', 'The draft recipient name itself is preserved (not cleared) so re-enabling the card restores it');
+
+app.setMessageCardEnabled(true);
+const cardReenabledState = app.normalizedCheckoutState();
+assert.strictEqual(cardReenabledState.recipientName, 'Ayu', 'Re-enabling the card must resubmit the preserved draft name');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 30 Passed: card recipient/sender/gift-message fields are excluded from submission whenever the card is disabled, while the draft itself survives for re-enabling');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 28 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 30 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -281,8 +281,8 @@ function doPost(event) {
         'Wrap': order.wrap,
         'Message Card': order.message_card_enabled ? 'Yes' : 'No',
         'Gift Message': order.message_card_enabled ? safeText(order.gift_message) : '',
-        'Recipient Name': safeText(order.recipient_name),
-        'Card Sender Name': safeText(order.card_sender_name),
+        'Recipient Name': order.message_card_enabled ? safeText(order.recipient_name) : '',
+        'Card Sender Name': order.message_card_enabled ? safeText(order.card_sender_name) : '',
         'Submitted Product Subtotal': safeNumber(order.product_subtotal),
         'Submitted Message Card Fee': safeNumber(order.message_card_fee),
         'Submitted Total': safeNumber(order.estimated_product_total),
@@ -352,20 +352,34 @@ function validateOrder(order) {
   const giftMessage = String(order.gift_message || '');
   if (giftMessage.length > MAX_TEXT.gift_message) return fail('Gift message is too long.');
   if (!order.message_card_enabled && giftMessage.trim()) return fail('Gift message present without message card enabled.');
-  if (String(order.recipient_name || '').length > MAX_TEXT.recipient_name) return fail('Recipient name is too long.');
-  if (String(order.card_sender_name || '').length > MAX_TEXT.card_sender_name) return fail('Card sender name is too long.');
+  const recipientName = String(order.recipient_name || '');
+  const cardSenderName = String(order.card_sender_name || '');
+  if (recipientName.length > MAX_TEXT.recipient_name) return fail('Recipient name is too long.');
+  if (cardSenderName.length > MAX_TEXT.card_sender_name) return fail('Card sender name is too long.');
+  // ALX-13: independently reject inactive card fields — the client already
+  // clears these the instant the card is unchecked, so a request sending
+  // either of them without the card enabled is either a stale client or
+  // manipulated, and must not be stored under a name the customer removed.
+  if (!order.message_card_enabled && (recipientName.trim() || cardSenderName.trim())) return fail('Card recipient/sender name present without message card enabled.');
 
   return validateItemData(order.item_data);
 }
 
 function isValidLeadTimeDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const picked = new Date(value + 'T00:00:00');
+  if (isNaN(picked.getTime())) return false;
+  // ALX-12: JS's Date constructor accepts an impossible day/month and
+  // rolls it forward instead of failing — new Date('2027-02-31T00:00:00')
+  // silently yields March 3rd. A round-trip check against the original
+  // Y-M-D components is what actually rejects it.
+  const parts = value.split('-').map(Number);
+  if (picked.getFullYear() !== parts[0] || picked.getMonth() + 1 !== parts[1] || picked.getDate() !== parts[2]) return false;
   const todayStr = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
   const today = new Date(todayStr + 'T00:00:00');
   const minDate = new Date(today.getTime());
   minDate.setDate(minDate.getDate() + MINIMUM_LEAD_DAYS);
-  const picked = new Date(value + 'T00:00:00');
-  return !isNaN(picked.getTime()) && picked.getTime() >= minDate.getTime();
+  return picked.getTime() >= minDate.getTime();
 }
 
 function validateItemData(itemData) {

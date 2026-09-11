@@ -226,6 +226,29 @@
           );
         }
 
+        // ALX-25: heading sequence has no skipped level, and three
+        // previously-undersized touch targets now meet the AA/house floor.
+        // Re-measured directly rather than assumed.
+        const headingTags = Array.from(doc.querySelectorAll('h1,h2,h3,h4,h5,h6')).map((el) => Number(el.tagName[1]));
+        let skippedHeading = false;
+        for (let i = 1; i < headingTags.length; i += 1) {
+          if (headingTags[i] > headingTags[i - 1] + 1) skippedHeading = true;
+        }
+        assert('ALX-25: the heading sequence contains no skipped level', skippedHeading === false, `sequence: ${headingTags.join(',')}`);
+
+        function rectOf(id) {
+          const el = doc.getElementById(id);
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { w: r.width, h: r.height };
+        }
+        const cardToggleRect = rectOf('card-note-toggle');
+        assert('ALX-25: #card-note-toggle meets the 24x24 AA floor', !!cardToggleRect && cardToggleRect.w >= 24 && cardToggleRect.h >= 24, JSON.stringify(cardToggleRect));
+        const footerRect = rectOf('footer-link-whatsapp');
+        assert('ALX-25: a footer link meets the 24x24 AA floor', !!footerRect && footerRect.h >= 24, JSON.stringify(footerRect));
+        const catTabRect = rectOf('cat-tab-all');
+        assert('ALX-25: a category tab meets the 44px house standard', !!catTabRect && catTabRect.h >= 44, JSON.stringify(catTabRect));
+
         // Test 8: Required-field indicators survive checkout localization
         // (ALX-21). All seven — plus regency, which carries a "(wajib)" mark
         // too — must stay visible on the first open, and must still be

@@ -12,6 +12,13 @@
   const LANG_KEY = 'alxanthia.lang';
   const AUTH_KEY = 'alxanthia_unlocked';
   const CART_KEY = 'alxanthia_cart_v1';
+  // ALX-03: the reference/idempotency key/fingerprint of a submission whose
+  // outcome is not yet known to be safely retryable — written before the
+  // network call, so a lost response (reload, tab close, dropped connection)
+  // can resume the SAME attempt instead of minting a new idempotency key and
+  // risking a second real order for a request the server may have already stored.
+  const PENDING_ATTEMPT_KEY = 'alxanthia_pending_attempt';
+  const PENDING_ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — short and documented (ALX-03)
   const CARD_NOTE_MAX = 200;
   // ALX-06: mirrors CONFIGURE-SUBMISSION-ENDPOINT.md's MAX_QTY_PER_LINE /
   // MAX_LINES_PER_ORDER / MAX_TOTAL_QTY / MAX_CUSTOM_* / MAX_TEXT exactly —
@@ -3282,6 +3289,74 @@
     if (isSubmitting && notice && !notice.textContent) notice.textContent = '';
   }
 
+  /**
+   * Identity of "what would be submitted right now" — used both to decide
+   * whether a review reuses the in-flight attempt's reference (DEV-04) and,
+   * on success, to detect that the cart has since diverged from what was
+   * actually recorded (ALX-05).
+   */
+  function checkoutFingerprint(state) {
+    return JSON.stringify({
+      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
+      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
+    });
+  }
+
+  /**
+   * ALX-03: write the pending attempt's identity BEFORE the network call —
+   * this is the only copy that survives a reload while the outcome is
+   * still unknown. Cleared once the outcome is definitively "success" or
+   * "duplicate" (the order is safely recorded); kept for every other
+   * outcome (conflict/ambiguous/connection/rejected) so a retry after
+   * reload still reuses the same idempotency key.
+   */
+  function persistPendingAttempt() {
+    try {
+      localStorage.setItem(PENDING_ATTEMPT_KEY, JSON.stringify({
+        reference: checkoutAttempt.reference,
+        idempotencyKey: checkoutAttempt.idempotencyKey,
+        fingerprint: checkoutAttempt.fingerprint,
+        startedAt: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  function clearPendingAttempt() {
+    try { localStorage.removeItem(PENDING_ATTEMPT_KEY); } catch (e) {}
+  }
+
+  /**
+   * Called once at startup, after the cart/draft has been restored, so the
+   * fingerprint comparison is against the same order the pending attempt
+   * was recorded for. A mismatched or expired record belongs to an order
+   * that no longer exists in this form — safe to discard, never to reuse.
+   */
+  function restorePendingAttempt() {
+    let pending;
+    try {
+      const raw = localStorage.getItem(PENDING_ATTEMPT_KEY);
+      if (!raw) return;
+      pending = JSON.parse(raw);
+    } catch (e) { clearPendingAttempt(); return; }
+    if (!pending || typeof pending !== 'object' || !pending.reference || !pending.idempotencyKey || !pending.fingerprint) {
+      clearPendingAttempt();
+      return;
+    }
+    if (!(Date.now() - Number(pending.startedAt || 0) < PENDING_ATTEMPT_MAX_AGE_MS)) {
+      clearPendingAttempt();
+      return;
+    }
+    const currentFingerprint = checkoutFingerprint(normalizedCheckoutState());
+    if (pending.fingerprint !== currentFingerprint) {
+      // The cart no longer matches what was pending — reusing this key for
+      // a different order would be wrong, and a genuinely new order must
+      // get a genuinely new UUID (ALX-03/ALX-05).
+      clearPendingAttempt();
+      return;
+    }
+    checkoutAttempt = { reference: pending.reference, idempotencyKey: pending.idempotencyKey, fingerprint: pending.fingerprint };
+  }
+
   function openCheckoutReview() {
     const state = normalizedCheckoutState();
     if (!state.isValid) {
@@ -3299,10 +3374,7 @@
     // reviews of an unsubmitted, unchanged order (so a retry stays one
     // attempt); only start a fresh attempt once the order has actually
     // changed, or the previous attempt already succeeded.
-    const fingerprint = JSON.stringify({
-      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
-      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
-    });
+    const fingerprint = checkoutFingerprint(state);
     if (!checkoutAttempt || checkoutAttempt.submitted || checkoutAttempt.fingerprint !== fingerprint) {
       checkoutAttempt = { reference: generateOrderReference(), idempotencyKey: generateIdempotencyKey(), fingerprint };
     }
@@ -3372,8 +3444,16 @@
 
   function openCheckoutDialog() {
     if (checkoutAttempt && checkoutAttempt.submitted) {
-      reopenCheckoutSuccess();
-      return;
+      // ALX-05: only reopen the recorded order's success screen if the cart
+      // still matches exactly what was submitted. Products added since
+      // success must lead to a fresh review of the new draft, not a stale
+      // success screen that hides them — the recorded order stays reachable
+      // separately through the recent-order banner (saveRecentOrder()).
+      const state = normalizedCheckoutState();
+      if (state.isValid && checkoutFingerprint(state) === checkoutAttempt.fingerprint) {
+        reopenCheckoutSuccess();
+        return;
+      }
     }
     openCheckoutReview();
   }
@@ -3852,6 +3932,10 @@
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
+    // ALX-04: explicit guard at entry — a double `submit` (double-click,
+    // Enter held down) must issue exactly one request, not queue a second
+    // one behind the first's still-open button-disable.
+    if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
     const invalidFields = validateCheckoutForm(form);
     if (invalidFields.length > 0) {
       error.textContent = ck('checkoutFieldsIncomplete', { count: invalidFields.length });
@@ -3882,6 +3966,9 @@
     button.disabled = true;
     button.textContent = ck('checkoutSaving');
     error.textContent = '';
+    // ALX-03: written before the network call — the only record that
+    // survives if the response never comes back.
+    persistPendingAttempt();
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS) : null;
@@ -3891,46 +3978,63 @@
     let outcome;
     let response = null;
     try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller ? controller.signal : undefined
-      });
-    } catch (networkError) {
-      outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
-    }
-    if (timeoutId) clearTimeout(timeoutId);
+      // ALX-04: the timeout stays active across this ENTIRE try block —
+      // request, body read, and response validation — not just until
+      // fetch()'s promise settles at headers-received. response.json()
+      // below shares the same AbortSignal-backed body read, so a stalled
+      // body still aborts within CHECKOUT_TIMEOUT_MS instead of hanging
+      // forever on "Saving…".
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller ? controller.signal : undefined
+        });
+      } catch (networkError) {
+        // A request that never got a response at all: an abort (whether
+        // from our own timeout or a stalled body — see below) is
+        // uncertain, never a definite failure; anything else is a plain
+        // connection failure.
+        outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
+      }
 
-    if (!outcome) {
-      if (response.status === 409) {
-        outcome = 'conflict';
-      } else if (response.status >= 500) {
-        outcome = 'ambiguous';
-      } else if (!response.ok) {
-        outcome = 'rejected';
-      } else {
-        try {
-          const result = await response.json();
-          // DEV-06: both the success flag and the exact matching reference
-          // are required — `{ "ok": true }` alone is no longer accepted.
-          if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
-            outcome = result.duplicate === true ? 'duplicate' : 'success';
-          } else {
+      if (!outcome) {
+        if (response.status === 409) {
+          outcome = 'conflict';
+        } else if (response.status >= 500) {
+          outcome = 'ambiguous';
+        } else if (!response.ok) {
+          outcome = 'rejected';
+        } else {
+          try {
+            const result = await response.json();
+            // DEV-06: both the success flag and the exact matching reference
+            // are required — `{ "ok": true }` alone is no longer accepted.
+            if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
+              outcome = result.duplicate === true ? 'duplicate' : 'success';
+            } else {
+              outcome = 'ambiguous';
+            }
+          } catch (parseError) {
+            // Headers came back fine, but the body read was aborted (a
+            // stalled body past CHECKOUT_TIMEOUT_MS) or was malformed —
+            // either way the server may have already stored the order,
+            // so this is ambiguous, never a plain rejection (ALX-04).
             outcome = 'ambiguous';
           }
-        } catch (parseError) {
-          outcome = 'ambiguous';
         }
       }
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setCheckoutSubmitGuard(false);
+      button.disabled = false;
+      button.textContent = ck('checkoutSaveOrder');
+      resetTurnstile(); // a Turnstile token is single-use regardless of outcome
     }
 
-    setCheckoutSubmitGuard(false);
-    button.disabled = false;
-    button.textContent = ck('checkoutSaveOrder');
-    resetTurnstile(); // a Turnstile token is single-use regardless of outcome
-
     if (outcome === 'success' || outcome === 'duplicate') {
+      clearPendingAttempt(); // ALX-03: safely recorded — no longer "uncertain"
       showRecordedOrder(payload, outcome === 'duplicate');
     } else if (outcome === 'conflict') {
       checkoutAttempt.conflicted = true;
@@ -4140,6 +4244,7 @@
     try {
       loadData();
       restoreCartFromStorage();
+      restorePendingAttempt();
       initLang();
       setupEventListeners();
       setupReducedMotionListener();

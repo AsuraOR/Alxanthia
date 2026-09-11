@@ -46,6 +46,7 @@ async function runCheckoutDialogChecks(browser) {
   });
   let mockMode = 'success'; // 'success' | 'duplicate' | 'conflict' | 'timeout' | 'serverError'
   let capturedRequests = 0;
+  const capturedBodies = []; // ALX-03: inspected to prove a retry reuses the same idempotency_key
 
   if (endpoint) {
     await page.route(endpoint, async (route) => {
@@ -53,6 +54,7 @@ async function runCheckoutDialogChecks(browser) {
       if (req.method() !== 'POST') return route.continue();
       capturedRequests += 1;
       const body = JSON.parse(req.postData() || '{}');
+      capturedBodies.push(body);
       if (mockMode === 'timeout') {
         // Never resolve within the test's window — simulates an unreachable
         // upstream; the app's own 20s AbortController would eventually fire
@@ -219,6 +221,28 @@ async function runCheckoutDialogChecks(browser) {
     assert('DEV-10: reopening checkout after success shows the success step again', reviewHiddenOnReopen && successVisibleOnReopen);
     assert('DEV-10: the reference is unchanged on reopen', referenceBefore === referenceAfter, `before=${referenceBefore} after=${referenceAfter}`);
 
+    // --- ALX-05: adding a product after success must open a fresh review
+    //     of the new draft, not silently reopen the stale success screen
+    //     over products the customer hasn't submitted yet. The recorded
+    //     order must stay reachable separately, via the recent-order banner.
+    await page.click('#checkout-close');
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { window.AlxanthiaApp.selectStem('Tulip', false); });
+    await page.click('#btn-checkout');
+    await page.waitForSelector('#checkout-modal[open]', { timeout: 5000 });
+    const reviewVisibleAfterCartChange = await page.evaluate(() => !document.getElementById('checkout-review').hidden);
+    const successHiddenAfterCartChange = await page.evaluate(() => document.getElementById('checkout-success').hidden);
+    assert('ALX-05: adding a product after a recorded success opens a fresh review, not the stale success screen', reviewVisibleAfterCartChange && successHiddenAfterCartChange, `reviewVisible=${reviewVisibleAfterCartChange} successHidden=${successHiddenAfterCartChange}`);
+    const reviewItemsAfterCartChange = await page.locator('#checkout-items').textContent();
+    assert('ALX-05: the fresh review reflects the newly added product', !!(reviewItemsAfterCartChange && reviewItemsAfterCartChange.toLowerCase().includes('tulip')), `items: "${reviewItemsAfterCartChange}"`);
+    const bannerStillShowsRecordedOrder = await page.evaluate(() => {
+      const el = document.getElementById('recent-order-banner');
+      return !!el && !el.hidden;
+    });
+    assert('ALX-05: the previously recorded order stays reachable via the recent-order banner after starting a new draft', bannerStillShowsRecordedOrder === true);
+    await page.click('#checkout-edit'); // back out without submitting the new draft
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+
     // --- DEV-10: recent-order banner survives a reload --------------------
     await page.reload({ waitUntil: 'load' });
     await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
@@ -245,6 +269,47 @@ async function runCheckoutDialogChecks(browser) {
       return !!el && !el.hidden && el.textContent.length > 0;
     });
     assert('DEV-18: a denied clipboard write shows a selectable manual-copy fallback', fallbackVisible === true);
+
+    // The clipboard test left the success screen open — close it before
+    // starting a fresh attempt, since #btn-checkout is unreachable while a
+    // modal dialog covers it.
+    await page.evaluate(() => { const m = document.getElementById('checkout-modal'); if (m.hasAttribute('open')) m.close(); });
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+
+    // --- ALX-03: an uncertain submission survives a reload and retries
+    //     with the SAME idempotency key — never minting a new UUID for a
+    //     request the server may already have stored under the first one.
+    await openCheckoutOnFreshStem();
+    const referenceBeforeAmbiguous = await page.locator('#checkout-reference').textContent();
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'timeout'; // aborted mid-flight — the outcome is uncertain, not a definite failure
+    const requestsBeforeUncertain = capturedRequests;
+    await page.click('#save-order');
+    await page.waitForFunction(() => document.getElementById('save-order') && !document.getElementById('save-order').disabled, { timeout: 5000 });
+    assert('ALX-03 setup: the uncertain submission actually reached the network once', capturedRequests === requestsBeforeUncertain + 1, `before=${requestsBeforeUncertain} after=${capturedRequests}`);
+    const firstIdempotencyKey = capturedBodies[capturedBodies.length - 1].idempotency_key;
+
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    await page.click('#btn-checkout');
+    await page.waitForSelector('#checkout-modal[open]', { timeout: 5000 });
+    const reviewVisibleAfterUncertainReload = await page.evaluate(() => !document.getElementById('checkout-review').hidden);
+    assert('ALX-03: reopening after an uncertain outcome shows the (unsubmitted) review, since the order was never confirmed', reviewVisibleAfterUncertainReload === true);
+    const referenceAfterUncertainReload = await page.locator('#checkout-reference').textContent();
+    assert('ALX-03: the order reference is unchanged after reloading following an uncertain submission', referenceAfterUncertainReload === referenceBeforeAmbiguous, `before=${referenceBeforeAmbiguous} after=${referenceAfterUncertainReload}`);
+
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'success';
+    await page.click('#save-order');
+    await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
+    const secondIdempotencyKey = capturedBodies[capturedBodies.length - 1].idempotency_key;
+    assert('ALX-03: retrying after an uncertain outcome reuses the same idempotency key, not a freshly minted UUID', secondIdempotencyKey === firstIdempotencyKey, `first=${firstIdempotencyKey} second=${secondIdempotencyKey}`);
+    const finalReference = await page.locator('#success-reference').textContent();
+    assert('ALX-03: the retried submission is recorded under the original reference', finalReference === referenceBeforeAmbiguous, `original=${referenceBeforeAmbiguous} recorded=${finalReference}`);
   } catch (err) {
     assert('Checkout dialog flow completed without throwing', false, err && err.stack ? err.stack : String(err));
   } finally {

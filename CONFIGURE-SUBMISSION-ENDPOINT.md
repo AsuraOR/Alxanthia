@@ -136,6 +136,14 @@ var MAX_LINES_PER_ORDER = 20;
 var MAX_QTY_PER_LINE = 20;
 var MAX_TOTAL_QTY = 60;
 var MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
+// ALX-06: MAX_TOTAL_QTY above counts line quantities (how many of each item
+// was ordered), not the flowers/additions nested inside one custom bouquet
+// definition — without these, a single custom line at qty:1 could still
+// declare an absurd stem count. Same order of magnitude as MAX_TOTAL_QTY;
+// revisit alongside it if a real order ever legitimately needs more.
+var MAX_CUSTOM_STEMS_PER_FLOWER = 60;
+var MAX_CUSTOM_TOTAL_STEMS = 60;
+var MAX_CUSTOM_ADDITION_PER_KEY = 60;
 
 // ============================================================================
 // Entry point
@@ -325,7 +333,7 @@ function validateItemData(itemData) {
     const item = itemData[i];
     if (!item || typeof item !== 'object') return fail('Invalid item entry.');
     const qty = item.qty;
-    if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) return fail('Invalid item quantity.');
+    if (!Number.isSafeInteger(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) return fail('Invalid item quantity.');
     totalQty += qty;
 
     if (item.type === 'stem') {
@@ -357,10 +365,11 @@ function validateCustomStems(stems) {
     const key = keys[i];
     if (!hasOwn(CATALOG.flowerStemPrice, key)) return fail('Unknown flower in custom bouquet.');
     const count = stems[key];
-    if (!Number.isInteger(count) || count < 1) return fail('Invalid custom bouquet stem count.');
+    if (!Number.isSafeInteger(count) || count < 1 || count > MAX_CUSTOM_STEMS_PER_FLOWER) return fail('Invalid custom bouquet stem count.');
     total += count;
   }
   if (total < CATALOG.minStems) return fail('Custom bouquet below minimum stem count.');
+  if (total > MAX_CUSTOM_TOTAL_STEMS) return fail('Custom bouquet stem count too large.');
   return { ok: true };
 }
 
@@ -373,7 +382,7 @@ function validateCustomAdditions(additions) {
     const key = keys[i];
     if (!hasOwn(CATALOG.additionPrice, key)) return fail('Unknown addition.');
     const count = additions[key];
-    if (!Number.isInteger(count) || count < 0) return fail('Invalid addition quantity.');
+    if (!Number.isSafeInteger(count) || count < 0 || count > MAX_CUSTOM_ADDITION_PER_KEY) return fail('Invalid addition quantity.');
   }
   return { ok: true };
 }

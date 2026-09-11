@@ -4184,6 +4184,8 @@ details.is-closing > .faq-answer-wrapper {
 .form-help { margin: -4px 0 2px; color: var(--text-muted); font-size: .88rem; line-height: 1.45; }
 .field-error { display: block; margin: -3px 0 2px; color: #9d3e32; font-size: .85rem; font-weight: 600; line-height: 1.4; }
 .field-error[hidden] { display: none; }
+.cart-limit-notice { margin: 8px 0 0; padding: 10px 14px; background: rgba(157, 62, 50, .1); color: #9d3e32; font-size: .85rem; font-weight: 600; line-height: 1.4; }
+.cart-limit-notice[hidden] { display: none; }
 .checkout-form [aria-invalid="true"] { border-color: #9d3e32; }
 .check-label { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; flex-wrap: wrap; }
 .check-label input { width: 20px; height: 20px; flex: 0 0 auto; }

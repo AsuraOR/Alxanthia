@@ -13,6 +13,16 @@
   const AUTH_KEY = 'alxanthia_unlocked';
   const CART_KEY = 'alxanthia_cart_v1';
   const CARD_NOTE_MAX = 200;
+  // ALX-06: mirrors CONFIGURE-SUBMISSION-ENDPOINT.md's MAX_QTY_PER_LINE /
+  // MAX_LINES_PER_ORDER / MAX_TOTAL_QTY / MAX_CUSTOM_* / MAX_TEXT exactly —
+  // that file is the source of truth; keep both in sync if either changes.
+  const MAX_QTY_PER_LINE = 20;
+  const MAX_LINES_PER_ORDER = 20;
+  const MAX_TOTAL_QTY = 60;
+  const MAX_CUSTOM_STEMS_PER_FLOWER = 60;
+  const MAX_CUSTOM_TOTAL_STEMS = 60;
+  const MAX_CUSTOM_ADDITION_PER_KEY = 60;
+  const MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
 
   // State
   let currentLang = 'id';
@@ -83,7 +93,7 @@
   function persistCart() {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify({
-        cart, wrapKey: selectedWrap, orderNote, customCounts,
+        cart, wrapKey: selectedWrap, orderNote, customCounts, customAdditions,
         messageCardEnabled, orderRecipientName, orderCardSenderName
       }));
     } catch (e) {}
@@ -158,9 +168,24 @@
         orderNote = parsed.orderNote.slice(0, CARD_NOTE_MAX);
       }
       if (parsed.customCounts && typeof parsed.customCounts === 'object') {
+        // ALX-06: re-clamp on restore too — a stale or hand-edited payload
+        // must never bypass the per-flower/total-stem caps.
+        let restoredTotal = 0;
         order.forEach(key => {
           const c = Math.floor(Number(parsed.customCounts[key]));
-          customCounts[key] = c > 0 ? c : 0;
+          const clamped = c > 0 ? Math.min(c, MAX_CUSTOM_STEMS_PER_FLOWER) : 0;
+          const withinTotal = Math.min(clamped, Math.max(0, MAX_CUSTOM_TOTAL_STEMS - restoredTotal));
+          customCounts[key] = withinTotal;
+          restoredTotal += withinTotal;
+        });
+      }
+      // ALX-14: the in-progress custom-builder draft's leaf additions were
+      // never persisted at all — a reload silently zeroed them out even
+      // though committed cart lines kept theirs.
+      if (parsed.customAdditions && typeof parsed.customAdditions === 'object') {
+        (siteData.customAdditions || []).forEach(addition => {
+          const c = Math.floor(Number(parsed.customAdditions[addition.key]));
+          customAdditions[addition.key] = c > 0 ? Math.min(c, MAX_CUSTOM_ADDITION_PER_KEY) : 0;
         });
       }
       messageCardEnabled = !!parsed.messageCardEnabled;
@@ -599,6 +624,26 @@
   }
 
   /**
+   * Visible + screen-reader-announced feedback when a cart/custom-builder
+   * limit is hit, instead of silently clamping or letting the order reach
+   * the server only to fail there (ALX-06).
+   */
+  let cartLimitNoticeTimer = null;
+  function showCartLimitNotice(key, vars) {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const message = fillTemplate(t[key] || '', vars);
+    if (!message) return;
+    const el = document.getElementById('cart-limit-notice');
+    if (el) {
+      el.textContent = message;
+      el.hidden = false;
+      if (cartLimitNoticeTimer) clearTimeout(cartLimitNoticeTimer);
+      cartLimitNoticeTimer = setTimeout(() => { el.hidden = true; }, 5000);
+    }
+    announceToScreenReader(message);
+  }
+
+  /**
    * Announce a cart mutation via the single #order-announcer live region.
    * Throttled to at most one DOM write per 500ms so holding a stepper
    * button doesn't flood the queue — a rapid burst still ends with one
@@ -632,20 +677,36 @@
    * never merge — each committed bouquet is a distinct line.
    */
   function addLine(lineSpec) {
-    const addQty = lineSpec.qty || 1;
+    const requestedQty = lineSpec.qty || 1;
     let line;
+    let existing;
     if (lineSpec.type !== 'custom') {
-      const existing = cart.find(l => l.type === lineSpec.type && (
+      existing = cart.find(l => l.type === lineSpec.type && (
         lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey :
         lineSpec.type === 'pot' ? l.potKey === lineSpec.potKey :
         l.pkgIndex === lineSpec.pkgIndex
       ));
-      if (existing) {
-        existing.qty += addQty;
-        line = existing;
-      }
     }
-    if (!line) {
+
+    // ALX-06: never let a merge or a new line exceed the server's caps —
+    // MAX_QTY_PER_LINE for one line, MAX_LINES_PER_ORDER for distinct
+    // lines, MAX_TOTAL_QTY for the whole order.
+    if (!existing && cart.length >= MAX_LINES_PER_ORDER) {
+      showCartLimitNotice('cartLimitLines', { max: MAX_LINES_PER_ORDER });
+      return existing || null;
+    }
+    const lineCeiling = existing ? Math.max(0, MAX_QTY_PER_LINE - existing.qty) : MAX_QTY_PER_LINE;
+    const totalCeiling = Math.max(0, MAX_TOTAL_QTY - cartUnitCount());
+    const addQty = Math.max(0, Math.min(requestedQty, lineCeiling, totalCeiling));
+    if (addQty < requestedQty) {
+      showCartLimitNotice(addQty < requestedQty && lineCeiling < totalCeiling ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: lineCeiling < totalCeiling ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+    }
+    if (addQty <= 0) return existing || null;
+
+    if (existing) {
+      existing.qty += addQty;
+      line = existing;
+    } else {
       line = { ...lineSpec, id: nextLineId++, qty: addQty };
       cart.push(line);
     }
@@ -696,10 +757,21 @@
   function bumpLineQty(id, delta) {
     const line = cart.find(l => l.id === id);
     if (!line) return;
-    const newQty = line.qty + delta;
+    let newQty = line.qty + delta;
     if (newQty <= 0) {
       removeLine(id);
       return;
+    }
+    // ALX-06: mirrors the server's MAX_QTY_PER_LINE / MAX_TOTAL_QTY caps —
+    // an increment can't push a line, or the order, past what doPost would
+    // reject anyway.
+    if (delta > 0) {
+      const totalCeiling = MAX_TOTAL_QTY - (cartUnitCount() - line.qty);
+      const clamped = Math.min(newQty, MAX_QTY_PER_LINE, totalCeiling);
+      if (clamped < newQty) {
+        showCartLimitNotice(newQty > MAX_QTY_PER_LINE ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: newQty > MAX_QTY_PER_LINE ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+      }
+      newQty = Math.max(line.qty, clamped);
     }
     line.qty = newQty;
     renderCartLines();
@@ -803,7 +875,19 @@
    */
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
-    customCounts[flowerKey] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_STEMS_PER_FLOWER /
+    // MAX_CUSTOM_TOTAL_STEMS caps on a custom bouquet definition.
+    if (delta > 0) {
+      const currentTotal = getCustomTotals().stems;
+      const totalCeiling = MAX_CUSTOM_TOTAL_STEMS - (currentTotal - cur);
+      const clamped = Math.min(next, MAX_CUSTOM_STEMS_PER_FLOWER, totalCeiling);
+      if (clamped < next) {
+        showCartLimitNotice(next > MAX_CUSTOM_STEMS_PER_FLOWER ? 'customLimitStemsPerFlower' : 'customLimitTotalStems', { max: next > MAX_CUSTOM_STEMS_PER_FLOWER ? MAX_CUSTOM_STEMS_PER_FLOWER : MAX_CUSTOM_TOTAL_STEMS });
+      }
+      next = Math.max(cur, clamped);
+    }
+    customCounts[flowerKey] = next;
     renderCustomBuilder();
     renderBouquetsUI();
     persistCart();
@@ -825,8 +909,15 @@
   function bumpCustomAddition(key, delta) {
     if (!Object.prototype.hasOwnProperty.call(customAdditions, key)) return;
     const cur = customAdditions[key] || 0;
-    customAdditions[key] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_ADDITION_PER_KEY cap.
+    if (delta > 0 && next > MAX_CUSTOM_ADDITION_PER_KEY) {
+      showCartLimitNotice('customLimitAddition', { max: MAX_CUSTOM_ADDITION_PER_KEY });
+      next = MAX_CUSTOM_ADDITION_PER_KEY;
+    }
+    customAdditions[key] = next;
     renderCustomBuilder();
+    persistCart(); // ALX-14: was never persisted, so a reload silently dropped selected additions
   }
 
   /**

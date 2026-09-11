@@ -187,6 +187,13 @@ assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'R
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 9999 }] })).ok, false, 'An absurd quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 1 } }] })).ok, false, 'A custom bouquet below the minimum stem count must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { glitter: 1 } } ] })).ok, false, 'An unknown addition id must be rejected');
+// ALX-06: a huge nested count must be rejected even though MAX_TOTAL_QTY only
+// counts line quantities, not stems/additions inside one custom bouquet.
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 1000000 } }] })).ok, false, 'An absurd per-flower stem count in a custom bouquet must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 20, Tulip: 20, Sunflower: 20 } }] })).ok, true, 'A custom bouquet at the total-stem boundary must be accepted');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 20, Tulip: 20, Sunflower: 21 } }] })).ok, false, 'A custom bouquet over the total-stem boundary must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { rounded: 1000000 } }] })).ok, false, 'An absurd addition count must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 1.7976931348623157e+308 }] })).ok, false, 'A non-safe-integer quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ wrap: 'rainbow' })).ok, false, 'An unlisted wrap id must be rejected');
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: false })).ok, false, 'A false acknowledgement must be rejected');
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: 'true' })).ok, false, 'Acknowledgement must be a real boolean, not the string "true"');

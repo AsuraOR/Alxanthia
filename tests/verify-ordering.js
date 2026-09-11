@@ -1526,8 +1526,70 @@ app.resetToInitial();
 console.log('✔ Suite 26 Passed: Cart, wrap and gift note survive a reload; stale or corrupt storage is validated and never breaks the page');
 
 // ---------------------------------------------------------------------------
+console.log('\n--- SUITE 27: Cart & Custom-Builder Limits Mirror the Server (ALX-06) ---');
+
+// A single line can never exceed the server's MAX_QTY_PER_LINE (20).
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+const roseLineId = app.getCart()[0].id;
+for (let i = 0; i < 30; i += 1) app.bumpLineQty(roseLineId, 1);
+assert.strictEqual(app.getCart().find(l => l.id === roseLineId).qty, 20, 'A line quantity must clamp at MAX_QTY_PER_LINE (20), matching the server cap');
+
+// The whole order can never exceed MAX_TOTAL_QTY (60), even split across
+// several lines that each individually stay under MAX_QTY_PER_LINE.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.bumpLineQty(app.getCart()[0].id, 19); // Rose line at 20
+app.selectStem('Tulip', false);
+app.bumpLineQty(app.getCart().find(l => l.flowerKey === 'Tulip').id, 19); // Tulip line at 20
+app.selectStem('Sunflower', false);
+app.bumpLineQty(app.getCart().find(l => l.flowerKey === 'Sunflower').id, 25); // would be 26, but total cap is 60
+const totalQtyAfterCap = app.getCart().reduce((sum, l) => sum + l.qty, 0);
+assert.strictEqual(totalQtyAfterCap, 60, 'The order total must clamp at MAX_TOTAL_QTY (60) across lines, matching the server cap');
+
+// Distinct lines can never exceed MAX_LINES_PER_ORDER (20) — custom bouquets
+// never merge, so repeated commits are an easy way to reach many distinct lines.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.bumpCustom('Rose', 3);
+for (let i = 0; i < 25; i += 1) app.useCustom();
+assert.strictEqual(app.getCart().length, 20, 'The order must clamp at MAX_LINES_PER_ORDER (20) distinct lines, matching the server cap');
+
+// The custom-builder draft can never exceed MAX_CUSTOM_STEMS_PER_FLOWER (60)
+// per flower, nor MAX_CUSTOM_TOTAL_STEMS (60) across the whole draft.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetCustom();
+app.bumpCustom('Rose', 90);
+assert.strictEqual(app.getState().customCounts.Rose, 60, 'A single custom-flower count must clamp at MAX_CUSTOM_STEMS_PER_FLOWER (60)');
+app.resetCustom();
+app.bumpCustom('Rose', 40);
+app.bumpCustom('Tulip', 40); // would bring the draft total to 80, over MAX_CUSTOM_TOTAL_STEMS
+const customTotalAfterCap = app.getState().customCounts.Rose + app.getState().customCounts.Tulip;
+assert.strictEqual(customTotalAfterCap, 60, 'The custom-builder draft total must clamp at MAX_CUSTOM_TOTAL_STEMS (60)');
+
+// A custom addition can never exceed MAX_CUSTOM_ADDITION_PER_KEY (60), and —
+// unlike before this fix — the draft's addition counts now survive a reload.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetCustom();
+app.bumpCustom('Rose', 5);
+app.bumpCustomAddition('rounded', 90);
+assert.strictEqual(app.getState().customAdditions.rounded, 60, 'A custom addition count must clamp at MAX_CUSTOM_ADDITION_PER_KEY (60)');
+app.bumpCustomAddition('rounded', -55); // down to 5, well within bounds, to keep the reload check simple
+app.resetToInitial();
+app.restoreCartFromStorage();
+assert.strictEqual(app.getState().customAdditions.rounded, 5, 'ALX-14: the custom-builder draft\'s addition counts must survive a simulated reload');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 27 Passed: cart lines, order totals, and the custom-builder draft all enforce the same limits as the server, and draft additions persist');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 26 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 27 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

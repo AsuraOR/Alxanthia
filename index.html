@@ -692,9 +692,9 @@
             <h3 class="step-label" id="gift-details-label">Detail penerima (opsional)</h3>
             <div class="form-row">
               <label><span id="recipient-name-order-label">Nama penerima</span><input id="order-recipient-name"
-                  autocomplete="name"></label>
+                  autocomplete="name" maxlength="120"></label>
               <label><span id="card-sender-order-label">Nama pengirim pada kartu</span><input
-                  id="order-card-sender-name"></label>
+                  id="order-card-sender-name" maxlength="120"></label>
             </div>
           </div>
         </div>
@@ -711,6 +711,7 @@
             </div>
 
             <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
+            <p id="cart-limit-notice" class="cart-limit-notice" aria-live="polite" role="alert" hidden></p>
 
             <div class="summary-price-container">
               <p class="summary-price" id="summary-price">Rp 55.000</p>
@@ -987,7 +988,7 @@
         <form id="checkout-form" class="checkout-form" novalidate>
           <fieldset>
             <legend id="buyer-legend">Data pemesan</legend>
-            <label><span id="buyer-name-label"><span id="buyer-name-label-text">Nama pemesan </span><span class="required-mark" id="buyer-name-required">(wajib)</span></span><input name="buyer_name" autocomplete="name"
+            <label><span id="buyer-name-label"><span id="buyer-name-label-text">Nama pemesan </span><span class="required-mark" id="buyer-name-required">(wajib)</span></span><input name="buyer_name" autocomplete="name" maxlength="120"
                 required></label>
             <label><span id="buyer-phone-label"><span id="buyer-phone-label-text">Nomor WhatsApp pemesan </span><span class="required-mark" id="buyer-phone-required">(wajib)</span></span><input name="buyer_whatsapp" type="tel"
                 autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" aria-describedby="buyer-help" required></label>
@@ -1012,10 +1013,10 @@
                 WhatsApp.</p>
             </div>
             <div id="outside-bali-fields" hidden>
-              <label><span id="address-label"><span id="address-label-text">Alamat lengkap pengiriman </span><span class="required-mark" id="address-required">(wajib)</span></span><textarea name="address" rows="3"
+              <label><span id="address-label"><span id="address-label-text">Alamat lengkap pengiriman </span><span class="required-mark" id="address-required">(wajib)</span></span><textarea name="address" rows="3" maxlength="300"
                   autocomplete="street-address" aria-describedby="outside-bali-help"></textarea></label>
               <div class="form-row"><label><span id="city-label"><span id="city-label-text">Kota atau kabupaten </span><span class="required-mark" id="city-required">(wajib)</span></span><input name="city"
-                    autocomplete="address-level2"></label><label><span id="postal-label"><span id="postal-label-text">Kode pos </span><span class="required-mark" id="postal-required">(wajib)</span></span><input
+                    autocomplete="address-level2" maxlength="100"></label><label><span id="postal-label"><span id="postal-label-text">Kode pos </span><span class="required-mark" id="postal-required">(wajib)</span></span><input
                     name="postal_code" autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"></label></div>
               <p class="form-help" id="outside-bali-help">Pengiriman akan dikirim sesuai dengan alamat yang ditulis,
                 mohon diperhatikan dengan benar.</p>

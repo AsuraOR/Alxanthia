@@ -69,6 +69,15 @@ async function runCheckoutDialogChecks(browser) {
       if (mockMode === 'serverError') {
         return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream' }) });
       }
+      if (mockMode === 'renamed') {
+        // ALX-09: simulates the server resolving a rare reference collision —
+        // a different order_reference than the one sent, echoed back via
+        // renamed_from so the client can tell it's the SAME attempt succeeding.
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ ok: true, order_reference: body.order_reference + '-R', renamed_from: body.order_reference })
+        });
+      }
       return route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({ ok: true, order_reference: body.order_reference, duplicate: mockMode === 'duplicate' })
@@ -310,6 +319,23 @@ async function runCheckoutDialogChecks(browser) {
     assert('ALX-03: retrying after an uncertain outcome reuses the same idempotency key, not a freshly minted UUID', secondIdempotencyKey === firstIdempotencyKey, `first=${firstIdempotencyKey} second=${secondIdempotencyKey}`);
     const finalReference = await page.locator('#success-reference').textContent();
     assert('ALX-03: the retried submission is recorded under the original reference', finalReference === referenceBeforeAmbiguous, `original=${referenceBeforeAmbiguous} recorded=${finalReference}`);
+
+    // --- ALX-09: a server-resolved reference collision (a different
+    //     order_reference, echoed back via renamed_from) is accepted as a
+    //     genuine success for THIS attempt, and the success screen shows
+    //     the server's renamed reference, not the one the client proposed.
+    await page.evaluate(() => { const m = document.getElementById('checkout-modal'); if (m.hasAttribute('open')) m.close(); });
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+    await openCheckoutOnFreshStem();
+    const referenceProposed = await page.locator('#checkout-reference').textContent();
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'renamed';
+    await page.click('#save-order');
+    await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
+    const referenceRecorded = await page.locator('#success-reference').textContent();
+    assert('ALX-09: a server-side rename after a reference collision is accepted as success', referenceRecorded === `${referenceProposed}-R`, `proposed=${referenceProposed} recorded=${referenceRecorded}`);
   } catch (err) {
     assert('Checkout dialog flow completed without throwing', false, err && err.stack ? err.stack : String(err));
   } finally {

@@ -31,7 +31,7 @@ Never paste your webhook secret, Google credentials, Cloudflare API token, Turns
 5. Click cell `A1` and paste this tab-separated header row exactly. The Apps Script in Part 2 looks up every column **by this header text**, not by column letter, so the order of columns does not matter as long as every heading below exists exactly once:
 
 ```text
-Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted At	Language	Currency	Source	Acknowledged	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Gift Message	Recipient Name	Card Sender Name	Submitted Product Subtotal	Submitted Message Card Fee	Submitted Total	Verified Product Subtotal	Verified Message Card Fee	Verified Total	Price Mismatch	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
+Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted Catalog Version	Submitted At	Language	Currency	Source	Acknowledged	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Gift Message	Recipient Name	Card Sender Name	Submitted Product Subtotal	Submitted Message Card Fee	Submitted Total	Verified Product Subtotal	Verified Message Card Fee	Verified Total	Price Mismatch	Shipping Fee	Final Total	Midtrans Payment Link	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
 ```
 
 6. If the headings stay in one cell, select it and choose **Data → Split text to columns → Tab**.
@@ -41,7 +41,7 @@ Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted At	Langua
 A quick guide to the new/changed columns:
 
 - **Idempotency Key** and **Payload Hash** are written by the script for deduplication — you will not type into them.
-- **Catalog Version** records which price list was active when the order was verified, so an old browser tab left open across a price change can be diagnosed later.
+- **Catalog Version** records which price list was active when the order was verified (this script's own `CATALOG_VERSION`). **Submitted Catalog Version** records what the customer's browser believed it was (`site-content.js`'s `catalogVersion`) — kept as a separate column (ALX-08) so the two can be compared: if they differ, the customer's tab was open across a price change, which is a useful diagnostic distinct from a genuine tampering attempt.
 - **Submitted Product/Message Card/Total** are exactly what the customer's browser calculated. **Verified Product/Message Card/Total** are what the Apps Script recalculated from its own price list. They usually match. Treat **Verified Total**, never Submitted Total, as the real order amount.
 - **Price Mismatch** is normally blank. The script writes `REVIEW` here if the submitted and verified totals disagree — this can mean the customer's browser tab was open across a price change, or that someone tried to tamper with the totals in their browser. Either way, double-check the row before sending a payment link.
 - **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once you fill in **Shipping Fee**. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove.
@@ -145,6 +145,21 @@ var MAX_CUSTOM_STEMS_PER_FLOWER = 60;
 var MAX_CUSTOM_TOTAL_STEMS = 60;
 var MAX_CUSTOM_ADDITION_PER_KEY = 60;
 
+// ALX-07: every column doPost writes to, checked to exist exactly once
+// before any append — a missing column previously made buildRow() silently
+// drop that field, and a missing "Idempotency Key" column silently disabled
+// deduplication entirely (findExisting()'s `keyCol !== undefined` guard).
+var REQUIRED_HEADERS = [
+  'Order Reference', 'Idempotency Key', 'Payload Hash', 'Catalog Version', 'Submitted Catalog Version',
+  'Submitted At', 'Language', 'Currency', 'Source', 'Acknowledged', 'Buyer Name', 'Buyer WhatsApp',
+  'Location Type', 'Regency', 'Delivery Method', 'Address', 'City', 'Postal Code', 'Preferred Date',
+  'Order Mode', 'Order Summary', 'Item Data', 'Total Stems', 'Wrap', 'Message Card', 'Gift Message',
+  'Recipient Name', 'Card Sender Name', 'Submitted Product Subtotal', 'Submitted Message Card Fee',
+  'Submitted Total', 'Verified Product Subtotal', 'Verified Message Card Fee', 'Verified Total',
+  'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Payment Status',
+  'Work Phase', 'Delivery Service', 'Tracking Link/Number', 'Internal Notes'
+];
+
 // ============================================================================
 // Entry point
 // ============================================================================
@@ -179,6 +194,8 @@ function doPost(event) {
     if (!sheet) return jsonResponse({ ok: false, code: 'STORAGE_ERROR', error: 'Orders worksheet was not found.' });
 
     const headers = getHeaderMap(sheet);
+    const schemaCheck = validateHeaderSchema(headers);
+    if (!schemaCheck.ok) return jsonResponse({ ok: false, code: 'SCHEMA_ERROR', error: schemaCheck.error });
 
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
@@ -186,9 +203,12 @@ function doPost(event) {
       const existing = findExisting(sheet, headers, order.idempotency_key, order.order_reference);
 
       // DEV-04: same idempotency key, identical payload → the browser retried
-      // after an ambiguous failure. Return the original success, not a new row.
+      // after an ambiguous failure. Return the original success, not a new row —
+      // but repair a derived cell first if an earlier attempt appended the row
+      // and then failed before finishing it (ALX-07).
       if (existing.byKey) {
         if (existing.byKey.payloadHash === payloadHash) {
+          repairRowIfNeeded(sheet, headers, existing.byKey.row);
           return jsonResponse({ ok: true, order_reference: existing.byKey.orderReference, duplicate: true });
         }
         // Same key, different content — a genuine conflict. Stop; do not store.
@@ -199,23 +219,38 @@ function doPost(event) {
       }
 
       // Same human-readable reference under a different key: astronomically
-      // unlikely, but store it anyway and flag it rather than silently
-      // discarding a real order.
-      let collisionNote = '';
+      // unlikely (1,048,576 combinations/day — see ALX-09), but the reference
+      // must stay unique for owner lookups and payment links, so mint a fresh
+      // one rather than storing two orders under the same customer-visible
+      // reference. `renamedFrom` tells the client which of its own references
+      // this response actually confirms.
+      let finalReference = order.order_reference;
+      let renamedFrom = null;
       if (existing.byReference && existing.byReference.idempotencyKey !== order.idempotency_key) {
-        collisionNote = 'Reference collision with row ' + existing.byReference.row + ' — verify manually.';
+        renamedFrom = order.order_reference;
+        finalReference = regenerateOrderReference(order.order_reference, function (candidate) {
+          return !!findExisting(sheet, headers, '', candidate).byReference;
+        });
+        if (!finalReference) {
+          return jsonResponse({ ok: false, code: 'STORAGE_ERROR', error: 'Could not allocate a unique order reference.' });
+        }
       }
 
       const pricing = computeVerifiedTotals(order.item_data, order.message_card_enabled === true, CATALOG);
       const orderMode = resolveOrderMode(order.item_data);
       const priceMismatch = Math.round(pricing.total) !== Math.round(Number(order.estimated_product_total) || -1);
       const isBali = order.location_type === 'bali';
+      // ALX-08: built from validated item_data and this script's own CATALOG —
+      // never from order.order_summary, which the browser could have sent as
+      // anything. See buildOrderSummary().
+      const orderSummary = buildOrderSummary(order.item_data, CATALOG);
 
       const row = buildRow(headers, {
-        'Order Reference': order.order_reference,
+        'Order Reference': finalReference,
         'Idempotency Key': order.idempotency_key,
         'Payload Hash': payloadHash,
         'Catalog Version': CATALOG_VERSION,
+        'Submitted Catalog Version': safeNumber(order.catalog_version),
         'Submitted At': new Date(),
         'Language': order.submitted_language,
         'Currency': order.currency,
@@ -231,7 +266,7 @@ function doPost(event) {
         'Postal Code': isBali ? '' : safeText(order.postal_code),
         'Preferred Date': order.preferred_date,
         'Order Mode': orderMode,
-        'Order Summary': safeText(order.order_summary),
+        'Order Summary': safeText(orderSummary),
         'Item Data': JSON.stringify(order.item_data || []),
         'Total Stems': pricing.totalStems,
         'Wrap': order.wrap,
@@ -253,15 +288,15 @@ function doPost(event) {
         'Work Phase': 'Not started',
         'Delivery Service': '',
         'Tracking Link/Number': '',
-        'Internal Notes': collisionNote
+        'Internal Notes': ''
       });
 
       sheet.appendRow(row);
       const newRow = sheet.getLastRow();
       setFinalTotalFormula(sheet, headers, newRow);
-      notifyOwner_(order.order_reference, orderMode, pricing.total, priceMismatch, sheet, newRow);
+      notifyOwner_(finalReference, orderMode, pricing.total, priceMismatch, sheet, newRow);
 
-      return jsonResponse({ ok: true, order_reference: order.order_reference });
+      return jsonResponse({ ok: true, order_reference: finalReference, renamed_from: renamedFrom || undefined });
     } finally {
       lock.releaseLock();
     }
@@ -495,10 +530,38 @@ function getHeaderMap(sheet) {
   const lastCol = sheet.getLastColumn();
   const values = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   const map = {};
+  const duplicates = [];
   values.forEach(function (name, idx) {
-    if (name) map[String(name).trim()] = idx;
+    if (!name) return;
+    const key = String(name).trim();
+    // ALX-07: a repeated header used to alias silently to whichever column
+    // this forEach saw last, aliasing two real columns into one and losing
+    // the other's data on every write. Detect it instead of overwriting.
+    if (Object.prototype.hasOwnProperty.call(map, key)) {
+      duplicates.push(key);
+    } else {
+      map[key] = idx;
+    }
   });
-  return { map: map, length: lastCol };
+  return { map: map, length: lastCol, duplicates: duplicates };
+}
+
+/**
+ * ALX-07: fail loudly, before any append, if the sheet's header row does not
+ * match what doPost's writes assume — instead of buildRow() silently
+ * dropping data into no column at all, or findExisting() silently disabling
+ * deduplication because "Idempotency Key" wasn't found.
+ */
+function validateHeaderSchema(headers) {
+  function fail(message) { return { ok: false, error: message }; }
+  if (headers.duplicates && headers.duplicates.length > 0) {
+    return fail('Duplicate column header(s) in the Orders sheet: ' + headers.duplicates.join(', ') + '. Every heading from Part 1 must exist exactly once.');
+  }
+  const missing = REQUIRED_HEADERS.filter(function (name) { return headers.map[name] === undefined; });
+  if (missing.length > 0) {
+    return fail('Missing column header(s) in the Orders sheet: ' + missing.join(', ') + '. Re-check Part 1\'s header row.');
+  }
+  return { ok: true };
 }
 
 function buildRow(headers, valuesByHeader) {
@@ -523,6 +586,74 @@ function setFinalTotalFormula(sheet, headers, row) {
   sheet.getRange(row, finalCol + 1).setFormula(
     '=IF(OR(' + verifiedA1 + '="",' + shippingA1 + '=""),"",' + verifiedA1 + '+' + shippingA1 + ')'
   );
+}
+
+/**
+ * ALX-07: called on every duplicate-lookup hit (a retried, already-stored
+ * attempt) so a row left incomplete by a prior failure between appendRow()
+ * and setFinalTotalFormula() gets repaired instead of staying permanently
+ * blank. Only touches a cell that is truly empty — no formula AND no
+ * manually-typed value — so it can never overwrite a legitimate owner edit.
+ */
+function repairRowIfNeeded(sheet, headers, row) {
+  const finalCol = headers.map['Final Total'];
+  if (finalCol === undefined) return;
+  const cell = sheet.getRange(row, finalCol + 1);
+  if (cell.getFormula() === '' && cell.getValue() === '') {
+    setFinalTotalFormula(sheet, headers, row);
+  }
+}
+
+/**
+ * ALX-09: mints a fresh customer-visible reference sharing the original's
+ * date segment, retrying until `isTaken` reports a free one. Returns null
+ * (never a best-effort guess) if it cannot find one within a few tries, so
+ * the caller fails loudly instead of ever storing two orders under the same
+ * reference.
+ */
+function regenerateOrderReference(base, isTaken) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const datePart = String(base || '').split('-')[1] || Utilities.formatDate(new Date(), TIMEZONE, 'yyMMdd');
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    let suffix = '';
+    for (let i = 0; i < 4; i += 1) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+    const candidate = 'ALX-' + datePart + '-' + suffix;
+    if (!isTaken(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * ALX-08: the human-readable "Order Summary" column, built only from
+ * validated item_data and this script's own CATALOG — never from
+ * order.order_summary, which is browser-supplied and was previously stored
+ * verbatim. Product names are generic (flower/addition keys, mini-pot slugs,
+ * package stem counts) rather than the storefront's marketing names, since
+ * those live only in site-content.js — but every value here is guaranteed
+ * to describe what validateOrder() actually accepted, which is the point.
+ */
+function buildOrderSummary(itemData, catalog) {
+  return (itemData || []).map(function (item) {
+    if (item.type === 'stem') return item.qty + '× ' + item.id;
+    if (item.type === 'pot') return item.qty + '× ' + humanizeKey(item.id) + ' mini pot';
+    if (item.type === 'package') {
+      const idx = Number(item.id);
+      const stems = catalog.packageStems[idx];
+      return item.qty + '× package (' + stems + ' stems)';
+    }
+    const stemParts = Object.keys(item.stems || {}).map(function (key) {
+      return item.stems[key] + '× ' + key;
+    });
+    const additionParts = Object.keys(item.additions || {})
+      .filter(function (key) { return item.additions[key] > 0; })
+      .map(function (key) { return item.additions[key] + '× ' + humanizeKey(key) + ' addition'; });
+    const parts = stemParts.concat(additionParts);
+    return item.qty + '× custom bouquet (' + parts.join(', ') + ')';
+  }).join('; ');
+}
+
+function humanizeKey(key) {
+  return String(key || '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 }
 
 function columnToLetter(column) {
@@ -697,7 +828,10 @@ const STATUS_BY_CODE = {
   // problem, not something the customer can fix, hence a 502 (ambiguous).
   UNAUTHORIZED: 502,
   CONFLICT: 409,
-  STORAGE_ERROR: 502
+  STORAGE_ERROR: 502,
+  // ALX-07: also an owner setup problem (a missing/duplicated sheet column),
+  // never something the customer caused or can fix.
+  SCHEMA_ERROR: 502
 };
 
 const PUBLIC_MESSAGE_BY_CODE = {
@@ -705,7 +839,8 @@ const PUBLIC_MESSAGE_BY_CODE = {
   BAD_JSON: 'Some details could not be saved. Please check the form and try again.',
   PAYLOAD_TOO_LARGE: 'The order is too large to submit.',
   CONFLICT: 'This order reference was already used with different details.',
-  STORAGE_ERROR: 'Order could not be stored.'
+  STORAGE_ERROR: 'Order could not be stored.',
+  SCHEMA_ERROR: 'Order could not be stored.'
 };
 
 async function verifyTurnstile(token, secret, remoteIp) {
@@ -852,7 +987,8 @@ If you already had an earlier version of this endpoint running (before pot/mixed
 1. Keep the passcode curtain active, or otherwise pause public ordering, for the duration of this migration.
 2. **File → Make a copy** of your current spreadsheet as a backup, and leave that copy untouched.
 3. On the live spreadsheet, delete the old `Final Total` formula from every existing row below the header (select the whole column's data rows and press Delete) — the old guide had you copy this formula down in advance, which now conflicts with `appendRow()`.
-4. Add the new columns from Part 1 that did not exist before (`Idempotency Key`, `Payload Hash`, `Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged`, `Verified Product Subtotal`, `Verified Message Card Fee`, `Verified Total`, `Price Mismatch`). Existing rows can stay blank in these new columns — they were not part of the older orders.
+4. Add the new columns from Part 1 that did not exist before (`Idempotency Key`, `Payload Hash`, `Catalog Version`, `Submitted Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged`, `Verified Product Subtotal`, `Verified Message Card Fee`, `Verified Total`, `Price Mismatch`). Existing rows can stay blank in these new columns — they were not part of the older orders.
 5. Replace the Apps Script code with Part 2's version in full, replace the Worker code with Part 3's version in full, then deploy **New version**/**Save and deploy** for both.
-6. Submit one test order (Part 5) and verify every column before reopening public ordering.
-7. Re-apply the column protections from Part 1 if they were lost when columns were added.
+6. Confirm the header row has every column from Part 1's list exactly once (ALX-07): `doPost` now checks this itself on every submission and fails loudly with `SCHEMA_ERROR` rather than silently dropping data into the wrong column or storing a row with missing fields, but fixing it here first avoids that error reaching a real customer.
+7. Submit one test order (Part 5) and verify every column before reopening public ordering.
+8. Re-apply the column protections from Part 1 if they were lost when columns were added.

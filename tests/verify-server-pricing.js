@@ -74,7 +74,10 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(appsScriptSrc, sandbox);
 
-const { computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter, normalizeIndonesianPhone } = sandbox;
+const {
+  computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter,
+  normalizeIndonesianPhone, validateHeaderSchema, buildOrderSummary, regenerateOrderReference, REQUIRED_HEADERS
+} = sandbox;
 assert(typeof computeVerifiedTotals === 'function', 'computeVerifiedTotals must be exposed');
 assert(typeof resolveOrderMode === 'function', 'resolveOrderMode must be exposed');
 assert(typeof validateOrder === 'function', 'validateOrder must be exposed');
@@ -236,6 +239,50 @@ assert.strictEqual(columnToLetter(27), 'AA');
 assert.strictEqual(columnToLetter(37), 'AK');
 console.log('✔ Suite S6 Passed: column index → A1 letter conversion is correct\n');
 
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S7: Sheet schema validation (ALX-07) ---');
+function fakeHeaders(names) {
+  const map = {};
+  const duplicates = [];
+  names.forEach((name, idx) => {
+    if (Object.prototype.hasOwnProperty.call(map, name)) duplicates.push(name);
+    else map[name] = idx;
+  });
+  return { map, length: names.length, duplicates };
+}
+assert.strictEqual(validateHeaderSchema(fakeHeaders(REQUIRED_HEADERS)).ok, true, 'Every required header present exactly once must validate');
+assert.strictEqual(validateHeaderSchema(fakeHeaders(REQUIRED_HEADERS.filter(h => h !== 'Idempotency Key'))).ok, false, 'A missing "Idempotency Key" column must fail schema validation, not silently disable deduplication');
+assert.strictEqual(validateHeaderSchema(fakeHeaders([...REQUIRED_HEADERS, 'Order Reference'])).ok, false, 'A duplicated header must fail schema validation, not silently alias to one column');
+console.log('✔ Suite S7 Passed: missing and duplicated required headers are both rejected before any append\n');
+
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S8: Server-built order summary (ALX-08) ---');
+const summaryItems = [
+  { type: 'stem', id: 'Rose', qty: 1 },
+  { type: 'pot', id: 'lily-of-the-valley', qty: 2 },
+  { type: 'package', id: '2', qty: 1 },
+  { type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { rounded: 1 } }
+];
+const summary = buildOrderSummary(summaryItems, CATALOG);
+assert.ok(summary.includes('1× Rose'), `summary must name the actual stem ordered: "${summary}"`);
+assert.ok(summary.includes('Lily Of The Valley'), `summary must humanize the mini-pot key: "${summary}"`);
+assert.ok(summary.includes(`${CATALOG.packageStems[2]} stems`), `summary must derive the package's real stem count from CATALOG, not trust the browser: "${summary}"`);
+assert.ok(summary.includes('3× Rose') && summary.includes('Rounded'), `summary must include custom-bouquet stems and additions: "${summary}"`);
+// The defect this guards against: a manipulated order_summary claiming
+// something totally different from the validated item_data.
+assert.ok(!summary.toLowerCase().includes('sunflower'), 'the summary must reflect item_data, never an unrelated browser-supplied string');
+console.log('✔ Suite S8 Passed: the stored summary is derived only from validated item_data and CATALOG\n');
+
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S9: Reference collision handling (ALX-09) ---');
+const takenRefs = new Set(['ALX-260915-ABCD', 'ALX-260915-EFGH']);
+const freshRef = regenerateOrderReference('ALX-260915-ABCD', (candidate) => takenRefs.has(candidate));
+assert.ok(freshRef, 'regenerateOrderReference must return a candidate when one is available');
+assert.ok(/^ALX-260915-[A-HJ-NP-Z2-9]{4}$/.test(freshRef), `the regenerated reference must keep the original date segment and match the reference format: "${freshRef}"`);
+assert.ok(!takenRefs.has(freshRef), 'the regenerated reference must not be one that is already taken');
+assert.strictEqual(regenerateOrderReference('ALX-260915-ABCD', () => true), null, 'exhausting every retry must return null so the caller fails loudly instead of storing an ambiguous reference');
+console.log('✔ Suite S9 Passed: a reference collision is resolved to a fresh, unique, correctly-formatted reference\n');
+
 console.log('======================================================================');
-console.log('✔ ALL 6 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 9 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

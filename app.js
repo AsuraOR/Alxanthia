@@ -4011,7 +4011,19 @@
             const result = await response.json();
             // DEV-06: both the success flag and the exact matching reference
             // are required — `{ "ok": true }` alone is no longer accepted.
-            if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
+            // ALX-09: the one exception is a server-side rename after a rare
+            // reference collision — accepted only when the server explicitly
+            // echoes back the exact reference THIS attempt sent as
+            // `renamed_from`, so a stale/replayed response for a different
+            // order still can't be mistaken for this one's success.
+            const referenceMatches = result && (
+              result.order_reference === checkoutAttempt.reference ||
+              (result.renamed_from === checkoutAttempt.reference && !!result.order_reference)
+            );
+            if (result && result.ok === true && referenceMatches) {
+              if (result.order_reference !== checkoutAttempt.reference) {
+                checkoutAttempt.reference = result.order_reference;
+              }
               outcome = result.duplicate === true ? 'duplicate' : 'success';
             } else {
               outcome = 'ambiguous';

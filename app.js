@@ -3567,11 +3567,17 @@
       }
     });
 
+    // Prev/next month re-render the popover's innerHTML from inside its own
+    // click handler, which destroys e.target (the button just clicked)
+    // while the event is still bubbling. By the time it reaches here,
+    // `field.contains(e.target)` would see a detached node and wrongly
+    // read as "outside". composedPath() is captured before dispatch and
+    // stays accurate across that kind of mid-event DOM mutation.
     document.addEventListener('click', (e) => {
-      if (isDatePickerOpen() && !field.contains(e.target)) closeDatePicker();
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
     });
     document.addEventListener('focusin', (e) => {
-      if (isDatePickerOpen() && !field.contains(e.target)) closeDatePicker();
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
     });
     // Fixed-position popover: track scroll/resize to keep it anchored to the
     // field. This also covers the browser's own "scroll the newly focused

@@ -174,6 +174,28 @@
           assert('Modal elements present', false, `photoWrapper: ${!!photoWrapper}, modal: ${!!modal}, modalClose: ${!!modalClose}`);
         }
 
+        // ALX-17: bouquet packages and mini pots previously had no detail/
+        // inspector action at all — reuse the same accessible modal.
+        const bouquetPhotoWrapper = doc.querySelector('.bouquet-photo-wrapper');
+        if (bouquetPhotoWrapper && modal && modalClose) {
+          bouquetPhotoWrapper.click();
+          assert('ALX-17: clicking a bouquet package photo opens the inspector modal', modal.open || modal.hasAttribute('open'));
+          modalClose.click();
+          assert('ALX-17: the bouquet package inspector modal closes', !modal.open && !modal.hasAttribute('open'));
+        } else {
+          assert('ALX-17: bouquet package photo wrapper present', false);
+        }
+
+        const potPhotoWrapper = doc.querySelector('.mini-pot-photo-wrapper');
+        if (potPhotoWrapper && modal && modalClose) {
+          potPhotoWrapper.click();
+          assert('ALX-17: clicking a mini pot photo opens the inspector modal', modal.open || modal.hasAttribute('open'));
+          modalClose.click();
+          assert('ALX-17: the mini pot inspector modal closes', !modal.open && !modal.hasAttribute('open'));
+        } else {
+          assert('ALX-17: mini pot photo wrapper present', false);
+        }
+
         // Test 6: Category Filter Tabs navigation (B1)
         const tabBouquets = doc.getElementById('cat-tab-bouquets');
         const colSection = doc.getElementById('collection');

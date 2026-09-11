@@ -1178,7 +1178,7 @@
         ? fillTemplate(t.miniPotHeight || '~{h} cm', { h: pot.heightCm })
         : t.miniPotMaterial;
       card.innerHTML = `
-        <div class="mini-pot-photo-wrapper"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
+        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
         <div class="mini-pot-info">
           <span class="mini-pot-material">${heightBadge}</span>
           <h4 class="mini-pot-title">${trans.name}</h4>
@@ -1187,6 +1187,23 @@
           <button type="button" class="btn-choose-bouquet btn-add-mini-pot">${t.miniPotBtn}</button>
         </div>`;
       card.querySelector('.btn-add-mini-pot').addEventListener('click', () => selectMiniPot(pot.key));
+
+      // ALX-17: mini pots previously had no detail/inspector action at
+      // all — reuse the same accessible image-modal pattern the finished
+      // stems already use.
+      const potPhotoWrap = card.querySelector('.mini-pot-photo-wrapper');
+      if (potPhotoWrap) {
+        potPhotoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
+        const handleOpenPotInspector = (e) => {
+          e.preventDefault();
+          openImageModal(pot.photo, trans.name, trans.name, `${heightBadge} · ${trans.blurb}`, potPhotoWrap);
+        };
+        potPhotoWrap.addEventListener('click', handleOpenPotInspector);
+        potPhotoWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpenPotInspector(e);
+        });
+      }
+
       grid.appendChild(card);
     });
   }
@@ -1423,7 +1440,7 @@
       card.setAttribute('data-lang', currentLang);
       card.className = `bouquet-card ${active ? 'active' : ''} ${isPopular ? 'popular-card' : ''}`;
       card.innerHTML = `
-        <div class="bouquet-photo-wrapper">
+        <div class="bouquet-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name })}">
           ${isPopular ? `<span class="pkg-popular-badge">${t.pkgFavoriteTag || 'Favorit Studio'}</span>` : ''}
           <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
         </div>
@@ -1446,6 +1463,22 @@
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => {
           selectPackageOrder(index);
+        });
+      }
+
+      // ALX-17: bouquet packages previously had no detail/inspector action
+      // at all — reuse the same accessible image-modal pattern the
+      // finished stems already use.
+      const pkgPhotoWrap = card.querySelector('.bouquet-photo-wrapper');
+      if (pkgPhotoWrap) {
+        pkgPhotoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
+        const handleOpenPkgInspector = (e) => {
+          e.preventDefault();
+          openImageModal(pkg.photoWebp || pkg.photo, name, name, `${pkg.stems} ${t.pkgStemLine} · ${blurb}`, pkgPhotoWrap);
+        };
+        pkgPhotoWrap.addEventListener('click', handleOpenPkgInspector);
+        pkgPhotoWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpenPkgInspector(e);
         });
       }
 

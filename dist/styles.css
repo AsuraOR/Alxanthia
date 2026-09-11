@@ -977,7 +977,7 @@ body.lock-scroll-off {
   }
 }
 
-.mini-pot-photo-wrapper { overflow: hidden; border-bottom: 1px solid var(--border-light); }
+.mini-pot-photo-wrapper { overflow: hidden; border-bottom: 1px solid var(--border-light); cursor: pointer; }
 .mini-pot-photo { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: transform var(--motion-duration-hover) var(--motion-ease-out); }
 .mini-pot-card:hover .mini-pot-photo { transform: scale(1.025); }
 .mini-pot-info { display: flex; flex: 1; flex-direction: column; padding: 24px; }
@@ -1069,6 +1069,7 @@ body.lock-scroll-off {
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-card);
   overflow: hidden;
+  cursor: pointer;
 }
 
 .bouquet-photo {
@@ -3278,7 +3279,7 @@ details.is-closing > .faq-answer-wrapper {
 
   .mini-pot-info { padding: 14px 10px; }
   .mini-pot-title { font-size: clamp(17px, 4.2vw, 21px); }
-  .mini-pot-blurb { display: -webkit-box; overflow: hidden; margin-bottom: 10px; font-size: 12px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .mini-pot-blurb { display: -webkit-box; overflow: hidden; margin-bottom: 10px; font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
   .mini-pot-price { margin-bottom: 10px; padding-top: 8px; font-size: var(--fs-button); }
   .mini-pot-material { margin-bottom: 7px; }
 
@@ -3296,7 +3297,7 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .flower-blurb {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.45;
     margin-bottom: 8px;
     display: -webkit-box;
@@ -3363,7 +3364,7 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .bouquet-blurb {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.45;
     margin-bottom: 10px;
     display: -webkit-box;
@@ -3632,7 +3633,8 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   .collection-grid,
-  .packages-grid {
+  .packages-grid,
+  .mini-pots-grid {
     grid-template-columns: 1fr !important;
   }
 

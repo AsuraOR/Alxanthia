@@ -38,6 +38,12 @@ async function runCheckoutDialogChecks(browser) {
   const endpoint = endpointMatch ? endpointMatch[1] : '';
 
   const page = await browser.newPage();
+  // Unlock via the same localStorage flag app.js checks, seeded before any
+  // page script runs — never the real passcode, and never the removed
+  // `?unlock=` query parameter (ALX-22 instruction 12).
+  await page.addInitScript(() => {
+    try { localStorage.setItem('alxanthia_unlocked', 'true'); } catch (e) {}
+  });
   let mockMode = 'success'; // 'success' | 'duplicate' | 'conflict' | 'timeout' | 'serverError'
   let capturedRequests = 0;
 
@@ -71,7 +77,7 @@ async function runCheckoutDialogChecks(browser) {
   page.on('pageerror', (err) => assert('No uncaught page error during checkout flow', false, String(err)));
 
   try {
-    await page.goto(URL.replace('/tests/browser-runner.html', '/index.html?unlock=22062024'), { waitUntil: 'load', timeout: 15000 });
+    await page.goto(URL.replace('/tests/browser-runner.html', '/index.html'), { waitUntil: 'load', timeout: 15000 });
     await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
 
     // A `hidden`-attribute element must actually render hidden — regression

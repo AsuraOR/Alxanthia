@@ -14,7 +14,7 @@
   <h1>ALXANTHIA REAL-BROWSER TEST RUNNER</h1>
   <div id="status">Loading application iframe...</div>
   <pre id="results"></pre>
-  <iframe id="app-frame" src="../index.html?unlock=22062024"></iframe>
+  <iframe id="app-frame" src="../index.html"></iframe>
 
   <script>
     const resultsEl = document.getElementById('results');
@@ -30,7 +30,26 @@
       }
     }
 
-    iframe.onload = async () => {
+    function waitForLoad() {
+      return new Promise((resolve) => { iframe.addEventListener('load', resolve, { once: true }); });
+    }
+
+    async function run() {
+      // Unlock via the same localStorage flag app.js itself checks, instead
+      // of the removed `?unlock=` query parameter — never handle the real
+      // passcode in this fixture (ALX-22 instruction 12). Reloaded (rather
+      // than unlocked via direct DOM manipulation after the fact) so
+      // setupAuth() never runs its "locked" branch at all — that branch
+      // autofocuses the passcode field, which would otherwise steal focus
+      // out from under every later focus-transfer assertion below.
+      await waitForLoad();
+      try {
+        iframe.contentWindow.localStorage.setItem('alxanthia_unlocked', 'true');
+      } catch (e) {}
+      const reloaded = waitForLoad();
+      iframe.contentWindow.location.reload();
+      await reloaded;
+
       statusEl.textContent = 'App loaded. Executing real-browser interactions...';
       const doc = iframe.contentDocument;
       const win = iframe.contentWindow;
@@ -167,6 +186,50 @@
           );
         }
 
+        // Test 8: Required-field indicators survive checkout localization
+        // (ALX-21). All seven — plus regency, which carries a "(wajib)" mark
+        // too — must stay visible on the first open, and must still be
+        // visible after localizeCheckoutForm() runs again.
+        const requiredMarkIds = [
+          'buyer-name-required', 'buyer-phone-required', 'location-type-required',
+          'regency-required', 'address-required', 'city-required', 'postal-required', 'date-required'
+        ];
+        const checkoutTrigger = doc.getElementById('btn-checkout');
+        const checkoutContinue = doc.getElementById('checkout-continue');
+        const checkoutBackToReview = doc.getElementById('checkout-back-to-review');
+        if (checkoutTrigger && checkoutContinue) {
+          checkoutTrigger.click();
+          checkoutContinue.click();
+          const firstOpen = requiredMarkIds.map((id) => {
+            const el = doc.getElementById(id);
+            return { id, present: !!el && el.textContent.trim().length > 0 };
+          });
+          assert(
+            'All required-field indicators are visible on the first checkout form open',
+            firstOpen.every((r) => r.present),
+            JSON.stringify(firstOpen.filter((r) => !r.present))
+          );
+
+          // Re-enter the form step a second time — localizeCheckoutForm()
+          // runs again, and must not have destroyed anything the second
+          // time either.
+          if (checkoutBackToReview) {
+            checkoutBackToReview.click();
+            checkoutContinue.click();
+            const secondOpen = requiredMarkIds.map((id) => {
+              const el = doc.getElementById(id);
+              return { id, present: !!el && el.textContent.trim().length > 0 };
+            });
+            assert(
+              'Required-field indicators survive re-entering the checkout form',
+              secondOpen.every((r) => r.present),
+              JSON.stringify(secondOpen.filter((r) => !r.present))
+            );
+          }
+        } else {
+          assert('Checkout trigger/continue elements present', false, `checkoutTrigger: ${!!checkoutTrigger}, checkoutContinue: ${!!checkoutContinue}`);
+        }
+
         statusEl.textContent = 'All real-browser interactions executed successfully.';
         statusEl.className = 'pass';
       } catch (err) {
@@ -178,7 +241,9 @@
       resultsEl.textContent = logs.join('\n');
       console.log('BROWSER_SPEC_RESULTS:\n' + logs.join('\n'));
       document.body.setAttribute('data-done', 'true');
-    };
+    }
+
+    run();
   </script>
 </body>
 </html>

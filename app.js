@@ -2025,7 +2025,7 @@
         btn.setAttribute('tabindex', active ? '0' : '-1');
         btn.setAttribute('data-wrap-key', w.key);
         btn.setAttribute('data-wrap-index', wIdx);
-        btn.setAttribute('aria-label', `${name} wrap paper`);
+        btn.setAttribute('aria-label', `${name} ${t.wrapAriaSuffix || 'wrap paper'}`);
         btn.innerHTML = `
           <span class="wrap-swatch" style="background:${w.swatch}"></span>
           <span>${name}</span>
@@ -3591,12 +3591,16 @@
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
-      '#buyer-name-label': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
-      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label': `${ck('checkoutLocationTypeLabel')} `, '#regency-label': `${ck('checkoutRegencyLabel')} `,
-      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label': `${ck('checkoutAddressLabel')} `, '#city-label': `${ck('checkoutCityLabel')} `, '#postal-label': `${ck('checkoutPostalLabel')} `,
+      // Targets the dedicated text child, not the parent `-label` span, which
+      // also contains the nested `-required` mark span — setText() replaces
+      // the element's entire textContent, so writing to the parent would
+      // destroy that child every time (ALX-21).
+      '#buyer-name-label-text': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label-text': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
+      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label-text': `${ck('checkoutLocationTypeLabel')} `, '#regency-label-text': `${ck('checkoutRegencyLabel')} `,
+      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label-text': `${ck('checkoutAddressLabel')} `, '#city-label-text': `${ck('checkoutCityLabel')} `, '#postal-label-text': `${ck('checkoutPostalLabel')} `,
       '#pickup-help': ck('checkoutPickupHelp'),
       '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
-      '#date-label': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
+      '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
       '#checkout-back-to-review': ck('checkoutBackToReview'),
       '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),

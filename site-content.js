@@ -497,6 +497,7 @@ window.ALXANTHIA_DATA = {
       announceQtyChanged: "{item} diperbarui menjadi {qty}. {n} item di keranjang.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
+      wrapAriaSuffix: "kertas pembungkus",
 
       // Native checkout dialog copy (DEV-13) — every string the checkout dialog shows,
       // in one place per language, including live-status and error text.
@@ -807,6 +808,7 @@ window.ALXANTHIA_DATA = {
       announceQtyChanged: "{item} updated to {qty}. {n} item(s) in cart.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
+      wrapAriaSuffix: "wrap paper",
 
       // Native checkout dialog copy (DEV-13) — every string the checkout dialog shows,
       // in one place per language, including live-status and error text.

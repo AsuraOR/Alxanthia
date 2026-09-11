@@ -266,6 +266,18 @@ async function runCheckoutDialogChecks(browser) {
     await page.click('#recent-order-view');
     await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
 
+    // --- ALX-18: the recent-order record never persists the buyer's name,
+    //     and its WhatsApp link is rebuilt without one on recovery.
+    const recoveredWaHref = await page.getAttribute('#checkout-whatsapp', 'href');
+    assert('ALX-18: the recovered WhatsApp link does not contain the buyer\'s name', !!(recoveredWaHref && !recoveredWaHref.includes('Sagita')), `href: "${recoveredWaHref}"`);
+    const storedRecordHasNoWaUrl = await page.evaluate(() => {
+      const raw = localStorage.getItem('alxanthia_recent_order_v1');
+      if (!raw) return false;
+      const record = JSON.parse(raw);
+      return !('waUrl' in record) && JSON.stringify(record).indexOf('Sagita') === -1;
+    });
+    assert('ALX-18: the stored recent-order record contains no waUrl field and no buyer name', storedRecordHasNoWaUrl === true);
+
     // --- DEV-18: clipboard-denied fallback ---------------------------------
     await page.evaluate(() => {
       // Force the clipboard write to reject, as it would with denied permission.
@@ -284,6 +296,31 @@ async function runCheckoutDialogChecks(browser) {
     // modal dialog covers it.
     await page.evaluate(() => { const m = document.getElementById('checkout-modal'); if (m.hasAttribute('open')) m.close(); });
     await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+
+    // --- ALX-18: dismissing the banner is persistent, not just in-memory --
+    await page.click('#recent-order-dismiss');
+    const bannerHiddenAfterDismiss = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    assert('ALX-18: dismissing the banner hides it immediately', bannerHiddenAfterDismiss === true);
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    const bannerStillHiddenAfterReload = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    assert('ALX-18: a dismissed banner stays dismissed after a reload, not just for the current session', bannerStillHiddenAfterReload === true);
+
+    // --- ALX-18: an expired record (older than the 14-day retention
+    //     window) must stop reappearing as "recent" ------------------------
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('alxanthia_recent_order_v1');
+      const record = JSON.parse(raw);
+      record.dismissed = false; // undo the dismiss above so expiry is what's under test
+      record.timestamp = Date.now() - (15 * 24 * 60 * 60 * 1000); // 15 days old
+      localStorage.setItem('alxanthia_recent_order_v1', JSON.stringify(record));
+    });
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    const bannerHiddenWhenExpired = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    const recordClearedWhenExpired = await page.evaluate(() => localStorage.getItem('alxanthia_recent_order_v1') === null);
+    assert('ALX-18: an expired recent-order record no longer shows the banner', bannerHiddenWhenExpired === true);
+    assert('ALX-18: an expired recent-order record is cleared from storage, not just hidden', recordClearedWhenExpired === true);
 
     // --- ALX-03: an uncertain submission survives a reload and retries
     //     with the SAME idempotency key — never minting a new UUID for a

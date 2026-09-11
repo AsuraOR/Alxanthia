@@ -3272,6 +3272,10 @@
    * doesn't already cover as "kept for this order".
    */
   const RECENT_ORDER_KEY = 'alxanthia_recent_order_v1';
+  // ALX-18: matches the order lifecycle this record exists to support
+  // (confirmation → payment → fulfillment) — an expired record is stale
+  // recovery information, not a live order, and must stop reappearing.
+  const RECENT_ORDER_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
   function saveRecentOrder() {
     if (!checkoutAttempt || !checkoutAttempt.submitted) return;
@@ -3283,7 +3287,11 @@
         orderSummary: checkoutAttempt.state.items.join('; '),
         total: checkoutAttempt.state.estimatedProductTotal,
         language: checkoutAttempt.state.language,
-        waUrl: checkoutAttempt.waUrl || ''
+        dismissed: false
+        // ALX-18: deliberately no waUrl here — buildPostSubmissionWhatsApp()
+        // embeds the buyer's name, which the privacy notice does not cover
+        // for long-term storage. The WhatsApp link is rebuilt on demand
+        // (without a name) when recovering from this record.
       }));
     } catch (e) {}
   }
@@ -3294,6 +3302,12 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || !parsed.reference) return null;
+      // ALX-18: the stored `timestamp` was written but never read — an
+      // arbitrarily old record kept reappearing as "recent" forever.
+      if (!(Date.now() - Number(parsed.timestamp || 0) < RECENT_ORDER_MAX_AGE_MS)) {
+        clearRecentOrder();
+        return null;
+      }
       return parsed;
     } catch (e) {
       return null;
@@ -3313,7 +3327,10 @@
     // checking in-memory checkoutAttempt state (that used to leave the
     // banner hidden until a full page reload, since checkoutAttempt.submitted
     // stays true for the rest of the session after a successful order).
-    if (!record) {
+    // ALX-18: dismiss used to only hide the banner in memory, so it
+    // reappeared on the very next reload despite the wording promising
+    // dismissal — `dismissed` is persisted with the record itself.
+    if (!record || record.dismissed) {
       banner.hidden = true;
       return;
     }
@@ -3577,15 +3594,23 @@
     const wa = document.getElementById('checkout-whatsapp');
     if (wa) {
       if (checkoutAttempt.lastPayload) {
-        // Fresh submission — rebuild with the real buyer name/date just entered.
+        // Fresh submission, same session — rebuild with the real buyer
+        // name/date just entered.
         const payload = checkoutAttempt.lastPayload;
         const url = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
         wa.href = url;
         checkoutAttempt.waUrl = url;
       } else if (checkoutAttempt.waUrl) {
-        // Recovered from the recent-order banner — reuse the URL saved at
-        // submit time rather than rebuilding one without a buyer name.
+        // Reopened later in the SAME session (no reload) — reuse the URL
+        // already built above; never persisted to localStorage (ALX-18).
         wa.href = checkoutAttempt.waUrl;
+      } else {
+        // ALX-18: recovered from the recent-order banner after a reload.
+        // The buyer's name is deliberately never persisted, so rebuild
+        // without it rather than reusing a name-bearing URL from before —
+        // buildPostSubmissionWhatsApp() already falls back to a neutral
+        // placeholder for an empty name.
+        wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, '', undefined, checkoutAttempt.state);
       }
     }
     const copyStatus = document.getElementById('copy-status');
@@ -4306,8 +4331,9 @@
         submitted: true,
         duplicate: false,
         state: { language: record.language || currentLang, items: record.orderSummary ? record.orderSummary.split('; ') : [], estimatedProductTotal: record.total || 0 },
-        lastPayload: null,
-        waUrl: record.waUrl
+        lastPayload: null
+        // ALX-18: no waUrl here — the buyer's name is never persisted, so
+        // renderSuccessStep() rebuilds the WhatsApp link fresh, without one.
       };
       renderSuccessStep();
       setCheckoutSubmitGuard(false);
@@ -4317,6 +4343,15 @@
     document.getElementById('recent-order-dismiss')?.addEventListener('click', () => {
       const banner = document.getElementById('recent-order-banner');
       if (banner) banner.hidden = true;
+      // ALX-18: persist the dismissal itself, not just this session's DOM
+      // state, so the banner stays gone after a reload — a later order
+      // still shows normally, since saveRecentOrder() always writes a
+      // fresh record with dismissed:false.
+      const record = loadRecentOrder();
+      if (record) {
+        record.dismissed = true;
+        try { localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify(record)); } catch (e) {}
+      }
     });
   }
 

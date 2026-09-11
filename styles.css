@@ -4135,6 +4135,68 @@ details.is-closing > .faq-answer-wrapper {
 .acknowledgement { padding: 16px; background: rgba(126, 143, 124, .14); }
 body:has(.checkout-modal[open]) { overflow: hidden; }
 
+/* ==========================================================================
+   THEMED DATE PICKER — replaces the browser-native <input type="date">
+   pop-up (which follows OS/browser dark mode and clashed with the site's
+   cream/green palette) with an on-brand calendar dropdown. The field
+   itself stays a real, validated text input; only the pop-up UI is custom.
+   ========================================================================== */
+.date-field { position: relative; }
+.checkout-form .date-field input { padding-right: 42px; cursor: pointer; }
+.date-field-icon { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); display: flex; color: var(--text-muted); pointer-events: none; transition: color var(--motion-duration-btn) ease; }
+.date-field:focus-within .date-field-icon { color: var(--accent-green); }
+
+.date-popover {
+  /* fixed, not absolute: .checkout-panel-scroll (the field's scrolling
+     ancestor) has overflow-y: auto, which would clip an absolutely
+     positioned dropdown the moment it extends past the visible scroll
+     area. Fixed positioning escapes that ancestor's clipping box entirely;
+     its on-screen coordinates are set from JS in openDatePicker(). */
+  position: fixed;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 12px 32px rgba(35, 32, 27, .18);
+  padding: 14px;
+}
+.date-popover[hidden] { display: none; }
+
+.date-popover-header { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.date-popover-title { flex: 1; text-align: center; font-family: var(--font-serif); font-size: 1.2rem; color: var(--text-dark); }
+.date-popover-nav {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 1px solid var(--border-medium); border-radius: 0;
+  background: #fff; color: var(--accent-green);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  transition: background-color var(--motion-duration-btn) ease, color var(--motion-duration-btn) ease;
+}
+.date-popover-nav:hover:not(:disabled) { background: var(--accent-green); color: var(--bg-main); }
+.date-popover-nav:disabled { opacity: .35; cursor: not-allowed; }
+
+.date-popover-weekdays, .date-popover-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.date-popover-weekdays { margin-bottom: 4px; }
+.date-popover-weekdays span { text-align: center; font: 600 11px var(--font-sans); letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); padding: 4px 0; }
+
+.date-popover-day {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; padding: 0;
+  border: 1px solid transparent; border-radius: 0;
+  background: none; color: var(--text-dark);
+  font: 600 14px var(--font-sans); cursor: pointer;
+  transition: background-color var(--motion-duration-btn) ease, color var(--motion-duration-btn) ease, border-color var(--motion-duration-btn) ease;
+}
+.date-popover-day.is-empty { visibility: hidden; cursor: default; }
+.date-popover-day:hover:not(:disabled) { border-color: var(--accent-green); }
+.date-popover-day:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 1px; }
+.date-popover-day.is-today { color: var(--accent-ochre); font-weight: 700; }
+.date-popover-day.is-selected { background: var(--accent-green); border-color: var(--accent-green); color: var(--bg-main); }
+.date-popover-day:disabled { color: var(--border-medium); cursor: not-allowed; }
+.date-popover-day:disabled:hover { border-color: transparent; }
+
+.date-popover-footer { display: flex; justify-content: flex-end; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-light); }
+
 @media (max-width: 640px) {
   .checkout-modal { width: 100%; max-width: 100%; max-height: 100dvh; height: 100dvh; border-inline: none; }
   .checkout-panel { max-height: 100dvh; height: 100%; }

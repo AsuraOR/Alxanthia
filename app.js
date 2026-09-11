@@ -3154,6 +3154,7 @@
   const CHECKOUT_FOOTER_IDS = ['checkout-review-footer', 'checkout-form-footer'];
 
   function showCheckoutStep(stepId) {
+    closeDatePicker();
     Object.keys(CHECKOUT_STEPS).forEach(id => {
       const section = document.getElementById(id);
       if (section) section.hidden = id !== stepId;
@@ -3340,6 +3341,253 @@
     renderRecentOrderBanner();
   }
 
+  /**
+   * Themed date picker for #preferred-date-input (checkoutDateLabel field).
+   *
+   * The native <input type="date"> pop-up renders using the OS/browser's
+   * own dark-or-light chrome (see the screenshot in the redesign request),
+   * which clashes with the site's cream/green theme and can't be restyled
+   * with CSS. The field itself stays a real, validated text input — value
+   * format, `required`, and `min` all keep working exactly as before, so
+   * typing "2026-09-15" directly (as tests/run-browser-runner.js does via
+   * page.fill) still works — this only replaces the *pop-up* with an
+   * on-brand calendar built from the same theme tokens as the rest of the
+   * checkout form.
+   */
+  const DATE_PICKER_MONTHS = {
+    id: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  };
+  const DATE_PICKER_WEEKDAYS = {
+    id: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
+    en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  };
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  let datePickerViewYear = null;
+  let datePickerViewMonth = null; // 0-11
+  let datePickerFocusISO = null;
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function toISODate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+  function todayLocalISO() {
+    const d = new Date();
+    return toISODate(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  /**
+   * Mirrors the server's isValidLeadTimeDate() range check (see
+   * CONFIGURE-SUBMISSION-ENDPOINT.md) as a client-side custom validity, since
+   * a plain text field gets no native `rangeUnderflow` for a `min` attribute.
+   */
+  function updateDateFieldValidity(field) {
+    const value = (field.value || '').trim();
+    if (!value || !ISO_DATE_RE.test(value)) { field.setCustomValidity(''); return; }
+    field.setCustomValidity(field.min && value < field.min ? 'date-out-of-range' : '');
+  }
+
+  function isDatePickerOpen() {
+    const popover = document.getElementById('date-popover');
+    return !!popover && !popover.hidden;
+  }
+
+  function closeDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (popover) popover.hidden = true;
+    if (input) input.setAttribute('aria-expanded', 'false');
+  }
+
+  function renderDatePickerCalendar() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input) return;
+    const lang = currentLang === 'en' ? 'en' : 'id';
+    const months = DATE_PICKER_MONTHS[lang];
+    const weekdays = DATE_PICKER_WEEKDAYS[lang];
+    const minISO = input.min || '';
+    const selectedISO = ISO_DATE_RE.test(input.value) ? input.value : '';
+    const todayISO = todayLocalISO();
+
+    const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
+    const daysInMonth = new Date(datePickerViewYear, datePickerViewMonth + 1, 0).getDate();
+
+    if (!datePickerFocusISO || datePickerFocusISO.slice(0, 7) !== `${datePickerViewYear}-${pad2(datePickerViewMonth + 1)}`) {
+      const selectedInView = selectedISO && selectedISO.slice(0, 7) === `${datePickerViewYear}-${pad2(datePickerViewMonth + 1)}`;
+      const firstOfMonthISO = toISODate(datePickerViewYear, datePickerViewMonth, 1);
+      // Default the roving-tabindex cell to the 1st of the month, unless
+      // that's disabled (before `min`) — a disabled <button> can't take
+      // focus, so land on the first selectable day instead.
+      datePickerFocusISO = selectedInView ? selectedISO : (minISO > firstOfMonthISO ? minISO : firstOfMonthISO);
+    }
+
+    let cellsHtml = '';
+    for (let i = 0; i < startWeekday; i++) cellsHtml += `<span class="date-popover-day is-empty" aria-hidden="true"></span>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = toISODate(datePickerViewYear, datePickerViewMonth, day);
+      const disabled = minISO && iso < minISO;
+      const isSelected = iso === selectedISO;
+      const isToday = iso === todayISO;
+      const classes = ['date-popover-day'];
+      if (isSelected) classes.push('is-selected');
+      if (isToday) classes.push('is-today');
+      cellsHtml += `<button type="button" class="${classes.join(' ')}" data-date="${iso}" ${disabled ? 'disabled' : ''} tabindex="${iso === datePickerFocusISO ? '0' : '-1'}" aria-selected="${isSelected}"${isToday ? ' aria-current="date"' : ''}>${day}</button>`;
+    }
+
+    const minMonthStamp = minISO ? Number(minISO.slice(0, 4)) * 12 + Number(minISO.slice(5, 7)) - 1 : -Infinity;
+    const viewMonthStamp = datePickerViewYear * 12 + datePickerViewMonth;
+
+    popover.innerHTML = `
+      <div class="date-popover-header">
+        <button type="button" class="date-popover-nav" id="date-popover-prev" aria-label="${lang === 'en' ? 'Previous month' : 'Bulan sebelumnya'}" ${viewMonthStamp <= minMonthStamp ? 'disabled' : ''}>‹</button>
+        <span class="date-popover-title">${months[datePickerViewMonth]} ${datePickerViewYear}</span>
+        <button type="button" class="date-popover-nav" id="date-popover-next" aria-label="${lang === 'en' ? 'Next month' : 'Bulan berikutnya'}">›</button>
+      </div>
+      <div class="date-popover-weekdays">${weekdays.map(w => `<span>${w}</span>`).join('')}</div>
+      <div class="date-popover-days" role="grid" aria-label="${months[datePickerViewMonth]} ${datePickerViewYear}">${cellsHtml}</div>
+      <div class="date-popover-footer">
+        <button type="button" class="btn-clear-cart" id="date-popover-clear">${lang === 'en' ? 'Clear' : 'Bersihkan'}</button>
+      </div>`;
+  }
+
+  function focusDatePickerCell(iso) {
+    const cell = document.querySelector(`.date-popover-day[data-date="${iso}"]`);
+    if (cell) cell.focus();
+  }
+
+  function openDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input) return;
+    const raw = input.value.trim();
+    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayLocalISO()) ? input.min : todayLocalISO());
+    datePickerViewYear = Number(base.slice(0, 4));
+    datePickerViewMonth = Number(base.slice(5, 7)) - 1;
+    datePickerFocusISO = null;
+    renderDatePickerCalendar();
+    popover.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    positionDatePicker();
+  }
+
+  /**
+   * The popover is `position: fixed` (see styles.css for why), so its
+   * on-screen placement has to be computed from the field's current
+   * viewport position rather than left to normal document flow.
+   */
+  function positionDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input || popover.hidden) return;
+    const rect = input.getBoundingClientRect();
+    let left = rect.left;
+    const maxLeft = window.innerWidth - popover.offsetWidth - 16;
+    if (left > maxLeft) left = Math.max(16, maxLeft);
+    popover.style.top = `${rect.bottom + 6}px`;
+    popover.style.left = `${left}px`;
+  }
+
+  function changeDatePickerMonth(delta) {
+    datePickerViewMonth += delta;
+    if (datePickerViewMonth < 0) { datePickerViewMonth = 11; datePickerViewYear -= 1; }
+    else if (datePickerViewMonth > 11) { datePickerViewMonth = 0; datePickerViewYear += 1; }
+    datePickerFocusISO = null;
+    renderDatePickerCalendar();
+    const focusable = document.querySelector('.date-popover-day[tabindex="0"]');
+    if (focusable) focusable.focus();
+  }
+
+  function moveDatePickerFocus(deltaDays) {
+    const input = document.getElementById('preferred-date-input');
+    const current = datePickerFocusISO || todayLocalISO();
+    const [y, m, d] = current.split('-').map(Number);
+    const next = new Date(y, m - 1, d + deltaDays);
+    const nextISO = toISODate(next.getFullYear(), next.getMonth(), next.getDate());
+    if (input && input.min && nextISO < input.min) return;
+    datePickerFocusISO = nextISO;
+    datePickerViewYear = next.getFullYear();
+    datePickerViewMonth = next.getMonth();
+    renderDatePickerCalendar();
+    focusDatePickerCell(nextISO);
+  }
+
+  function setDatePickerValue(iso) {
+    const input = document.getElementById('preferred-date-input');
+    if (!input) return;
+    input.value = iso;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    closeDatePicker();
+    input.focus();
+  }
+
+  function initDatePicker() {
+    const field = document.getElementById('date-field');
+    const input = document.getElementById('preferred-date-input');
+    if (!field || !input || document.getElementById('date-popover')) return;
+
+    const popover = document.createElement('div');
+    popover.className = 'date-popover';
+    popover.id = 'date-popover';
+    popover.hidden = true;
+    popover.setAttribute('role', 'dialog');
+    field.appendChild(popover);
+
+    input.addEventListener('input', () => updateDateFieldValidity(input));
+    input.addEventListener('click', () => { if (!isDatePickerOpen()) openDatePicker(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!isDatePickerOpen()) openDatePicker();
+        const focusable = popover.querySelector('.date-popover-day[tabindex="0"]');
+        if (focusable) focusable.focus();
+      } else if (e.key === 'Escape' && isDatePickerOpen()) {
+        e.preventDefault();
+        closeDatePicker();
+      }
+    });
+
+    popover.addEventListener('click', (e) => {
+      const dayBtn = e.target.closest('.date-popover-day[data-date]');
+      if (dayBtn) { if (!dayBtn.disabled) setDatePickerValue(dayBtn.dataset.date); return; }
+      if (e.target.closest('#date-popover-prev')) { changeDatePickerMonth(-1); return; }
+      if (e.target.closest('#date-popover-next')) { changeDatePickerMonth(1); return; }
+      if (e.target.closest('#date-popover-clear')) { setDatePickerValue(''); }
+    });
+
+    popover.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeDatePicker(); input.focus(); return; }
+      if (!e.target.classList.contains('date-popover-day')) return;
+      const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      if (e.key in moves) { e.preventDefault(); moveDatePickerFocus(moves[e.key]); return; }
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.disabled) {
+        e.preventDefault();
+        setDatePickerValue(e.target.dataset.date);
+      }
+    });
+
+    // Prev/next month re-render the popover's innerHTML from inside its own
+    // click handler, which destroys e.target (the button just clicked)
+    // while the event is still bubbling. By the time it reaches here,
+    // `field.contains(e.target)` would see a detached node and wrongly
+    // read as "outside". composedPath() is captured before dispatch and
+    // stays accurate across that kind of mid-event DOM mutation.
+    document.addEventListener('click', (e) => {
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
+    });
+    document.addEventListener('focusin', (e) => {
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
+    });
+    // Fixed-position popover: track scroll/resize to keep it anchored to the
+    // field. This also covers the browser's own "scroll the newly focused
+    // field into view" behaviour, which otherwise fires right after opening
+    // and would immediately misplace (or, if this instead closed on scroll,
+    // instantly close) a popover that just opened.
+    document.querySelector('.checkout-panel-scroll')?.addEventListener('scroll', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
+    window.addEventListener('resize', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
+  }
+
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
@@ -3390,6 +3638,10 @@
       const minDate = new Date();
       minDate.setDate(minDate.getDate() + (siteData.minimumLeadDays ?? 0));
       dateInput.min = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
+      updateDateFieldValidity(dateInput);
+      if (document.getElementById(fieldErrorId(dateInput))) {
+        setFieldError(dateInput, dateInput.checkValidity() ? '' : fieldValidationMessage(dateInput));
+      }
     }
     setText('#checkout-form-footer-total', checkoutAttempt ? formatRp(checkoutAttempt.state.estimatedProductTotal) : '');
   }
@@ -3428,7 +3680,7 @@
     if (field.validity.patternMismatch) {
       return field.name === 'postal_code' ? ck('checkoutErrPostalPattern') : ck('checkoutErrPattern');
     }
-    if (field.validity.rangeUnderflow && field.type === 'date') {
+    if (field.name === 'preferred_date' && field.validity.customError) {
       return ck('checkoutErrDateRange');
     }
     return ck('checkoutErrGeneric');
@@ -3687,6 +3939,7 @@
     };
     checkoutFormEl.addEventListener('input', revalidateOnInteraction);
     checkoutFormEl.addEventListener('change', revalidateOnInteraction);
+    initDatePicker();
     document.getElementById('copy-reference').addEventListener('click', async () => {
       const fallback = document.getElementById('copy-fallback-text');
       try {

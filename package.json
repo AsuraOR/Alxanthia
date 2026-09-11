@@ -5,6 +5,7 @@
     "start": "python -m http.server 8080",
     "dev": "python -m http.server 8080",
     "serve": "npx -y serve -l 8080 .",
+    "build": "node scripts/build.js",
     "test": "node tests/verify-ordering.js && node tests/verify-server-pricing.js",
     "test:browser": "node tests/run-browser-runner.js",
     "test:all": "npm test && npm run test:browser"

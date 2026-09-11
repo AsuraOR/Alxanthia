@@ -20,14 +20,40 @@
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let customAdditions = { rounded: 0, fern: 0 }; // quantity per addition, not a boolean toggle
-  let customMessageCard = false;
   let cart = []; // line items: { id, type: 'stem'|'pot'|'package'|'custom', ...type-specific fields, qty }
   let nextLineId = 1;
   let selectedWrap = 'kraft';
   let orderNote = '';
+  let messageCardEnabled = false; // order-level: gates the card textarea & its fee, decided in the finishing section
+  let orderRecipientName = '';
+  let orderCardSenderName = '';
   let siteData = null;
   let checkoutAttempt = null;
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
+  let turnstileToken = ''; // DEV-07: current Cloudflare Turnstile token, if the widget is configured
+  let turnstileWidgetId = null;
+  let lastFloatingCartCount = null; // null until first render, so the pill doesn't bump on initial paint
+
+  /**
+   * Resets every piece of in-memory ordering state to its startup default.
+   * Shared by the test harness's resetToInitial() and the checkout dialog's
+   * "Start a new order" action (DEV-10) so both stay in sync.
+   */
+  function resetAllState() {
+    cart = [];
+    nextLineId = 1;
+    selectedFlower = 'Sunflower';
+    selectedPackage = 1;
+    customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
+    customAdditions = { rounded: 0, fern: 0 };
+    selectedWrap = 'kraft';
+    orderNote = '';
+    messageCardEnabled = false;
+    orderRecipientName = '';
+    orderCardSenderName = '';
+    checkoutAttempt = null;
+    activeCategory = 'all';
+  }
 
   /**
    * Currency formatter helper (Indonesian Rupiah standard)
@@ -54,7 +80,8 @@
   function persistCart() {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify({
-        cart, wrapKey: selectedWrap, orderNote, customCounts
+        cart, wrapKey: selectedWrap, orderNote, customCounts,
+        messageCardEnabled, orderRecipientName, orderCardSenderName
       }));
     } catch (e) {}
   }
@@ -98,7 +125,7 @@
             const c = Math.floor(Number(line.additions && line.additions[addition.key]));
             if (c > 0) additions[addition.key] = c;
           });
-          restoredLines.push({ type: 'custom', counts, additions, messageCard: !!line.messageCard, qty, _id: line.id });
+          restoredLines.push({ type: 'custom', counts, additions, qty, _id: line.id });
         }
       });
 
@@ -133,6 +160,9 @@
           customCounts[key] = c > 0 ? c : 0;
         });
       }
+      messageCardEnabled = !!parsed.messageCardEnabled;
+      if (typeof parsed.orderRecipientName === 'string') orderRecipientName = parsed.orderRecipientName.slice(0, 120);
+      if (typeof parsed.orderCardSenderName === 'string') orderCardSenderName = parsed.orderCardSenderName.slice(0, 120);
     } catch (e) {
       cart = [];
     }
@@ -161,14 +191,25 @@
   function interpolateRules(template) {
     if (!template || typeof template !== 'string') return template;
     const minStems = siteData?.minStems ?? 3;
-    const bulkFrom = siteData?.bulkFrom ?? 9;
-    const bulkPercent = Math.round((siteData?.bulkRate ?? 0.10) * 100);
-    const wrapFeeFormatted = formatRp(siteData?.wrapFee ?? 35000);
+    const wrapFeeUnitStems = siteData?.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnitFormatted = formatRp(siteData?.wrapFeePerUnit ?? 35000);
     return template
       .replace(/\{minStems\}/g, minStems)
-      .replace(/\{bulkFrom\}/g, bulkFrom)
-      .replace(/\{bulkPercent\}/g, bulkPercent)
-      .replace(/\{wrapFee\}/g, wrapFeeFormatted);
+      .replace(/\{wrapFeeUnitStems\}/g, wrapFeeUnitStems)
+      .replace(/\{wrapFeePerUnit\}/g, wrapFeePerUnitFormatted);
+  }
+
+  /**
+   * Generic {placeholder} substitution for checkout copy (DEV-13). Unlike
+   * interpolateRules() above (fixed pricing-rule tokens only), this fills
+   * whatever keys the caller supplies, e.g. ck('checkoutFieldsIncomplete', { count: 2 }).
+   */
+  function ck(key, vars) {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    let template = t[key];
+    if (template === undefined) template = (siteData.translations.id || {})[key] || '';
+    if (!vars) return template;
+    return String(template).replace(/\{(\w+)\}/g, (match, name) => (Object.hasOwn(vars, name) ? String(vars[name]) : match));
   }
 
   /**
@@ -270,22 +311,20 @@
       flowersSubtotal += qty * price;
     });
 
-    const bulkFrom = siteData.bulkFrom ?? 9;
-    const bulkRate = siteData.bulkRate ?? 0.10;
-    const wrapFee = siteData.wrapFee ?? 35000;
+    const wrapFeeUnitStems = siteData.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnit = siteData.wrapFeePerUnit ?? 35000;
     const minStems = siteData.minStems ?? 3;
     const additionsSubtotal = (siteData.customAdditions || []).reduce((sum, addition) =>
       sum + (customAdditions[addition.key] || 0) * (addition.price || 0), 0);
 
-    const discount = stems >= bulkFrom ? Math.round(flowersSubtotal * bulkRate) : 0;
-    const total = flowersSubtotal - discount + wrapFee + additionsSubtotal;
+    const wrapFee = stems > 0 ? Math.ceil(stems / wrapFeeUnitStems) * wrapFeePerUnit : 0;
+    const total = flowersSubtotal + wrapFee + additionsSubtotal;
     const isValid = stems >= minStems;
 
     return {
       stems,
       flowersSubtotal,
       additionsSubtotal,
-      discount,
       wrapFee,
       total,
       isValid
@@ -299,18 +338,16 @@
   function computeCartTotals(cartArg) {
     const list = Array.isArray(cartArg) ? cartArg : [];
     const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
-    const bulkFrom = siteData.bulkFrom ?? 9;
-    const bulkRate = siteData.bulkRate ?? 0.10;
-    const wrapFeeCfg = siteData.wrapFee ?? 35000;
+    const wrapFeeUnitStems = siteData.wrapFeeUnitStems ?? 3;
+    const wrapFeePerUnit = siteData.wrapFeePerUnit ?? 35000;
     const minStems = siteData.minStems ?? 3;
 
-    let hasCustomLine = false;
     let everyCustomLineValid = true;
 
     const lines = list.map(line => {
       let stems = 0;
       let subtotal = 0;
-      let discount = 0;
+      let wrapFee = 0;
 
       if (line.type === 'stem') {
         const flower = siteData.flowers[line.flowerKey];
@@ -325,7 +362,6 @@
         stems = (pkg ? pkg.stems : 0) * line.qty;
         subtotal = (pkg ? pkg.price : 0) * line.qty;
       } else if (line.type === 'custom') {
-        hasCustomLine = true;
         let bouquetStems = 0;
         let bouquetSubtotal = 0;
         order.forEach(key => {
@@ -340,26 +376,27 @@
           bouquetSubtotal += count * (addition.price || 0);
         });
         if (bouquetStems < minStems) everyCustomLineValid = false;
+        const bouquetWrapFee = bouquetStems > 0 ? Math.ceil(bouquetStems / wrapFeeUnitStems) * wrapFeePerUnit : 0;
         stems = bouquetStems * line.qty;
         subtotal = bouquetSubtotal * line.qty;
-        discount = bouquetStems >= bulkFrom ? Math.round(subtotal * bulkRate) : 0;
+        wrapFee = bouquetWrapFee * line.qty;
       }
 
-      return { id: line.id, type: line.type, stems, subtotal, discount, total: subtotal - discount };
+      return { id: line.id, type: line.type, stems, subtotal, wrapFee, total: subtotal + wrapFee };
     });
 
     const stemsTotal = lines.reduce((sum, l) => sum + l.stems, 0);
     const subtotalTotal = lines.reduce((sum, l) => sum + l.subtotal, 0);
-    const discountTotal = lines.reduce((sum, l) => sum + l.discount, 0);
-    const wrapFee = hasCustomLine ? wrapFeeCfg : 0;
-    const total = subtotalTotal - discountTotal + wrapFee;
+    const wrapFeeTotal = lines.reduce((sum, l) => sum + l.wrapFee, 0);
+    const messageCardFee = list.length > 0 && messageCardEnabled ? (siteData.messageCardPrice ?? 0) : 0;
+    const total = subtotalTotal + wrapFeeTotal + messageCardFee;
 
     return {
       lines,
       stems: stemsTotal,
       subtotal: subtotalTotal,
-      discount: discountTotal,
-      wrapFee,
+      wrapFee: wrapFeeTotal,
+      messageCardFee,
       total,
       isValid: list.length > 0 && everyCustomLineValid
     };
@@ -390,7 +427,6 @@
         const name = (addition[lang] || addition.en).name;
         return count > 1 ? `${count} × ${name}` : name;
       });
-    if (line.messageCard) additionParts.push(t.messageCardSelected);
     const additions = additionParts.length ? ` · ${t.additionsLabel}: ${additionParts.join(', ')}` : '';
     return `${line.qty > 1 ? `${line.qty} × ` : ''}${lang === 'en' ? 'Custom bouquet' : 'Buket custom'} (${parts.join(', ')})${additions}`;
   }
@@ -402,21 +438,27 @@
       if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
       if (line.type === 'pot') return { type: 'pot', id: line.potKey, qty: line.qty };
       if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty };
-      return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, message_card: !!line.messageCard, stems: siteData.flowerOrder.reduce((out, key) => {
+      return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, stems: siteData.flowerOrder.reduce((out, key) => {
         const qty = (line.counts && line.counts[key]) || 0;
         if (qty) out[key] = qty;
         return out;
       }, {}) };
     });
     return {
-      orderMode: types.length === 1 ? types[0] : 'custom',
+      // DEV-01: a cart mixing more than one product type is `mixed`, distinct from a
+      // single custom bouquet. `itemData` (not this label) is the authoritative product
+      // list — the server must reprice from itemData, never trust orderMode for pricing.
+      orderMode: types.length > 1 ? 'mixed' : (types[0] || 'custom'),
       items: cart.map(line => checkoutLineLabel(line)),
       itemData,
       totalStemCount: totals.stems,
       wrapId: selectedWrap,
-      giftMessage: orderNote,
+      messageCardEnabled,
+      messageCardFee: totals.messageCardFee,
+      giftMessage: messageCardEnabled ? orderNote : '',
+      recipientName: orderRecipientName,
+      cardSenderName: orderCardSenderName,
       productSubtotal: totals.subtotal + totals.wrapFee,
-      discountAmount: totals.discount,
       estimatedProductTotal: totals.total,
       currency: 'IDR', language: currentLang, isValid: totals.isValid
     };
@@ -431,6 +473,23 @@
     return `ALX-${date}-${Array.from(bytes, value => alphabet[value % alphabet.length]).join('')}`;
   }
 
+  /**
+   * DEV-04: a real deduplication key, separate from the human-readable reference
+   * above (which only has 4 random characters and is not safe to deduplicate on).
+   * Kept on checkoutAttempt and reused across every retry of the same attempt;
+   * only "Start a new order" clears it.
+   */
+  function generateIdempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   function buildPostSubmissionWhatsApp(reference, buyerName = '', preferredDate = '', state = normalizedCheckoutState()) {
     const url = new URL(`https://wa.me/${String(siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '')}`);
     const name = buyerName || (state.language === 'en' ? '—' : '—');
@@ -441,20 +500,54 @@
     return url.toString();
   }
 
-  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState()) {
+  /**
+   * Collapses any way a customer might type an Indonesian number — 089...,
+   * 89..., 62..., +62 81-2345-..., with spaces/dashes/parens — into a single
+   * canonical E.164 form (+62...) so only one format ever reaches the sheet.
+   * Numbers that already carry a different country code are left untouched.
+   */
+  function normalizeIndonesianPhone(raw) {
+    let digits = String(raw || '').trim().replace(/[^\d+]/g, '');
+    digits = digits.replace(/(?!^)\+/g, '');
+    if (digits.startsWith('+62')) {
+      digits = '+62' + digits.slice(3).replace(/^0+/, '');
+    } else if (digits.startsWith('62')) {
+      digits = '+62' + digits.slice(2).replace(/^0+/, '');
+    } else if (digits.startsWith('0')) {
+      digits = '+62' + digits.slice(1);
+    } else if (digits.startsWith('+')) {
+      return digits;
+    } else if (digits) {
+      digits = '+62' + digits;
+    }
+    return digits;
+  }
+
+  function buildOrderSubmission(formData, reference, state = normalizedCheckoutState(), idempotencyKey = '') {
     const customer = {};
     formData.forEach((value, key) => { customer[key] = String(value); });
+    // DEV-06: the browser checkbox becomes the HTML string "on" (or is simply absent
+    // when unchecked) inside FormData — normalize it to a real Boolean before it ever
+    // reaches the server, which must still enforce that it is exactly `true`.
+    customer.acknowledgement = customer.acknowledgement === 'on' || customer.acknowledgement === 'true';
+    if (customer.buyer_whatsapp) customer.buyer_whatsapp = normalizeIndonesianPhone(customer.buyer_whatsapp);
     return {
       order_reference: reference,
+      idempotency_key: idempotencyKey,
+      catalog_version: siteData.catalogVersion ?? 1,
+      cf_turnstile_token: turnstileToken,
       submitted_language: state.language,
       order_mode: state.orderMode,
       order_summary: state.items.join('; '),
       item_data: state.itemData,
       total_stems: state.totalStemCount,
       wrap: state.wrapId,
+      message_card_enabled: state.messageCardEnabled,
+      message_card_fee: state.messageCardFee,
       gift_message: state.giftMessage,
+      recipient_name: state.recipientName,
+      card_sender_name: state.cardSenderName,
       product_subtotal: state.productSubtotal,
-      discount_amount: state.discountAmount,
       estimated_product_total: state.estimatedProductTotal,
       currency: state.currency,
       source: 'website',
@@ -620,12 +713,13 @@
    * Order action: Choose a single finished stem
    */
   function selectStemOrder(flowerKey, scroll = true) {
+    const wasCartEmpty = cart.length === 0;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
     addLine({ type: 'stem', flowerKey: selectedFlower, qty: 1 });
     if (scroll) {
-      scrollToSection('#order', '.order-controls-col');
+      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
         finishLabel.focus({ preventScroll: true });
@@ -642,16 +736,18 @@
   }
 
   function selectMiniPot(potKey, scroll = true) {
+    const wasCartEmpty = cart.length === 0;
     const pot = (siteData.miniPots || []).find(item => item.key === potKey);
     if (!pot) return;
     addLine({ type: 'pot', potKey, qty: 1 });
-    if (scroll) scrollToSection('#order', '.order-controls-col');
+    if (scroll && wasCartEmpty) scrollToSection('#order', '.order-controls-col');
   }
 
   /**
    * Order action: Select a bouquet package
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
+    const wasCartEmpty = cart.length === 0;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
     addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
     if (restoreFocus) {
@@ -659,7 +755,7 @@
       if (activeBtn) activeBtn.focus({ preventScroll: true });
     }
     if (scroll) {
-      scrollToSection('#order', '.order-controls-col');
+      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
         finishLabel.focus({ preventScroll: true });
@@ -682,7 +778,7 @@
   function useCustomBouquet() {
     const tot = getCustomTotals();
     if (tot.isValid) {
-      addLine({ type: 'custom', counts: { ...customCounts }, additions: { ...customAdditions }, messageCard: customMessageCard, qty: 1 });
+      addLine({ type: 'custom', counts: { ...customCounts }, additions: { ...customAdditions }, qty: 1 });
       scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
       if (finishLabel) {
@@ -718,7 +814,6 @@
       customCounts[k] = 0;
     });
     Object.keys(customAdditions).forEach(key => { customAdditions[key] = 0; });
-    customMessageCard = false;
     renderCustomBuilder();
     renderBouquetsUI();
     persistCart();
@@ -1242,8 +1337,6 @@
     setText('#custom-pick-label', t.customPickLabel);
     setText('#custom-additions-label', t.customAdditionsLabel);
     setText('#custom-additions-note', t.customAdditionsNote);
-    setText('#custom-message-card-label', t.customMessageCardLabel);
-    setText('#custom-message-card-note', t.customMessageCardNote);
     setText('#custom-reset-btn', t.resetLabel);
 
     const toggleBtn = document.getElementById('btn-toggle-custom');
@@ -1263,24 +1356,48 @@
       const isAddInc = activeEl ? activeEl.classList.contains('btn-addition-inc') : false;
       const isAddDec = activeEl ? activeEl.classList.contains('btn-addition-dec') : false;
 
-      additionsGrid.innerHTML = '';
-      (siteData.customAdditions || []).forEach(addition => {
-        const trans = addition[currentLang] || addition.en;
-        const count = customAdditions[addition.key] || 0;
-        const card = document.createElement('div');
-        card.className = `custom-addition-card ${count > 0 ? 'is-selected' : ''}`;
-        card.innerHTML = `
-          <img src="${addition.photo}" width="1254" height="1254" alt="${trans.name}" loading="lazy" />
-          <span class="custom-addition-copy"><strong>${trans.name}</strong><small>${formatRp(addition.price)} / ${currentLang === 'en' ? 'piece' : 'lembar'}</small></span>
-          <div class="stepper-controls custom-addition-stepper">
-            <button type="button" class="btn-stepper btn-addition-dec" data-addition="${addition.key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
-            <span class="stepper-count" aria-live="polite">${count}</span>
-            <button type="button" class="btn-stepper btn-addition-inc" data-addition="${addition.key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
-          </div>`;
-        card.querySelector('.btn-addition-dec').addEventListener('click', () => bumpCustomAddition(addition.key, -1));
-        card.querySelector('.btn-addition-inc').addEventListener('click', () => bumpCustomAddition(addition.key, 1));
-        additionsGrid.appendChild(card);
-      });
+      const expectedAdditions = siteData.customAdditions || [];
+      const existingAdditionCards = additionsGrid.querySelectorAll('.custom-addition-card');
+
+      // This grid re-renders on every cart mutation (it lives inside
+      // renderCustomBuilder, called from renderBouquetsUI's fast path), not
+      // just when an addition itself changes. When the same set of addition
+      // cards is already in place for the current language, update counts
+      // in place instead of tearing every card (and its <img>) down and
+      // rebuilding, which used to flicker every addition photo on any
+      // unrelated add/remove.
+      if (existingAdditionCards.length === expectedAdditions.length
+        && (expectedAdditions.length === 0 || existingAdditionCards[0].getAttribute('data-lang') === currentLang)) {
+        existingAdditionCards.forEach((card, i) => {
+          const addition = expectedAdditions[i];
+          const count = customAdditions[addition.key] || 0;
+          card.classList.toggle('is-selected', count > 0);
+          const countEl = card.querySelector('.stepper-count');
+          if (countEl) countEl.textContent = String(count);
+          const decBtn = card.querySelector('.btn-addition-dec');
+          if (decBtn) decBtn.disabled = count === 0;
+        });
+      } else {
+        additionsGrid.innerHTML = '';
+        expectedAdditions.forEach(addition => {
+          const trans = addition[currentLang] || addition.en;
+          const count = customAdditions[addition.key] || 0;
+          const card = document.createElement('div');
+          card.className = `custom-addition-card ${count > 0 ? 'is-selected' : ''}`;
+          card.setAttribute('data-lang', currentLang);
+          card.innerHTML = `
+            <img src="${addition.photo}" width="1254" height="1254" alt="${trans.name}" loading="lazy" />
+            <span class="custom-addition-copy"><strong>${trans.name}</strong><small>${formatRp(addition.price)} / ${currentLang === 'en' ? 'piece' : 'lembar'}</small></span>
+            <div class="stepper-controls custom-addition-stepper">
+              <button type="button" class="btn-stepper btn-addition-dec" data-addition="${addition.key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+              <span class="stepper-count" aria-live="polite">${count}</span>
+              <button type="button" class="btn-stepper btn-addition-inc" data-addition="${addition.key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+            </div>`;
+          card.querySelector('.btn-addition-dec').addEventListener('click', () => bumpCustomAddition(addition.key, -1));
+          card.querySelector('.btn-addition-inc').addEventListener('click', () => bumpCustomAddition(addition.key, 1));
+          additionsGrid.appendChild(card);
+        });
+      }
 
       if (activeAddition) {
         let selector = isAddInc
@@ -1297,15 +1414,6 @@
       }
     }
 
-    const messageCardInput = document.getElementById('custom-message-card');
-    if (messageCardInput) {
-      messageCardInput.checked = customMessageCard;
-      messageCardInput.onchange = event => {
-        customMessageCard = !!event.target.checked;
-        renderCustomBuilder();
-      };
-    }
-
     // List of flower rows
     const rowsList = document.getElementById('custom-rows-list');
     if (rowsList) {
@@ -1315,37 +1423,54 @@
       const isInc = activeEl ? activeEl.classList.contains('btn-inc') : false;
       const isDec = activeEl ? activeEl.classList.contains('btn-dec') : false;
 
-      rowsList.innerHTML = '';
       const order = siteData.flowerOrder || ['Sunflower', 'Rose', 'Tulip', 'Gerbera'];
+      const existingRows = rowsList.querySelectorAll('.custom-row-item');
 
-      order.forEach(key => {
-        const flower = siteData.flowers[key];
-        if (!flower) return;
-        const trans = flower[currentLang] || flower.en;
-        const count = customCounts[key] || 0;
-        const priceStr = `${formatRp(flower.stemPrice || 55000)} / ${t.stemWord}`;
+      // Same reasoning as the additions grid above: this list re-renders on
+      // every cart mutation, so update counts in place when the row set
+      // already matches instead of rebuilding every row from scratch.
+      if (existingRows.length === order.length
+        && (order.length === 0 || existingRows[0].getAttribute('data-lang') === currentLang)) {
+        existingRows.forEach((li, i) => {
+          const key = order[i];
+          const count = customCounts[key] || 0;
+          const countEl = li.querySelector('.stepper-count');
+          if (countEl) countEl.textContent = String(count);
+          const decBtn = li.querySelector('.btn-dec');
+          if (decBtn) decBtn.disabled = count === 0;
+        });
+      } else {
+        rowsList.innerHTML = '';
+        order.forEach(key => {
+          const flower = siteData.flowers[key];
+          if (!flower) return;
+          const trans = flower[currentLang] || flower.en;
+          const count = customCounts[key] || 0;
+          const priceStr = `${formatRp(flower.stemPrice || 55000)} / ${t.stemWord}`;
 
-        const li = document.createElement('li');
-        li.className = 'custom-row-item';
-        li.innerHTML = `
-          <div class="custom-flower-meta">
-            <span class="custom-flower-dot" style="background:${flower.accent}" aria-hidden="true"></span>
-            <div>
-              <p class="custom-flower-name">${trans.name}</p>
-              <p class="custom-flower-price">${priceStr}</p>
+          const li = document.createElement('li');
+          li.className = 'custom-row-item';
+          li.setAttribute('data-lang', currentLang);
+          li.innerHTML = `
+            <div class="custom-flower-meta">
+              <span class="custom-flower-dot" style="background:${flower.accent}" aria-hidden="true"></span>
+              <div>
+                <p class="custom-flower-name">${trans.name}</p>
+                <p class="custom-flower-price">${priceStr}</p>
+              </div>
             </div>
-          </div>
-          <div class="stepper-controls">
-            <button type="button" class="btn-stepper btn-dec" data-flower="${key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
-            <span class="stepper-count" aria-live="polite">${count}</span>
-            <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
-          </div>
-        `;
+            <div class="stepper-controls">
+              <button type="button" class="btn-stepper btn-dec" data-flower="${key}" ${count === 0 ? 'disabled' : ''} aria-label="${currentLang === 'en' ? 'Decrease' : 'Kurangi'} ${trans.name}">−</button>
+              <span class="stepper-count" aria-live="polite">${count}</span>
+              <button type="button" class="btn-stepper btn-inc" data-flower="${key}" aria-label="${currentLang === 'en' ? 'Increase' : 'Tambahkan'} ${trans.name}">+</button>
+            </div>
+          `;
 
-        li.querySelector('.btn-dec').addEventListener('click', () => bumpCustomCount(key, -1));
-        li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
-        rowsList.appendChild(li);
-      });
+          li.querySelector('.btn-dec').addEventListener('click', () => bumpCustomCount(key, -1));
+          li.querySelector('.btn-inc').addEventListener('click', () => bumpCustomCount(key, 1));
+          rowsList.appendChild(li);
+        });
+      }
 
       // Restore focus if a stepper button was clicked
       if (activeFlower) {
@@ -1378,17 +1503,6 @@
     setText('#custom-est-label', t.estimateLabel);
     setText('#est-flowers-label', `${t.flowersLabel} (${tot.stems})`);
     setText('#est-flowers-val', tot.isValid ? formatRp(tot.flowersSubtotal) : '—');
-
-    const discountRow = document.getElementById('est-discount-row');
-    if (discountRow) {
-      if (tot.isValid && tot.discount > 0) {
-        discountRow.style.display = 'flex';
-        setText('#est-discount-label', interpolateRules(t.discountLabel));
-        setText('#est-discount-val', `− ${formatRp(tot.discount)}`);
-      } else {
-        discountRow.style.display = 'none';
-      }
-    }
 
     setText('#est-wrap-label', t.wrapFeeLabel);
     setText('#est-wrap-val', tot.isValid ? formatRp(tot.wrapFee) : '—');
@@ -1570,106 +1684,151 @@
    * textContent only — cart lines are the one region whose content is
    * derived from a growing data structure, so it stays out of innerHTML.
    */
+  function buildCartLineEl(line, t, title, photoSrc, photoAlt, linePrice) {
+    const li = document.createElement('li');
+    li.className = 'cart-line';
+    li.setAttribute('data-line-id', String(line.id));
+
+    const thumb = document.createElement('img');
+    thumb.className = 'cart-line-photo';
+    thumb.src = photoSrc;
+    thumb.alt = photoAlt;
+    thumb.width = 56;
+    thumb.height = 56;
+    thumb.loading = 'lazy';
+    li.appendChild(thumb);
+
+    const info = document.createElement('div');
+    info.className = 'cart-line-info';
+    const titleEl = document.createElement('p');
+    titleEl.className = 'cart-line-title';
+    titleEl.textContent = title;
+    const priceEl = document.createElement('p');
+    priceEl.className = 'cart-line-price';
+    priceEl.textContent = formatRp(linePrice);
+    info.appendChild(titleEl);
+    info.appendChild(priceEl);
+    li.appendChild(info);
+
+    const stepper = document.createElement('div');
+    stepper.className = 'stepper-controls cart-line-stepper';
+    const decBtn = document.createElement('button');
+    decBtn.type = 'button';
+    decBtn.className = 'btn-stepper btn-line-dec';
+    decBtn.textContent = '−';
+    decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
+    decBtn.addEventListener('click', () => bumpLineQty(line.id, -1));
+    const countEl = document.createElement('span');
+    countEl.className = 'stepper-count';
+    countEl.setAttribute('aria-live', 'polite');
+    countEl.textContent = String(line.qty);
+    const incBtn = document.createElement('button');
+    incBtn.type = 'button';
+    incBtn.className = 'btn-stepper btn-line-inc';
+    incBtn.textContent = '+';
+    incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
+    incBtn.addEventListener('click', () => bumpLineQty(line.id, 1));
+    stepper.appendChild(decBtn);
+    stepper.appendChild(countEl);
+    stepper.appendChild(incBtn);
+    li.appendChild(stepper);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn-remove-line';
+    removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => removeLine(line.id));
+    li.appendChild(removeBtn);
+
+    return li;
+  }
+
+  /**
+   * Update an existing cart-line <li> in place (title/price/qty/labels only).
+   * The <img> node is left untouched — its src never changes for a line that
+   * already existed, so reusing the node avoids a decode/repaint flicker on
+   * every unrelated add/remove.
+   */
+  function updateCartLineEl(li, t, title, photoSrc, photoAlt, linePrice, qty) {
+    const img = li.querySelector('.cart-line-photo');
+    if (img) {
+      if (img.src !== photoSrc) img.src = photoSrc;
+      if (img.alt !== photoAlt) img.alt = photoAlt;
+    }
+    const titleEl = li.querySelector('.cart-line-title');
+    if (titleEl) titleEl.textContent = title;
+    const priceEl = li.querySelector('.cart-line-price');
+    if (priceEl) priceEl.textContent = formatRp(linePrice);
+    const countEl = li.querySelector('.stepper-count');
+    if (countEl) countEl.textContent = String(qty);
+    const decBtn = li.querySelector('.btn-line-dec');
+    if (decBtn) decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
+    const incBtn = li.querySelector('.btn-line-inc');
+    if (incBtn) incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
+    const removeBtn = li.querySelector('.btn-remove-line');
+    if (removeBtn) removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
+  }
+
   function renderCartLines() {
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const linesEl = document.getElementById('cart-lines');
     if (!linesEl) return;
 
-    // Record the currently focused stepper button, if any, so the rebuild
-    // below doesn't eject keyboard focus to <body> (UX-04) — same pattern
-    // as renderCustomBuilder()'s flower-row steppers, keyed on line id.
-    const activeEl = document.activeElement;
-    const activeLineEl = activeEl ? activeEl.closest('.cart-line') : null;
-    const activeLineId = activeLineEl ? activeLineEl.getAttribute('data-line-id') : null;
-    const isLineInc = activeEl ? activeEl.classList.contains('btn-line-inc') : false;
-    const isLineDec = activeEl ? activeEl.classList.contains('btn-line-dec') : false;
-
-    while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
-
     if (cart.length === 0) {
-      const emptyLi = document.createElement('li');
-      emptyLi.className = 'cart-line-empty';
-      emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
-        ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
-        : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
-      linesEl.appendChild(emptyLi);
+      const alreadyEmpty = linesEl.children.length === 1 && linesEl.children[0].classList.contains('cart-line-empty');
+      if (!alreadyEmpty) {
+        while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
+        const emptyLi = document.createElement('li');
+        emptyLi.className = 'cart-line-empty';
+        emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
+          ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
+          : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
+        linesEl.appendChild(emptyLi);
+      }
       return;
     }
 
+    // Drop the empty-state placeholder, if the cart just went from 0 to 1 item.
+    if (linesEl.children.length === 1 && linesEl.children[0].classList.contains('cart-line-empty')) {
+      linesEl.removeChild(linesEl.children[0]);
+    }
+
+    // Reuse existing <li> nodes for lines that already existed (matched by id)
+    // instead of tearing down and rebuilding the whole list on every
+    // add/remove/qty change — recreating every <img> in the cart each time
+    // caused every existing line's thumbnail to flicker, not just the one
+    // that changed, and also stole keyboard focus from stepper buttons.
+    const existingById = new Map();
+    Array.from(linesEl.children).forEach(li => {
+      const id = li.getAttribute('data-line-id');
+      if (id) existingById.set(id, li);
+    });
+
     const cartTotals = computeCartTotals(cart);
+    const seenIds = new Set();
 
     cart.forEach((line, index) => {
+      const idStr = String(line.id);
+      seenIds.add(idStr);
       const { title, photoSrc, photoAlt } = describeLine(line, t);
       const linePrice = cartTotals.lines[index].total;
 
-      const li = document.createElement('li');
-      li.className = 'cart-line';
-      li.setAttribute('data-line-id', String(line.id));
-
-      const thumb = document.createElement('img');
-      thumb.className = 'cart-line-photo';
-      thumb.src = photoSrc;
-      thumb.alt = photoAlt;
-      thumb.width = 56;
-      thumb.height = 56;
-      thumb.loading = 'lazy';
-      li.appendChild(thumb);
-
-      const info = document.createElement('div');
-      info.className = 'cart-line-info';
-      const titleEl = document.createElement('p');
-      titleEl.className = 'cart-line-title';
-      titleEl.textContent = title;
-      const priceEl = document.createElement('p');
-      priceEl.className = 'cart-line-price';
-      priceEl.textContent = formatRp(linePrice);
-      info.appendChild(titleEl);
-      info.appendChild(priceEl);
-      li.appendChild(info);
-
-      const stepper = document.createElement('div');
-      stepper.className = 'stepper-controls cart-line-stepper';
-      const decBtn = document.createElement('button');
-      decBtn.type = 'button';
-      decBtn.className = 'btn-stepper btn-line-dec';
-      decBtn.textContent = '−';
-      decBtn.setAttribute('aria-label', (t.decreaseLineLabel || 'Decrease {item} quantity').replace('{item}', title));
-      decBtn.addEventListener('click', () => bumpLineQty(line.id, -1));
-      const countEl = document.createElement('span');
-      countEl.className = 'stepper-count';
-      countEl.setAttribute('aria-live', 'polite');
-      countEl.textContent = String(line.qty);
-      const incBtn = document.createElement('button');
-      incBtn.type = 'button';
-      incBtn.className = 'btn-stepper btn-line-inc';
-      incBtn.textContent = '+';
-      incBtn.setAttribute('aria-label', (t.increaseLineLabel || 'Increase {item} quantity').replace('{item}', title));
-      incBtn.addEventListener('click', () => bumpLineQty(line.id, 1));
-      stepper.appendChild(decBtn);
-      stepper.appendChild(countEl);
-      stepper.appendChild(incBtn);
-      li.appendChild(stepper);
-
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn-remove-line';
-      removeBtn.setAttribute('aria-label', (t.removeLineLabel || 'Remove {item} from cart').replace('{item}', title));
-      removeBtn.textContent = '✕';
-      removeBtn.addEventListener('click', () => removeLine(line.id));
-      li.appendChild(removeBtn);
-
-      linesEl.appendChild(li);
+      // Cart lines are only ever appended (new) or spliced out (removed) —
+      // the relative order among surviving lines never changes — so an
+      // existing line is updated in place and left exactly where it already
+      // sits in the DOM; only a genuinely new line needs appending.
+      const existingLi = existingById.get(idStr);
+      if (existingLi) {
+        updateCartLineEl(existingLi, t, title, photoSrc, photoAlt, linePrice, line.qty);
+      } else {
+        linesEl.appendChild(buildCartLineEl(line, t, title, photoSrc, photoAlt, linePrice));
+      }
     });
 
-    if (activeLineId && (isLineInc || isLineDec)) {
-      const selector = isLineInc
-        ? `.cart-line[data-line-id="${activeLineId}"] .btn-line-inc`
-        : `.cart-line[data-line-id="${activeLineId}"] .btn-line-dec`;
-      const btnToFocus = linesEl.querySelector(selector);
-      // If the line no longer exists (qty hit 0), removeLine() already owns
-      // focus restoration for that case — don't fight it here.
-      if (btnToFocus) btnToFocus.focus();
-    }
+    existingById.forEach((li, id) => {
+      if (!seenIds.has(id)) linesEl.removeChild(li);
+    });
   }
 
   /**
@@ -1741,7 +1900,7 @@
           title: trans.name,
           priceStr,
           ariaLabel: `${t.orderStemLabel} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectStemOrder(key, false)
+          onSelect: () => selectStemOrder(key, true)
         }));
       });
     }
@@ -1757,7 +1916,7 @@
           title,
           priceStr,
           ariaLabel: `${t.pkgBtn} — ${title}, ${priceStr}`,
-          onSelect: () => selectPackageOrder(index, false)
+          onSelect: () => selectPackageOrder(index, true)
         }));
       });
     }
@@ -1773,7 +1932,7 @@
           title: trans.name,
           priceStr,
           ariaLabel: `${t.miniPotBtn} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectMiniPot(pot.key, false)
+          onSelect: () => selectMiniPot(pot.key, true)
         }));
       });
     }
@@ -1787,6 +1946,43 @@
       const groupEl = document.getElementById(groupId);
       if (groupEl) groupEl.style.display = (gridEl && gridEl.children.length > 0) ? '' : 'none';
     });
+  }
+
+  /**
+   * Floating cart status pill: an always-on-top indicator of how many units
+   * are in the cart, so an add/remove is visibly confirmed even though (per
+   * P1-05) the page no longer auto-scrolls to the cart after the first item.
+   * Hidden while the cart is empty; bumps briefly whenever the count changes.
+   */
+  function renderFloatingCartBadge(t) {
+    const pill = document.getElementById('floating-cart-pill');
+    if (!pill) return;
+    const countEl = document.getElementById('floating-cart-count');
+    const labelEl = document.getElementById('floating-cart-label');
+    const n = cartUnitCount();
+
+    if (countEl) countEl.textContent = String(n);
+    if (labelEl) labelEl.textContent = t.floatingCartLabel || (currentLang === 'en' ? 'in cart' : 'di keranjang');
+    pill.setAttribute('aria-label', fillTemplate(
+      t.floatingCartAriaLabel || (currentLang === 'en' ? 'View cart — {n} item(s)' : 'Lihat keranjang — {n} item'),
+      { n }
+    ));
+
+    const isVisible = n > 0;
+    pill.classList.toggle('visible', isVisible);
+    pill.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    pill.tabIndex = isVisible ? 0 : -1;
+
+    if (isVisible && lastFloatingCartCount !== null && n !== lastFloatingCartCount) {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReducedMotion) {
+        pill.classList.remove('bump');
+        if (typeof pill.offsetWidth === 'number') void pill.offsetWidth;
+        pill.classList.add('bump');
+        setTimeout(() => pill.classList.remove('bump'), 400);
+      }
+    }
+    lastFloatingCartCount = n;
   }
 
   /**
@@ -1856,12 +2052,25 @@
       });
     }
 
-    // 3. Message card textarea
+    // 3. Message card: paid checkbox gates the textarea and its fee
+    const messageCardPrice = siteData.messageCardPrice ?? 0;
+    setText('#card-note-toggle-label', fillTemplate(t.cardCheckboxLabel || 'Tambahkan kartu ucapan (+{price})', { price: formatRp(messageCardPrice) }));
+    const cardToggle = document.getElementById('card-note-toggle');
+    const cardFieldsWrap = document.getElementById('card-note-fields');
     const noteInput = document.getElementById('card-note-input');
     const noteCounterEl = document.getElementById('card-note-counter');
     const updateNoteCounter = () => {
       if (noteCounterEl) noteCounterEl.textContent = fillTemplate(t.cardNoteCounter || '{n}/{max}', { n: orderNote.length, max: CARD_NOTE_MAX });
     };
+    if (cardToggle) {
+      cardToggle.checked = messageCardEnabled;
+      cardToggle.onchange = event => {
+        messageCardEnabled = !!event.target.checked;
+        renderOrderSection();
+        persistCart();
+      };
+    }
+    if (cardFieldsWrap) cardFieldsWrap.hidden = !messageCardEnabled;
     if (noteInput) {
       noteInput.placeholder = t.cardPlaceholder;
       noteInput.maxLength = CARD_NOTE_MAX;
@@ -1882,6 +2091,31 @@
       };
     }
 
+    // 3b. Recipient & card-sender name (optional, order-level — replaces the
+    //     old gift-recipient fields that used to live in the checkout form).
+    //     Only relevant once a card is actually being added.
+    const giftDetailsFields = document.getElementById('gift-details-fields');
+    if (giftDetailsFields) giftDetailsFields.hidden = !messageCardEnabled;
+    setText('#gift-details-label', t.giftDetailsLabel);
+    setText('#recipient-name-order-label', t.recipientNameOrderLabel);
+    setText('#card-sender-order-label', t.cardSenderOrderLabel);
+    const recipientNameInput = document.getElementById('order-recipient-name');
+    if (recipientNameInput) {
+      if (recipientNameInput.value !== orderRecipientName) recipientNameInput.value = orderRecipientName;
+      recipientNameInput.oninput = (e) => {
+        orderRecipientName = e.target.value.slice(0, 120);
+        persistCart();
+      };
+    }
+    const cardSenderInput = document.getElementById('order-card-sender-name');
+    if (cardSenderInput) {
+      if (cardSenderInput.value !== orderCardSenderName) cardSenderInput.value = orderCardSenderName;
+      cardSenderInput.oninput = (e) => {
+        orderCardSenderName = e.target.value.slice(0, 120);
+        persistCart();
+      };
+    }
+
     // 4. Edit selection button: with multiple lines possible, this is a
     //    generic "go add or change something" affordance, not one line's editor.
     const editBtn = document.getElementById('btn-edit-selection');
@@ -1892,8 +2126,24 @@
       };
     }
 
+    // 4b. Clear cart: empties every line in one action (vs. removing lines
+    // one at a time), with a native confirm() since this is destructive.
+    const clearCartBtn = document.getElementById('btn-clear-cart');
+    if (clearCartBtn) {
+      setText('#btn-clear-cart', t.clearCartLabel || 'Kosongkan keranjang');
+      clearCartBtn.style.display = cartHasSelection ? '' : 'none';
+      clearCartBtn.onclick = () => {
+        if (!window.confirm(t.clearCartConfirm || 'Kosongkan keranjang?')) return;
+        resetAllState();
+        persistCart();
+        renderAll();
+        announceToScreenReader(t.clearCartAnnounce || 'Keranjang dikosongkan.');
+      };
+    }
+
     // 5. Cart-level price and includes (renderCartLines handles per-line display)
     renderCartLines();
+    renderFloatingCartBadge(t);
 
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
@@ -1956,8 +2206,11 @@
             allIncludes.push(`${t.wrapFeeLabel}: ${formatRp(cartTotals.wrapFee)}`);
           }
           allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
-          if (orderNote.trim()) {
-            allIncludes.push(`${t.cardLinePrefix}: "${orderNote.trim()}"`);
+          if (messageCardEnabled) {
+            const feeText = cartTotals.messageCardFee > 0 ? ` (+${formatRp(cartTotals.messageCardFee)})` : '';
+            allIncludes.push(orderNote.trim()
+              ? `${t.cardLinePrefix}: "${orderNote.trim()}"${feeText}`
+              : `${t.messageCardSelected}${feeText}`);
           }
         }
 
@@ -2102,7 +2355,7 @@
 
       const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
       const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
-      const cardTxt = orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
+      const cardTxt = messageCardEnabled && orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
       let waMsg = '';
       if (cart.length === 1) {
@@ -2124,7 +2377,6 @@
               const name = (addition[currentLang] || addition.en).name;
               return count > 1 ? `${count} × ${name}` : name;
             });
-          if (line.messageCard) additionNames.push(t.messageCardSelected);
           const customItems = [...flowerNames, ...additionNames.map(item => `${t.additionsLabel}: ${item}`)];
           const flowerList = customItems.map(item => `• ${item}`).join('\n');
           const vars = {
@@ -2799,6 +3051,13 @@
       });
     }
 
+    const floatingCartPill = document.getElementById('floating-cart-pill');
+    if (floatingCartPill) {
+      floatingCartPill.addEventListener('click', () => {
+        scrollToSection('#order', '.summary-box');
+      });
+    }
+
     initStickyOrderBar();
   }
 
@@ -2821,32 +3080,152 @@
     }
   }
 
+  /**
+   * DEV-10: safe (no address/phone/email/card-text) recent-order record so a
+   * customer who reloads or closes the tab can still find their reference and
+   * the WhatsApp link. Never store anything the acknowledgement/privacy notice
+   * doesn't already cover as "kept for this order".
+   */
+  const RECENT_ORDER_KEY = 'alxanthia_recent_order_v1';
+
+  function saveRecentOrder() {
+    if (!checkoutAttempt || !checkoutAttempt.submitted) return;
+    try {
+      localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify({
+        reference: checkoutAttempt.reference,
+        idempotencyKey: checkoutAttempt.idempotencyKey,
+        timestamp: Date.now(),
+        orderSummary: checkoutAttempt.state.items.join('; '),
+        total: checkoutAttempt.state.estimatedProductTotal,
+        language: checkoutAttempt.state.language,
+        waUrl: checkoutAttempt.waUrl || ''
+      }));
+    } catch (e) {}
+  }
+
+  function loadRecentOrder() {
+    try {
+      const raw = localStorage.getItem(RECENT_ORDER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !parsed.reference) return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearRecentOrder() {
+    try { localStorage.removeItem(RECENT_ORDER_KEY); } catch (e) {}
+  }
+
+  function renderRecentOrderBanner() {
+    const banner = document.getElementById('recent-order-banner');
+    if (!banner) return;
+    const record = loadRecentOrder();
+    // Show whenever a stored record exists — the checkout dialog sits on top
+    // of this banner anyway, so there is no redundancy to avoid by also
+    // checking in-memory checkoutAttempt state (that used to leave the
+    // banner hidden until a full page reload, since checkoutAttempt.submitted
+    // stays true for the rest of the session after a successful order).
+    if (!record) {
+      banner.hidden = true;
+      return;
+    }
+    setText('#recent-order-text', ck('checkoutRecentOrderBanner', { reference: record.reference }));
+    setText('#recent-order-view', ck('checkoutRecentOrderLink'));
+    setAttr('#recent-order-dismiss', 'aria-label', ck('checkoutRecentOrderDismiss'));
+    banner.hidden = false;
+  }
+
+  /**
+   * DEV-14: a single map from visible dialog step to its focusable heading and
+   * the modal's aria-labelledby target — used on every review/form/success
+   * transition so the dialog's accessible name always matches what's on screen.
+   */
+  const CHECKOUT_STEPS = {
+    'checkout-review': { headingId: 'checkout-title', stepNumber: 1, footerId: 'checkout-review-footer' },
+    'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2, footerId: 'checkout-form-footer' },
+    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2, footerId: null }
+  };
+  // DEV-16: each step's total+actions bar is a real, non-scrolling footer
+  // region (see .checkout-dialog-footer) rather than position:sticky inside
+  // the scrollable content, which used to render on top of later fields.
+  const CHECKOUT_FOOTER_IDS = ['checkout-review-footer', 'checkout-form-footer'];
+
+  function showCheckoutStep(stepId) {
+    closeDatePicker();
+    Object.keys(CHECKOUT_STEPS).forEach(id => {
+      const section = document.getElementById(id);
+      if (section) section.hidden = id !== stepId;
+    });
+    const meta = CHECKOUT_STEPS[stepId];
+    CHECKOUT_FOOTER_IDS.forEach(footerId => {
+      const footer = document.getElementById(footerId);
+      if (footer) footer.hidden = !meta || meta.footerId !== footerId;
+    });
+    const modal = document.getElementById('checkout-modal');
+    if (modal && meta) modal.setAttribute('aria-labelledby', meta.headingId);
+    const indicator = document.getElementById('checkout-step-indicator');
+    if (indicator) {
+      indicator.textContent = stepId === 'checkout-success'
+        ? ck('checkoutStepSuccess')
+        : ck('checkoutStepIndicator', { step: meta.stepNumber, total: 2 });
+    }
+    const heading = meta ? document.getElementById(meta.headingId) : null;
+    if (heading && typeof heading.focus === 'function') heading.focus();
+  }
+
+  /**
+   * DEV-09: while a submission is in flight, close/edit/back controls are
+   * disabled and the dialog's native `cancel` event (Esc key) is suppressed so
+   * an order can't be silently orphaned mid-request.
+   */
+  function setCheckoutSubmitGuard(isSubmitting) {
+    if (checkoutAttempt) checkoutAttempt.isSubmitting = isSubmitting;
+    ['checkout-close', 'checkout-edit', 'checkout-back-to-review', 'checkout-continue'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = isSubmitting;
+    });
+    const notice = document.getElementById('form-error');
+    if (isSubmitting && notice && !notice.textContent) notice.textContent = '';
+  }
+
   function openCheckoutReview() {
     const state = normalizedCheckoutState();
-    const error = document.getElementById('checkout-error');
     if (!state.isValid) {
-      if (error) error.textContent = currentLang === 'en' ? 'Choose a valid product before continuing.' : 'Pilih produk yang valid sebelum melanjutkan.';
+      // DEV-19: this message used to be written into #checkout-error inside a
+      // dialog that this path never opens, so nobody ever saw it. Route it
+      // through the order section's existing live region instead.
+      announceToScreenReader(ck('checkoutInvalidCart'));
       scrollToSection(cart.length ? '#custom-builder' : '#collection');
       return;
     }
-    if (!checkoutAttempt || checkoutAttempt.submitted) checkoutAttempt = { reference: generateOrderReference() };
-    checkoutAttempt.state = state;
-    const en = currentLang === 'en';
     const modal = document.getElementById('checkout-modal');
     if (!modal) return;
-    document.getElementById('checkout-review').hidden = false;
-    document.getElementById('checkout-form-step').hidden = true;
-    document.getElementById('checkout-success').hidden = true;
-    setText('#checkout-eyebrow', en ? 'Order review' : 'Tinjau pesanan');
-    setText('#checkout-title', en ? 'Check your order details' : 'Periksa detail pesanan Anda');
-    setText('#checkout-reference-label', en ? 'Order reference' : 'Referensi pesanan');
+
+    // DEV-04: reuse the same reference + idempotency key across repeated
+    // reviews of an unsubmitted, unchanged order (so a retry stays one
+    // attempt); only start a fresh attempt once the order has actually
+    // changed, or the previous attempt already succeeded.
+    const fingerprint = JSON.stringify({
+      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
+      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
+    });
+    if (!checkoutAttempt || checkoutAttempt.submitted || checkoutAttempt.fingerprint !== fingerprint) {
+      checkoutAttempt = { reference: generateOrderReference(), idempotencyKey: generateIdempotencyKey(), fingerprint };
+    }
+    checkoutAttempt.state = state;
+
+    setText('#checkout-eyebrow', ck('checkoutReviewEyebrow'));
+    setText('#checkout-reference-label', ck('checkoutReferenceLabel'));
     setText('#checkout-reference', checkoutAttempt.reference);
     const list = document.getElementById('checkout-items');
+    const cartTotals = computeCartTotals(cart);
     if (list) {
       list.textContent = '';
       // Show a per-line price here (UX-13) — richer than state.items, which
       // stays plain text for the WhatsApp/submission summaries that reuse it.
-      const cartTotals = computeCartTotals(cart);
       cart.forEach((line, idx) => {
         const li = document.createElement('li');
         const lineTotal = cartTotals.lines[idx] ? cartTotals.lines[idx].total : 0;
@@ -2854,73 +3233,417 @@
         list.appendChild(li);
       });
     }
-    setText('#checkout-subtotal-label', en ? 'Product subtotal' : 'Subtotal produk');
-    setText('#checkout-subtotal', formatRp(state.productSubtotal));
-    setText('#checkout-discount-label', en ? 'Discount' : 'Potongan');
-    setText('#checkout-discount', `− ${formatRp(state.discountAmount)}`);
-    const discountRow = document.getElementById('checkout-discount-row');
-    if (discountRow) discountRow.hidden = state.discountAmount === 0;
-    setText('#checkout-total-label', en ? 'Estimated product total' : 'Estimasi total produk');
+    setText('#checkout-subtotal-label', ck('checkoutSubtotalLabel'));
+    // DEV-17: the wrap/ribbon fee gets its own row instead of being folded
+    // silently into the subtotal — only custom bouquets carry a wrap fee.
+    setText('#checkout-subtotal', formatRp(cartTotals.subtotal));
+    setText('#checkout-wrap-fee-label', ck('checkoutWrapFeeLabel'));
+    setText('#checkout-wrap-fee', formatRp(cartTotals.wrapFee));
+    const wrapFeeRow = document.getElementById('checkout-wrap-fee-row');
+    if (wrapFeeRow) wrapFeeRow.hidden = !(cartTotals.wrapFee > 0);
+    setText('#checkout-card-fee-label', ck('checkoutCardFeeLabel'));
+    setText('#checkout-card-fee', formatRp(state.messageCardFee));
+    const cardFeeRow = document.getElementById('checkout-card-fee-row');
+    if (cardFeeRow) cardFeeRow.hidden = !state.messageCardEnabled;
+    setText('#checkout-total-label', ck('checkoutTotalLabel'));
     setText('#checkout-total', formatRp(state.estimatedProductTotal));
+    setText('#checkout-delivery-row-label', ck('checkoutDeliveryRowLabel'));
+    setText('#checkout-delivery-row-value', ck('checkoutDeliveryRowValue'));
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    const cardNoteText = orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
+    const en = currentLang === 'en';
+    const cardNoteText = state.messageCardEnabled && orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
     setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
-    setText('#checkout-notice', en ? 'No payment is required at this stage. We will confirm your address, delivery fee, and final total through WhatsApp.' : 'Belum ada pembayaran pada tahap ini. Kami akan mengonfirmasi alamat, ongkos kirim, dan total akhir melalui WhatsApp.');
-    setText('#checkout-edit', en ? 'Edit order' : 'Ubah pesanan');
-    setText('#checkout-continue', en ? 'Continue order' : 'Lanjutkan pemesanan');
+    setText('#checkout-notice', ck('checkoutNotice'));
+    setText('#checkout-edit', ck('checkoutEditOrder'));
+    setText('#checkout-continue', ck('checkoutContinueOrder'));
+    setText('#checkout-review-footer-total', formatRp(state.estimatedProductTotal));
+    const error = document.getElementById('checkout-error');
     if (error) error.textContent = '';
+    setCheckoutSubmitGuard(false);
+    // DEV-14: showModal() itself moves focus to the dialog's first focusable
+    // element (the close button) as part of opening — call it BEFORE setting
+    // our own heading focus, or the browser's native focus would win.
     if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+    showCheckoutStep('checkout-review');
   }
 
-  function showRecordedOrder(payload) {
+  /**
+   * Reopen the dialog on an already-submitted attempt (DEV-10): the success
+   * screen, not a brand-new review, since the order is already recorded.
+   */
+  function reopenCheckoutSuccess() {
+    const modal = document.getElementById('checkout-modal');
+    if (!modal || !checkoutAttempt || !checkoutAttempt.submitted) return;
+    renderSuccessStep();
+    if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+    showCheckoutStep('checkout-success');
+  }
+
+  function openCheckoutDialog() {
+    if (checkoutAttempt && checkoutAttempt.submitted) {
+      reopenCheckoutSuccess();
+      return;
+    }
+    openCheckoutReview();
+  }
+
+  function renderSuccessStep() {
+    if (!checkoutAttempt) return;
+    setText('#checkout-success-eyebrow', ck('checkoutSuccessEyebrow'));
+    setText('#checkout-success-title', ck('checkoutSuccessTitle'));
+    setText('#checkout-success-copy', checkoutAttempt.duplicate ? ck('checkoutDuplicateCopy') : ck('checkoutSuccessCopy'));
+    setText('#success-reference-label', ck('checkoutReferenceLabel'));
+    setText('#success-reference', checkoutAttempt.reference);
+    setText('#success-order-label', ck('checkoutSuccessOrderLabel'));
+    const itemsList = document.getElementById('success-items');
+    if (itemsList) {
+      itemsList.textContent = '';
+      (checkoutAttempt.state.items || []).forEach(itemLabel => {
+        const li = document.createElement('li');
+        li.textContent = itemLabel;
+        itemsList.appendChild(li);
+      });
+    }
+    setText('#success-total-label', ck('checkoutSuccessTotalLabel'));
+    setText('#success-total', formatRp(checkoutAttempt.state.estimatedProductTotal || 0));
+    setText('#checkout-whatsapp', ck('checkoutWhatsappButton'));
+    setText('#copy-reference', ck('checkoutCopyReference'));
+    setText('#checkout-start-new', ck('checkoutStartNewOrder'));
+    const wa = document.getElementById('checkout-whatsapp');
+    if (wa) {
+      if (checkoutAttempt.lastPayload) {
+        // Fresh submission — rebuild with the real buyer name/date just entered.
+        const payload = checkoutAttempt.lastPayload;
+        const url = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+        wa.href = url;
+        checkoutAttempt.waUrl = url;
+      } else if (checkoutAttempt.waUrl) {
+        // Recovered from the recent-order banner — reuse the URL saved at
+        // submit time rather than rebuilding one without a buyer name.
+        wa.href = checkoutAttempt.waUrl;
+      }
+    }
+    const copyStatus = document.getElementById('copy-status');
+    if (copyStatus) copyStatus.textContent = '';
+    const fallback = document.getElementById('copy-fallback-text');
+    if (fallback) fallback.hidden = true;
+  }
+
+  function showRecordedOrder(payload, isDuplicate = false) {
     if (!checkoutAttempt) return;
     checkoutAttempt.submitted = true;
-    document.getElementById('checkout-review').hidden = true;
-    document.getElementById('checkout-form-step').hidden = true;
-    document.getElementById('checkout-success').hidden = false;
-    const en = checkoutAttempt.state.language === 'en';
-    setText('#checkout-success-title', en ? 'Your order request has been recorded.' : 'Pesanan Anda sudah dicatat.');
-    setText('#checkout-success-copy', en ? 'Continue to WhatsApp so our studio can confirm availability, delivery, and payment.' : 'Lanjutkan ke WhatsApp agar studio kami dapat mengonfirmasi ketersediaan, pengiriman, dan pembayaran.');
-    setText('#success-reference-label', en ? 'Order reference' : 'Referensi pesanan');
-    setText('#success-reference', checkoutAttempt.reference);
-    const wa = document.getElementById('checkout-whatsapp');
-    if (wa) wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
+    checkoutAttempt.duplicate = isDuplicate;
+    checkoutAttempt.lastPayload = payload;
+    renderSuccessStep();
+    setCheckoutSubmitGuard(false);
+    showCheckoutStep('checkout-success');
+    saveRecentOrder();
+    renderRecentOrderBanner();
+  }
+
+  /**
+   * Themed date picker for #preferred-date-input (checkoutDateLabel field).
+   *
+   * The native <input type="date"> pop-up renders using the OS/browser's
+   * own dark-or-light chrome (see the screenshot in the redesign request),
+   * which clashes with the site's cream/green theme and can't be restyled
+   * with CSS. The field itself stays a real, validated text input — value
+   * format, `required`, and `min` all keep working exactly as before, so
+   * typing "2026-09-15" directly (as tests/run-browser-runner.js does via
+   * page.fill) still works — this only replaces the *pop-up* with an
+   * on-brand calendar built from the same theme tokens as the rest of the
+   * checkout form.
+   */
+  const DATE_PICKER_MONTHS = {
+    id: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  };
+  const DATE_PICKER_WEEKDAYS = {
+    id: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
+    en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  };
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  let datePickerViewYear = null;
+  let datePickerViewMonth = null; // 0-11
+  let datePickerFocusISO = null;
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function toISODate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+  function todayLocalISO() {
+    const d = new Date();
+    return toISODate(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  /**
+   * Mirrors the server's isValidLeadTimeDate() range check (see
+   * CONFIGURE-SUBMISSION-ENDPOINT.md) as a client-side custom validity, since
+   * a plain text field gets no native `rangeUnderflow` for a `min` attribute.
+   */
+  function updateDateFieldValidity(field) {
+    const value = (field.value || '').trim();
+    if (!value || !ISO_DATE_RE.test(value)) { field.setCustomValidity(''); return; }
+    field.setCustomValidity(field.min && value < field.min ? 'date-out-of-range' : '');
+  }
+
+  function isDatePickerOpen() {
+    const popover = document.getElementById('date-popover');
+    return !!popover && !popover.hidden;
+  }
+
+  function closeDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (popover) popover.hidden = true;
+    if (input) input.setAttribute('aria-expanded', 'false');
+  }
+
+  function renderDatePickerCalendar() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input) return;
+    const lang = currentLang === 'en' ? 'en' : 'id';
+    const months = DATE_PICKER_MONTHS[lang];
+    const weekdays = DATE_PICKER_WEEKDAYS[lang];
+    const minISO = input.min || '';
+    const selectedISO = ISO_DATE_RE.test(input.value) ? input.value : '';
+    const todayISO = todayLocalISO();
+
+    const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
+    const daysInMonth = new Date(datePickerViewYear, datePickerViewMonth + 1, 0).getDate();
+
+    if (!datePickerFocusISO || datePickerFocusISO.slice(0, 7) !== `${datePickerViewYear}-${pad2(datePickerViewMonth + 1)}`) {
+      const selectedInView = selectedISO && selectedISO.slice(0, 7) === `${datePickerViewYear}-${pad2(datePickerViewMonth + 1)}`;
+      const firstOfMonthISO = toISODate(datePickerViewYear, datePickerViewMonth, 1);
+      // Default the roving-tabindex cell to the 1st of the month, unless
+      // that's disabled (before `min`) — a disabled <button> can't take
+      // focus, so land on the first selectable day instead.
+      datePickerFocusISO = selectedInView ? selectedISO : (minISO > firstOfMonthISO ? minISO : firstOfMonthISO);
+    }
+
+    let cellsHtml = '';
+    for (let i = 0; i < startWeekday; i++) cellsHtml += `<span class="date-popover-day is-empty" aria-hidden="true"></span>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = toISODate(datePickerViewYear, datePickerViewMonth, day);
+      const disabled = minISO && iso < minISO;
+      const isSelected = iso === selectedISO;
+      const isToday = iso === todayISO;
+      const classes = ['date-popover-day'];
+      if (isSelected) classes.push('is-selected');
+      if (isToday) classes.push('is-today');
+      cellsHtml += `<button type="button" class="${classes.join(' ')}" data-date="${iso}" ${disabled ? 'disabled' : ''} tabindex="${iso === datePickerFocusISO ? '0' : '-1'}" aria-selected="${isSelected}"${isToday ? ' aria-current="date"' : ''}>${day}</button>`;
+    }
+
+    const minMonthStamp = minISO ? Number(minISO.slice(0, 4)) * 12 + Number(minISO.slice(5, 7)) - 1 : -Infinity;
+    const viewMonthStamp = datePickerViewYear * 12 + datePickerViewMonth;
+
+    popover.innerHTML = `
+      <div class="date-popover-header">
+        <button type="button" class="date-popover-nav" id="date-popover-prev" aria-label="${lang === 'en' ? 'Previous month' : 'Bulan sebelumnya'}" ${viewMonthStamp <= minMonthStamp ? 'disabled' : ''}>‹</button>
+        <span class="date-popover-title">${months[datePickerViewMonth]} ${datePickerViewYear}</span>
+        <button type="button" class="date-popover-nav" id="date-popover-next" aria-label="${lang === 'en' ? 'Next month' : 'Bulan berikutnya'}">›</button>
+      </div>
+      <div class="date-popover-weekdays">${weekdays.map(w => `<span>${w}</span>`).join('')}</div>
+      <div class="date-popover-days" role="grid" aria-label="${months[datePickerViewMonth]} ${datePickerViewYear}">${cellsHtml}</div>
+      <div class="date-popover-footer">
+        <button type="button" class="btn-clear-cart" id="date-popover-clear">${lang === 'en' ? 'Clear' : 'Bersihkan'}</button>
+      </div>`;
+  }
+
+  function focusDatePickerCell(iso) {
+    const cell = document.querySelector(`.date-popover-day[data-date="${iso}"]`);
+    if (cell) cell.focus();
+  }
+
+  function openDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input) return;
+    const raw = input.value.trim();
+    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayLocalISO()) ? input.min : todayLocalISO());
+    datePickerViewYear = Number(base.slice(0, 4));
+    datePickerViewMonth = Number(base.slice(5, 7)) - 1;
+    datePickerFocusISO = null;
+    renderDatePickerCalendar();
+    popover.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    positionDatePicker();
+  }
+
+  /**
+   * The popover is `position: fixed` (see styles.css for why), so its
+   * on-screen placement has to be computed from the field's current
+   * viewport position rather than left to normal document flow.
+   */
+  function positionDatePicker() {
+    const popover = document.getElementById('date-popover');
+    const input = document.getElementById('preferred-date-input');
+    if (!popover || !input || popover.hidden) return;
+    const rect = input.getBoundingClientRect();
+    let left = rect.left;
+    const maxLeft = window.innerWidth - popover.offsetWidth - 16;
+    if (left > maxLeft) left = Math.max(16, maxLeft);
+    popover.style.top = `${rect.bottom + 6}px`;
+    popover.style.left = `${left}px`;
+  }
+
+  function changeDatePickerMonth(delta) {
+    datePickerViewMonth += delta;
+    if (datePickerViewMonth < 0) { datePickerViewMonth = 11; datePickerViewYear -= 1; }
+    else if (datePickerViewMonth > 11) { datePickerViewMonth = 0; datePickerViewYear += 1; }
+    datePickerFocusISO = null;
+    renderDatePickerCalendar();
+    const focusable = document.querySelector('.date-popover-day[tabindex="0"]');
+    if (focusable) focusable.focus();
+  }
+
+  function moveDatePickerFocus(deltaDays) {
+    const input = document.getElementById('preferred-date-input');
+    const current = datePickerFocusISO || todayLocalISO();
+    const [y, m, d] = current.split('-').map(Number);
+    const next = new Date(y, m - 1, d + deltaDays);
+    const nextISO = toISODate(next.getFullYear(), next.getMonth(), next.getDate());
+    if (input && input.min && nextISO < input.min) return;
+    datePickerFocusISO = nextISO;
+    datePickerViewYear = next.getFullYear();
+    datePickerViewMonth = next.getMonth();
+    renderDatePickerCalendar();
+    focusDatePickerCell(nextISO);
+  }
+
+  function setDatePickerValue(iso) {
+    const input = document.getElementById('preferred-date-input');
+    if (!input) return;
+    input.value = iso;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    closeDatePicker();
+    input.focus();
+  }
+
+  function initDatePicker() {
+    const field = document.getElementById('date-field');
+    const input = document.getElementById('preferred-date-input');
+    if (!field || !input || document.getElementById('date-popover')) return;
+
+    const popover = document.createElement('div');
+    popover.className = 'date-popover';
+    popover.id = 'date-popover';
+    popover.hidden = true;
+    popover.setAttribute('role', 'dialog');
+    field.appendChild(popover);
+
+    input.addEventListener('input', () => updateDateFieldValidity(input));
+    input.addEventListener('click', () => { if (!isDatePickerOpen()) openDatePicker(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!isDatePickerOpen()) openDatePicker();
+        const focusable = popover.querySelector('.date-popover-day[tabindex="0"]');
+        if (focusable) focusable.focus();
+      } else if (e.key === 'Escape' && isDatePickerOpen()) {
+        e.preventDefault();
+        closeDatePicker();
+      }
+    });
+
+    popover.addEventListener('click', (e) => {
+      const dayBtn = e.target.closest('.date-popover-day[data-date]');
+      if (dayBtn) { if (!dayBtn.disabled) setDatePickerValue(dayBtn.dataset.date); return; }
+      if (e.target.closest('#date-popover-prev')) { changeDatePickerMonth(-1); return; }
+      if (e.target.closest('#date-popover-next')) { changeDatePickerMonth(1); return; }
+      if (e.target.closest('#date-popover-clear')) { setDatePickerValue(''); }
+    });
+
+    popover.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeDatePicker(); input.focus(); return; }
+      if (!e.target.classList.contains('date-popover-day')) return;
+      const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      if (e.key in moves) { e.preventDefault(); moveDatePickerFocus(moves[e.key]); return; }
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.disabled) {
+        e.preventDefault();
+        setDatePickerValue(e.target.dataset.date);
+      }
+    });
+
+    // Prev/next month re-render the popover's innerHTML from inside its own
+    // click handler, which destroys e.target (the button just clicked)
+    // while the event is still bubbling. By the time it reaches here,
+    // `field.contains(e.target)` would see a detached node and wrongly
+    // read as "outside". composedPath() is captured before dispatch and
+    // stays accurate across that kind of mid-event DOM mutation.
+    document.addEventListener('click', (e) => {
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
+    });
+    document.addEventListener('focusin', (e) => {
+      if (isDatePickerOpen() && !e.composedPath().includes(field)) closeDatePicker();
+    });
+    // Fixed-position popover: track scroll/resize to keep it anchored to the
+    // field. This also covers the browser's own "scroll the newly focused
+    // field into view" behaviour, which otherwise fires right after opening
+    // and would immediately misplace (or, if this instead closed on scroll,
+    // instantly close) a popover that just opened.
+    document.querySelector('.checkout-panel-scroll')?.addEventListener('scroll', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
+    window.addEventListener('resize', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
   }
 
   function localizeCheckoutForm() {
-    const en = currentLang === 'en';
-    const copy = en ? {
-      '#checkout-form-eyebrow': 'Order form', '#checkout-form-title': 'Complete your order details', '#buyer-legend': 'Buyer',
-      '#buyer-name-label': 'Buyer name', '#buyer-phone-label': 'Buyer WhatsApp number', '#buyer-help': 'We use this number to confirm your order, delivery fee, and payment.',
-      '#optional-email': '(optional)', '#recipient-legend': 'Recipient', '#order-for-label': 'Who is this order for?', '#recipient-name-label': 'Recipient name',
-      '#recipient-phone-label': 'Recipient WhatsApp number', '#recipient-permission-label': 'May we contact the recipient?', '#recipient-help': 'Recipient details are used only to coordinate delivery.',
-      '#delivery-legend': 'Delivery', '#address-label': 'Complete delivery address', '#city-label': 'City or regency', '#postal-label': 'Postal code',
-      '#directions-label': 'Location directions (optional)', '#date-label': 'Preferred date', '#window-label': 'Time (optional)',
-      '#delivery-help': 'The date and time are preferences and will be confirmed through WhatsApp.', '#details-legend': 'Gift details and notes',
-      '#sender-label': 'Sender name on card (optional)', '#anonymous-label': 'Send anonymously', '#notes-label': 'Additional notes (optional)',
-      '#price-note': 'Requests that affect the price will be confirmed before payment.',
-      '#ack-label': 'I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.', '#save-order': 'Save order'
-    } : {
-      '#checkout-form-eyebrow': 'Formulir pesanan', '#checkout-form-title': 'Lengkapi detail pesanan', '#buyer-legend': 'Data pemesan',
-      '#buyer-name-label': 'Nama pemesan', '#buyer-phone-label': 'Nomor WhatsApp pemesan', '#buyer-help': 'Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan pembayaran.',
-      '#optional-email': '(opsional)', '#recipient-legend': 'Penerima', '#order-for-label': 'Pesanan ini untuk siapa?', '#recipient-name-label': 'Nama penerima',
-      '#recipient-phone-label': 'Nomor WhatsApp penerima', '#recipient-permission-label': 'Bolehkah kami menghubungi penerima?', '#recipient-help': 'Detail penerima hanya digunakan untuk koordinasi pengiriman.',
-      '#delivery-legend': 'Pengiriman', '#address-label': 'Alamat lengkap pengiriman', '#city-label': 'Kota atau kabupaten', '#postal-label': 'Kode pos',
-      '#directions-label': 'Patokan atau petunjuk lokasi (opsional)', '#date-label': 'Tanggal yang diinginkan', '#window-label': 'Waktu (opsional)',
-      '#delivery-help': 'Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui WhatsApp.', '#details-legend': 'Detail hadiah dan catatan',
-      '#sender-label': 'Nama pengirim pada kartu (opsional)', '#anonymous-label': 'Kirim secara anonim', '#notes-label': 'Catatan tambahan (opsional)',
-      '#price-note': 'Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.',
-      '#ack-label': 'Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.', '#save-order': 'Simpan pesanan'
+    const copy = {
+      '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
+      '#buyer-name-label': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
+      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label': `${ck('checkoutLocationTypeLabel')} `, '#regency-label': `${ck('checkoutRegencyLabel')} `,
+      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label': `${ck('checkoutAddressLabel')} `, '#city-label': `${ck('checkoutCityLabel')} `, '#postal-label': `${ck('checkoutPostalLabel')} `,
+      '#pickup-help': ck('checkoutPickupHelp'),
+      '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
+      '#date-label': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
+      '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
+      '#checkout-back-to-review': ck('checkoutBackToReview'),
+      '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
+      '#buyer-name-required': ck('checkoutRequiredMark'), '#buyer-phone-required': ck('checkoutRequiredMark'),
+      '#location-type-required': ck('checkoutRequiredMark'), '#regency-required': ck('checkoutRequiredMark'),
+      '#address-required': ck('checkoutRequiredMark'), '#city-required': ck('checkoutRequiredMark'),
+      '#postal-required': ck('checkoutRequiredMark'), '#date-required': ck('checkoutRequiredMark')
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
     const form = document.getElementById('checkout-form');
+    const en = currentLang === 'en';
     const setOptions = (name, options) => {
       const select = form.elements[name];
-      options.forEach((label, index) => { select.options[index].textContent = label; });
+      options.forEach((label, index) => { if (select.options[index]) select.options[index].textContent = label; });
     };
-    setOptions('order_for', en ? ['For myself', 'Someone else or a gift'] : ['Untuk saya sendiri', 'Untuk orang lain atau hadiah']);
-    setOptions('recipient_contact_permission', en ? ['Choose one', 'Yes', 'Contact me first', 'Do not contact the recipient; it is a surprise'] : ['Pilih satu', 'Ya, boleh', 'Hubungi saya terlebih dahulu', 'Jangan hubungi penerima; ini kejutan']);
-    setOptions('preferred_window', en ? ['Flexible', 'Morning', 'Afternoon', 'Evening'] : ['Fleksibel', 'Pagi', 'Siang', 'Sore']);
+    setOptions('location_type', [ck('checkoutLocationBali'), ck('checkoutLocationOutsideBali')]);
+    setOptions('delivery_method', [ck('checkoutDeliveryGrabGojek'), ck('checkoutDeliverySelfPickup')]);
+
+    const regencySelect = form.elements['regency'];
+    if (regencySelect) {
+      const regencies = siteData.baliRegencies || [];
+      const currentValue = regencySelect.value;
+      while (regencySelect.options.length > 1) regencySelect.remove(1);
+      regencySelect.options[0].textContent = ck('checkoutRegencyChoose');
+      regencies.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        regencySelect.appendChild(opt);
+      });
+      if (regencies.includes(currentValue)) regencySelect.value = currentValue;
+    }
+
+    // DEV-11: the date picker enforces today + the owner-configured production
+    // lead time, not just "today" — mirrored server-side (see
+    // CONFIGURE-SUBMISSION-ENDPOINT.md's MINIMUM_LEAD_DAYS).
+    const dateInput = form.elements['preferred_date'];
+    if (dateInput) {
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() + (siteData.minimumLeadDays ?? 0));
+      dateInput.min = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
+      updateDateFieldValidity(dateInput);
+      if (document.getElementById(fieldErrorId(dateInput))) {
+        setFieldError(dateInput, dateInput.checkValidity() ? '' : fieldValidationMessage(dateInput));
+      }
+    }
+    setText('#checkout-form-footer-total', checkoutAttempt ? formatRp(checkoutAttempt.state.estimatedProductTotal) : '');
   }
 
   /**
@@ -2949,19 +3672,18 @@
   }
 
   function fieldValidationMessage(field) {
-    const en = currentLang === 'en';
     if (field.validity.valueMissing) {
-      if (field.type === 'checkbox') return en ? 'Please check this box to continue.' : 'Centang kotak ini untuk melanjutkan.';
-      if (field.tagName === 'SELECT') return en ? 'Please choose an option.' : 'Silakan pilih salah satu.';
-      return en ? 'This field is required.' : 'Kolom ini wajib diisi.';
+      if (field.type === 'checkbox') return ck('checkoutErrCheckbox');
+      if (field.tagName === 'SELECT') return ck('checkoutErrSelect');
+      return ck('checkoutErrRequired');
     }
     if (field.validity.patternMismatch) {
-      return en ? 'Enter a valid WhatsApp number.' : 'Masukkan nomor WhatsApp yang valid.';
+      return field.name === 'postal_code' ? ck('checkoutErrPostalPattern') : ck('checkoutErrPattern');
     }
-    if (field.validity.typeMismatch) {
-      return en ? 'Enter a valid email address.' : 'Masukkan alamat email yang valid.';
+    if (field.name === 'preferred_date' && field.validity.customError) {
+      return ck('checkoutErrDateRange');
     }
-    return en ? 'This field needs attention.' : 'Kolom ini perlu diperiksa.';
+    return ck('checkoutErrGeneric');
   }
 
   function setFieldError(field, message) {
@@ -2993,41 +3715,137 @@
     return invalidFields;
   }
 
+  /**
+   * DEV-07: load and render the Cloudflare Turnstile widget only once a
+   * public site key is configured (OWNER-05) — the checkout form works
+   * without it, so setup can proceed before Turnstile is ready.
+   */
+  function initTurnstile() {
+    const siteKey = String((siteData.store && siteData.store.turnstileSiteKey) || '').trim();
+    const container = document.getElementById('turnstile-widget');
+    if (!siteKey || !container || typeof document.createElement !== 'function') return;
+    window.__alxanthiaTurnstileReady = function () {
+      if (!window.turnstile) return;
+      turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: siteKey,
+        callback: (token) => { turnstileToken = token; },
+        'expired-callback': () => { turnstileToken = ''; },
+        'error-callback': () => { turnstileToken = ''; }
+      });
+    };
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__alxanthiaTurnstileReady&render=explicit';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
+  function resetTurnstile() {
+    turnstileToken = '';
+    if (window.turnstile && turnstileWidgetId !== null) {
+      try { window.turnstile.reset(turnstileWidgetId); } catch (e) {}
+    }
+  }
+
+  /**
+   * DEV-08: a submission gets at most 20 seconds before we treat it as
+   * ambiguous rather than leaving the customer staring at "Saving..." forever.
+   */
+  const CHECKOUT_TIMEOUT_MS = 20000;
+
   async function submitWebsiteOrder(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
     const invalidFields = validateCheckoutForm(form);
     if (invalidFields.length > 0) {
-      const en = currentLang === 'en';
-      error.textContent = en
-        ? `${invalidFields.length} field${invalidFields.length === 1 ? '' : 's'} need${invalidFields.length === 1 ? 's' : ''} to be completed.`
-        : `${invalidFields.length} kolom perlu dilengkapi.`;
+      error.textContent = ck('checkoutFieldsIncomplete', { count: invalidFields.length });
       invalidFields[0].focus();
       return;
     }
     error.textContent = '';
     const endpoint = String(siteData.store.orderSubmissionUrl || '').trim();
     if (!endpoint) {
-      error.textContent = currentLang === 'en' ? 'Order saving is not configured yet. Please contact the studio.' : 'Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.';
+      error.textContent = ck('checkoutNotConfigured');
       return;
     }
+    // DEV-04: a prior 409 means this exact attempt (same idempotency key) is
+    // stuck in a genuine conflict — stop instead of hammering the endpoint.
+    if (checkoutAttempt.conflicted) {
+      error.textContent = ck('checkoutConflictFailure', { reference: checkoutAttempt.reference });
+      return;
+    }
+    const turnstileConfigured = !!String((siteData.store && siteData.store.turnstileSiteKey) || '').trim();
+    if (turnstileConfigured && !turnstileToken) {
+      error.textContent = ck('checkoutTurnstileRequired');
+      return;
+    }
+
     const button = document.getElementById('save-order');
-    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state);
+    const payload = buildOrderSubmission(new FormData(form), checkoutAttempt.reference, checkoutAttempt.state, checkoutAttempt.idempotencyKey);
+    setCheckoutSubmitGuard(true);
     button.disabled = true;
-    button.textContent = currentLang === 'en' ? 'Saving…' : 'Menyimpan…';
+    button.textContent = ck('checkoutSaving');
     error.textContent = '';
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS) : null;
+
+    // Every branch below sets `outcome` to one of: success | duplicate |
+    // conflict | ambiguous | connection | rejected (DEV-08's typed failures).
+    let outcome;
+    let response = null;
     try {
-      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      if (result.ok !== true || (result.order_reference && result.order_reference !== checkoutAttempt.reference)) throw new Error('Invalid acknowledgement');
-      showRecordedOrder(payload);
-    } catch (e) {
-      error.textContent = currentLang === 'en' ? `We could not verify that the order was saved. Please contact the studio with reference ${checkoutAttempt.reference} before trying again.` : `Kami belum dapat memastikan pesanan tersimpan. Hubungi studio dengan referensi ${checkoutAttempt.reference} sebelum mencoba lagi.`;
-    } finally {
-      button.disabled = false;
-      button.textContent = currentLang === 'en' ? 'Save order' : 'Simpan pesanan';
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller ? controller.signal : undefined
+      });
+    } catch (networkError) {
+      outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
+    }
+    if (timeoutId) clearTimeout(timeoutId);
+
+    if (!outcome) {
+      if (response.status === 409) {
+        outcome = 'conflict';
+      } else if (response.status >= 500) {
+        outcome = 'ambiguous';
+      } else if (!response.ok) {
+        outcome = 'rejected';
+      } else {
+        try {
+          const result = await response.json();
+          // DEV-06: both the success flag and the exact matching reference
+          // are required — `{ "ok": true }` alone is no longer accepted.
+          if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
+            outcome = result.duplicate === true ? 'duplicate' : 'success';
+          } else {
+            outcome = 'ambiguous';
+          }
+        } catch (parseError) {
+          outcome = 'ambiguous';
+        }
+      }
+    }
+
+    setCheckoutSubmitGuard(false);
+    button.disabled = false;
+    button.textContent = ck('checkoutSaveOrder');
+    resetTurnstile(); // a Turnstile token is single-use regardless of outcome
+
+    if (outcome === 'success' || outcome === 'duplicate') {
+      showRecordedOrder(payload, outcome === 'duplicate');
+    } else if (outcome === 'conflict') {
+      checkoutAttempt.conflicted = true;
+      error.textContent = ck('checkoutConflictFailure', { reference: checkoutAttempt.reference });
+    } else if (outcome === 'connection') {
+      error.textContent = ck('checkoutConnectionFailure');
+    } else if (outcome === 'rejected') {
+      error.textContent = ck('checkoutRejectedFailure');
+    } else {
+      error.textContent = ck('checkoutAmbiguousFailure', { reference: checkoutAttempt.reference });
     }
   }
 
@@ -3035,32 +3853,80 @@
     const modal = document.getElementById('checkout-modal');
     const trigger = document.getElementById('btn-checkout');
     if (!modal || !trigger) return;
-    trigger.addEventListener('click', openCheckoutReview);
-    document.getElementById('checkout-close').addEventListener('click', () => modal.close());
-    document.getElementById('checkout-edit').addEventListener('click', () => { modal.close(); scrollToSection('#order'); });
+    trigger.addEventListener('click', openCheckoutDialog);
+    document.getElementById('checkout-close').addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      modal.close();
+    });
+    // DEV-09: suppress Esc-to-close (the dialog's native `cancel` event)
+    // while a submission is in flight.
+    modal.addEventListener('cancel', (e) => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) e.preventDefault();
+    });
+    document.getElementById('checkout-edit').addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      modal.close();
+      scrollToSection('#order');
+    });
     document.getElementById('checkout-continue').addEventListener('click', () => {
-      document.getElementById('checkout-review').hidden = true;
-      document.getElementById('checkout-form-step').hidden = false;
       localizeCheckoutForm();
       setText('#checkout-form-summary', `${checkoutAttempt.reference} · ${checkoutAttempt.state.items.join('; ')} · ${formatRp(checkoutAttempt.state.estimatedProductTotal)}`);
-      document.querySelector('#checkout-form input')?.focus();
+      showCheckoutStep('checkout-form-step');
     });
-    const orderFor = document.querySelector('#checkout-form [name="order_for"]');
-    const giftFields = document.getElementById('gift-fields');
-    const toggleGiftFields = () => {
-      const isGift = orderFor.value === 'gift';
-      giftFields.hidden = !isGift;
-      giftFields.querySelectorAll('input, select').forEach(field => {
-        field.required = isGift;
-        // A field that was invalid while required must not keep showing
-        // a stale error once toggling makes it optional again.
-        if (document.getElementById(fieldErrorId(field))) {
+    document.getElementById('checkout-back-to-review')?.addEventListener('click', () => {
+      if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
+      openCheckoutReview();
+    });
+    document.getElementById('checkout-start-new')?.addEventListener('click', () => {
+      modal.close();
+      resetAllState();
+      persistCart();
+      clearRecentOrder();
+      renderAll();
+      renderRecentOrderBanner();
+      scrollToSection('#order');
+    });
+    const locationType = document.querySelector('#checkout-form [name="location_type"]');
+    const baliFields = document.getElementById('bali-fields');
+    const outsideBaliFields = document.getElementById('outside-bali-fields');
+    const toggleLocationFields = () => {
+      const isBali = locationType.value !== 'luar_bali';
+      baliFields.hidden = !isBali;
+      outsideBaliFields.hidden = isBali;
+      // DEV-12: the inactive branch is disabled (excluded from FormData) and
+      // cleared — the server must still enforce the branch independently,
+      // since client-side disabling is not security.
+      baliFields.querySelectorAll('input, select').forEach(field => {
+        field.required = isBali;
+        field.disabled = !isBali;
+        if (!isBali) {
+          field.value = field.tagName === 'SELECT' ? field.options[0].value : '';
+          setFieldError(field, '');
+        } else if (document.getElementById(fieldErrorId(field))) {
           setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
         }
       });
-      if (isGift) giftFields.querySelector('input')?.focus();
+      outsideBaliFields.querySelectorAll('input, textarea').forEach(field => {
+        field.required = !isBali;
+        field.disabled = isBali;
+        if (isBali) {
+          field.value = '';
+          setFieldError(field, '');
+        } else if (document.getElementById(fieldErrorId(field))) {
+          setFieldError(field, field.checkValidity() ? '' : fieldValidationMessage(field));
+        }
+      });
+      if (!isBali) outsideBaliFields.querySelector('textarea, input')?.focus();
     };
-    orderFor.addEventListener('change', toggleGiftFields);
+    locationType.addEventListener('change', toggleLocationFields);
+    toggleLocationFields();
+    const deliveryMethod = document.querySelector('#checkout-form [name="delivery_method"]');
+    const pickupHelp = document.getElementById('pickup-help');
+    const togglePickupHelp = () => {
+      if (pickupHelp) pickupHelp.hidden = deliveryMethod.value !== 'self_pickup';
+    };
+    deliveryMethod.addEventListener('change', togglePickupHelp);
+    togglePickupHelp();
     const checkoutFormEl = document.getElementById('checkout-form');
     checkoutFormEl.addEventListener('submit', submitWebsiteOrder);
     // Filling in a field that already shows an error clears only that
@@ -3073,13 +3939,45 @@
     };
     checkoutFormEl.addEventListener('input', revalidateOnInteraction);
     checkoutFormEl.addEventListener('change', revalidateOnInteraction);
+    initDatePicker();
     document.getElementById('copy-reference').addEventListener('click', async () => {
+      const fallback = document.getElementById('copy-fallback-text');
       try {
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(checkoutAttempt.reference);
-        setText('#copy-status', currentLang === 'en' ? 'Order reference copied.' : 'Referensi pesanan disalin.');
+        setText('#copy-status', ck('checkoutCopySuccess'));
+        if (fallback) fallback.hidden = true;
       } catch (e) {
-        setText('#copy-status', checkoutAttempt.reference);
+        // DEV-18: clipboard permission denied — show a selectable fallback
+        // with the reference, instead of a bare, unexplained value.
+        setText('#copy-status', '');
+        if (fallback) {
+          fallback.textContent = ck('checkoutCopyFallback', { reference: checkoutAttempt.reference });
+          fallback.hidden = false;
+          if (typeof fallback.focus === 'function') fallback.focus();
+        }
       }
+    });
+    document.getElementById('recent-order-view')?.addEventListener('click', () => {
+      const record = loadRecentOrder();
+      if (!record) return;
+      checkoutAttempt = {
+        reference: record.reference,
+        idempotencyKey: record.idempotencyKey,
+        submitted: true,
+        duplicate: false,
+        state: { language: record.language || currentLang, items: record.orderSummary ? record.orderSummary.split('; ') : [], estimatedProductTotal: record.total || 0 },
+        lastPayload: null,
+        waUrl: record.waUrl
+      };
+      renderSuccessStep();
+      setCheckoutSubmitGuard(false);
+      if (typeof modal.showModal === 'function') modal.showModal(); else modal.setAttribute('open', '');
+      showCheckoutStep('checkout-success');
+    });
+    document.getElementById('recent-order-dismiss')?.addEventListener('click', () => {
+      const banner = document.getElementById('recent-order-banner');
+      if (banner) banner.hidden = true;
     });
   }
 
@@ -3152,6 +4050,8 @@
     setupAuth();
     renderAll();
     initCheckout();
+    initTurnstile();
+    renderRecentOrderBanner();
     initScrollReveals();
 
     try {
@@ -3195,10 +4095,6 @@
       selectPackage: selectPackageOrder,
       bumpCustom: bumpCustomCount,
       bumpCustomAddition: bumpCustomAddition,
-      setCustomMessageCard: (checked) => {
-        customMessageCard = !!checked;
-        renderCustomBuilder();
-      },
       resetCustom: resetCustomCounts,
       useCustom: useCustomBouquet,
       selectWrap: selectWrap,
@@ -3207,18 +4103,23 @@
         renderOrderSection();
         persistCart();
       },
+      setMessageCardEnabled: (checked) => {
+        messageCardEnabled = !!checked;
+        renderOrderSection();
+        persistCart();
+      },
+      setOrderRecipientName: (name) => {
+        orderRecipientName = typeof name === 'string' ? name.slice(0, 120) : '';
+        renderOrderSection();
+        persistCart();
+      },
+      setOrderCardSenderName: (name) => {
+        orderCardSenderName = typeof name === 'string' ? name.slice(0, 120) : '';
+        renderOrderSection();
+        persistCart();
+      },
       resetToInitial: () => {
-        cart = [];
-        nextLineId = 1;
-        selectedFlower = 'Sunflower';
-        selectedPackage = 1;
-        customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 };
-        customAdditions = { rounded: 0, fern: 0 };
-        customMessageCard = false;
-        selectedWrap = 'kraft';
-        orderNote = '';
-        checkoutAttempt = null;
-        activeCategory = 'all';
+        resetAllState();
         renderAll();
       },
       getCustomTotals: getCustomTotals,
@@ -3227,6 +4128,7 @@
       generateOrderReference: generateOrderReference,
       buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
       buildOrderSubmission: buildOrderSubmission,
+      normalizeIndonesianPhone: normalizeIndonesianPhone,
       getCart: () => cart.map(l => ({ ...l })),
       _setCartForTest: (c) => { cart = c; },
       persistCart: persistCart,
@@ -3246,7 +4148,9 @@
         selectedPackage,
         customCounts: { ...customCounts },
         customAdditions: { ...customAdditions },
-        customMessageCard,
+        messageCardEnabled,
+        orderRecipientName,
+        orderCardSenderName,
         selectedWrap,
         orderNote,
         activeCategory,

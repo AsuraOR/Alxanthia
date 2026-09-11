@@ -1478,11 +1478,22 @@ body.lock-scroll-off {
 .custom-addition-copy strong { color: var(--text-dark); font: 500 18px/1.2 var(--font-serif); }
 .custom-addition-copy small { color: var(--text-muted); font: 600 var(--fs-label) var(--font-sans); }
 .custom-addition-stepper { grid-column: 1 / -1; justify-content: flex-end; padding-top: 4px; }
-.custom-message-card-option { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 15px; border: 1px solid var(--border-medium); background: var(--bg-main); cursor: pointer; }
-.custom-message-card-option input { flex: none; width: 19px; height: 19px; margin-top: 2px; accent-color: var(--accent-green); }
-.custom-message-card-option span { display: grid; gap: 4px; }
-.custom-message-card-option strong { color: var(--text-dark); font-size: 15px; }
-.custom-message-card-option small { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.message-card-option { margin-top: 14px; }
+#card-note-fields { margin-top: 14px; }
+
+#gift-details-label { margin-top: 28px; }
+.order-controls-col .form-row label { display: grid; gap: 7px; font-weight: 600; font-family: var(--font-sans); font-size: 14.5px; color: var(--text-dark); }
+.order-controls-col .form-row input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 0;
+  background: #fff;
+  color: var(--text-dark);
+  font: inherit;
+}
+.order-controls-col .form-row input:focus { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 
 .custom-stem-count {
   font-family: var(--font-sans);
@@ -2084,6 +2095,37 @@ body.lock-scroll-off {
 
 .summary-top-row .step-label {
   margin-bottom: 0;
+}
+
+.summary-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-clear-cart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--motion-duration-btn) ease;
+}
+
+.btn-clear-cart:hover {
+  color: #9d3e32;
 }
 
 .btn-edit-selection {
@@ -2909,6 +2951,90 @@ details.is-closing > .faq-answer-wrapper {
   }
 }
 
+/* Floating cart status pill: a small always-on-top indicator (top-right,
+   under the header) so an add/remove is visibly confirmed without forcing
+   a scroll back to the cart. Hidden while the cart is empty. */
+.floating-cart-pill {
+  position: fixed;
+  top: 86px;
+  right: 20px;
+  z-index: 85;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--accent-green);
+  color: var(--bg-main);
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(35, 32, 27, 0.2);
+  cursor: pointer;
+  transform: translateY(-8px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform var(--motion-duration-disclosure) var(--motion-ease-out),
+              opacity var(--motion-duration-disclosure) var(--motion-ease-out),
+              visibility var(--motion-duration-disclosure) var(--motion-ease-out),
+              background-color var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.floating-cart-pill.visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.floating-cart-pill:hover {
+  background: var(--accent-green-hover);
+}
+
+.floating-cart-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@keyframes floatingCartBump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+.floating-cart-pill.bump {
+  animation: floatingCartBump 380ms var(--motion-ease-out);
+}
+
+@media (max-width: 860px) {
+  /* The hero's two action buttons sit right under the header on mobile
+     (stacked, full-width), so a top-right pill would sit on top of them.
+     Bottom-right, clear of the slim sticky order bar, is safe instead. */
+  .floating-cart-pill {
+    top: auto;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    right: 14px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    transform: translateY(8px) scale(0.92);
+  }
+
+  .floating-cart-pill.visible {
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ==========================================================================
    RESPONSIVENESS & TOUCH REFINEMENTS
    ========================================================================== */
@@ -3692,8 +3818,13 @@ details.is-closing > .faq-answer-wrapper {
   }
 
   /* Disclosures: instant menu, instant order bar, instant FAQ */
-  .sticky-order-bar {
+  .sticky-order-bar,
+  .floating-cart-pill {
     transition: none !important;
+  }
+
+  .floating-cart-pill.bump {
+    animation: none !important;
   }
 
   .nav-group {
@@ -3938,11 +4069,16 @@ details.is-closing > .faq-answer-wrapper {
   color: var(--text-dark);
 }
 
-/* Lightweight checkout review and hosted Tally handoff */
-.checkout-modal { width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border-medium); background: var(--bg-main); color: var(--text-dark); }
+/* Native checkout dialog (DEV-16: fixed header, scrollable content, sticky mobile footer) */
+.checkout-modal { box-sizing: border-box; width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border-medium); background: var(--bg-main); color: var(--text-dark); overflow: hidden; }
 .checkout-modal::backdrop { background: rgba(25, 31, 24, .72); }
-.checkout-panel { position: relative; padding: clamp(24px, 5vw, 52px); overflow: auto; }
-.checkout-panel h2 { margin: 0 40px 20px 0; font-family: var(--font-serif); font-size: clamp(28px, 5vw, 44px); }
+.checkout-panel { box-sizing: border-box; display: flex; flex-direction: column; max-height: calc(100dvh - 24px); }
+.checkout-panel-header { position: relative; display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; padding: 14px clamp(20px, 5vw, 32px); border-bottom: 1px solid var(--border-medium); }
+.checkout-panel-header .image-modal-close { position: static; width: 40px; height: 40px; font-size: 20px; flex: 0 0 auto; }
+.checkout-step-indicator { margin: 0; color: var(--text-muted); font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.checkout-panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: clamp(20px, 5vw, 40px) clamp(20px, 5vw, 52px) clamp(20px, 5vw, 40px); -webkit-overflow-scrolling: touch; }
+.checkout-panel-scroll h2 { margin: 0 0 20px; font-family: var(--font-serif); font-size: clamp(28px, 5vw, 44px); }
+.checkout-panel-scroll h2:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 4px; }
 .checkout-reference { font-family: var(--font-mono); font-size: .82rem; letter-spacing: .04em; }
 .checkout-items { margin: 24px 0; padding-left: 20px; }
 .checkout-items li { margin: 8px 0; }
@@ -3950,25 +4086,123 @@ details.is-closing > .faq-answer-wrapper {
 .checkout-totals div:not([hidden]) { display: flex; justify-content: space-between; gap: 20px; padding: 7px 0; }
 .checkout-totals dd { margin: 0; text-align: right; }
 .checkout-total { font-weight: 700; }
+.checkout-delivery-row { color: var(--text-muted); font-size: .88rem; font-style: italic; }
 .checkout-notice { padding: 14px; background: rgba(126, 143, 124, .14); line-height: 1.55; }
 .checkout-error { min-height: 1.4em; color: #9d3e32; font-weight: 600; }
-.checkout-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.btn-checkout-primary, .btn-checkout-secondary { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 12px 18px; border: 1px solid var(--text-dark); font: 600 var(--fs-button) var(--font-sans); text-decoration: none; cursor: pointer; }
+.checkout-actions-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+.checkout-footer-total { font-size: 1.05rem; }
+/* DEV-16: a real non-scrolling footer region, outside .checkout-panel-scroll —
+   NOT position:sticky inside the scroll area, which used to visually overlap
+   the still-unscrolled fields behind it (the date/privacy/consent fields sit
+   later in the form than this footer, so a sticky-in-flow footer parked
+   itself over them instead of staying pinned below all of them). */
+.checkout-dialog-footer { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 14px clamp(20px, 5vw, 32px) calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border-medium); background: var(--bg-main); }
+.checkout-dialog-footer[hidden] { display: none; }
+.success-order-label { margin: 20px 0 4px; color: var(--text-muted); font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.success-order-total { margin: 4px 0 0; }
+.checkout-success-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 8px; }
+.btn-checkout-primary, .btn-checkout-secondary, .btn-checkout-tertiary { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 12px 18px; border: 1px solid var(--text-dark); font: 600 var(--fs-button) var(--font-sans); text-decoration: none; cursor: pointer; }
 .btn-checkout-primary { background: var(--text-dark); color: var(--bg-main); }
 .btn-checkout-secondary { background: transparent; color: var(--text-dark); }
+.btn-checkout-primary:disabled, .btn-checkout-secondary:disabled { opacity: .55; cursor: not-allowed; }
+.btn-checkout-tertiary { border-color: transparent; background: none; padding: 8px 0; color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px; min-height: auto; }
+.btn-checkout-tertiary:hover { color: var(--text-dark); }
+.copy-fallback-text { margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--border-medium); background: #fff; font-family: var(--font-mono); font-size: .85rem; user-select: all; -webkit-user-select: all; word-break: break-all; }
+.required-mark { color: var(--text-muted); font-weight: 400; font-size: .82em; text-transform: none; letter-spacing: normal; }
+.checkout-privacy-notice { margin-top: -6px; }
+.checkout-privacy-notice a { color: inherit; }
+.recent-order-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--border-medium); background: rgba(126, 143, 124, .1); font-size: .92rem; }
+.recent-order-banner[hidden] { display: none; }
+.recent-order-banner p { margin: 0; }
+.recent-order-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.recent-order-actions button { border: none; background: none; padding: 4px 2px; font: 600 .85rem var(--font-sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--text-dark); }
 .checkout-form { display: grid; gap: 20px; margin-top: 24px; }
 .checkout-form fieldset { display: grid; gap: 14px; margin: 0; padding: 18px; border: 1px solid var(--border-medium); }
+.checkout-form fieldset:disabled, .checkout-form [disabled] { opacity: .5; }
 .checkout-form legend { padding: 0 8px; font-family: var(--font-serif); font-size: 1.25rem; }
 .checkout-form label:not(.check-label) { display: grid; gap: 7px; font-weight: 600; }
 .checkout-form input:not([type="checkbox"]), .checkout-form select, .checkout-form textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--border-medium); border-radius: 0; background: #fff; color: var(--text-dark); font: inherit; }
 .checkout-form input:focus, .checkout-form select:focus, .checkout-form textarea:focus { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+#bali-fields:not([hidden]), #outside-bali-fields:not([hidden]) { display: grid; gap: 14px; }
 .form-help { margin: -4px 0 2px; color: var(--text-muted); font-size: .88rem; line-height: 1.45; }
 .field-error { display: block; margin: -3px 0 2px; color: #9d3e32; font-size: .85rem; font-weight: 600; line-height: 1.4; }
+.field-error[hidden] { display: none; }
 .checkout-form [aria-invalid="true"] { border-color: #9d3e32; }
 .check-label { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; flex-wrap: wrap; }
 .check-label input { width: 20px; height: 20px; flex: 0 0 auto; }
 .check-label .field-error { flex-basis: 100%; margin: 4px 0 0; }
 .acknowledgement { padding: 16px; background: rgba(126, 143, 124, .14); }
 body:has(.checkout-modal[open]) { overflow: hidden; }
-@media (max-width: 480px) { .checkout-actions > *, .checkout-form > .btn-checkout-primary { width: 100%; } .form-row { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   THEMED DATE PICKER — replaces the browser-native <input type="date">
+   pop-up (which follows OS/browser dark mode and clashed with the site's
+   cream/green palette) with an on-brand calendar dropdown. The field
+   itself stays a real, validated text input; only the pop-up UI is custom.
+   ========================================================================== */
+.date-field { position: relative; }
+.checkout-form .date-field input { padding-right: 42px; cursor: pointer; }
+.date-field-icon { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); display: flex; color: var(--text-muted); pointer-events: none; transition: color var(--motion-duration-btn) ease; }
+.date-field:focus-within .date-field-icon { color: var(--accent-green); }
+
+.date-popover {
+  /* fixed, not absolute: .checkout-panel-scroll (the field's scrolling
+     ancestor) has overflow-y: auto, which would clip an absolutely
+     positioned dropdown the moment it extends past the visible scroll
+     area. Fixed positioning escapes that ancestor's clipping box entirely;
+     its on-screen coordinates are set from JS in openDatePicker(). */
+  position: fixed;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 12px 32px rgba(35, 32, 27, .18);
+  padding: 14px;
+}
+.date-popover[hidden] { display: none; }
+
+.date-popover-header { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.date-popover-title { flex: 1; text-align: center; font-family: var(--font-serif); font-size: 1.2rem; color: var(--text-dark); }
+.date-popover-nav {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 1px solid var(--border-medium); border-radius: 0;
+  background: #fff; color: var(--accent-green);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  transition: background-color var(--motion-duration-btn) ease, color var(--motion-duration-btn) ease;
+}
+.date-popover-nav:hover:not(:disabled) { background: var(--accent-green); color: var(--bg-main); }
+.date-popover-nav:disabled { opacity: .35; cursor: not-allowed; }
+
+.date-popover-weekdays, .date-popover-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.date-popover-weekdays { margin-bottom: 4px; }
+.date-popover-weekdays span { text-align: center; font: 600 11px var(--font-sans); letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); padding: 4px 0; }
+
+.date-popover-day {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; padding: 0;
+  border: 1px solid transparent; border-radius: 0;
+  background: none; color: var(--text-dark);
+  font: 600 14px var(--font-sans); cursor: pointer;
+  transition: background-color var(--motion-duration-btn) ease, color var(--motion-duration-btn) ease, border-color var(--motion-duration-btn) ease;
+}
+.date-popover-day.is-empty { visibility: hidden; cursor: default; }
+.date-popover-day:hover:not(:disabled) { border-color: var(--accent-green); }
+.date-popover-day:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 1px; }
+.date-popover-day.is-today { color: var(--accent-ochre); font-weight: 700; }
+.date-popover-day.is-selected { background: var(--accent-green); border-color: var(--accent-green); color: var(--bg-main); }
+.date-popover-day:disabled { color: var(--border-medium); cursor: not-allowed; }
+.date-popover-day:disabled:hover { border-color: transparent; }
+
+.date-popover-footer { display: flex; justify-content: flex-end; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-light); }
+
+@media (max-width: 640px) {
+  .checkout-modal { width: 100%; max-width: 100%; max-height: 100dvh; height: 100dvh; border-inline: none; }
+  .checkout-panel { max-height: 100dvh; height: 100%; }
+  .checkout-dialog-footer { box-shadow: 0 -4px 12px rgba(25, 31, 24, .06); }
+  .checkout-actions-buttons, .checkout-success-actions { flex-direction: column; }
+  .checkout-actions-buttons > *, .checkout-success-actions > *, .btn-checkout-tertiary { width: 100%; }
+  .form-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }

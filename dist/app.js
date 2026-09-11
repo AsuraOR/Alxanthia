@@ -12,7 +12,24 @@
   const LANG_KEY = 'alxanthia.lang';
   const AUTH_KEY = 'alxanthia_unlocked';
   const CART_KEY = 'alxanthia_cart_v1';
+  // ALX-03: the reference/idempotency key/fingerprint of a submission whose
+  // outcome is not yet known to be safely retryable — written before the
+  // network call, so a lost response (reload, tab close, dropped connection)
+  // can resume the SAME attempt instead of minting a new idempotency key and
+  // risking a second real order for a request the server may have already stored.
+  const PENDING_ATTEMPT_KEY = 'alxanthia_pending_attempt';
+  const PENDING_ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — short and documented (ALX-03)
   const CARD_NOTE_MAX = 200;
+  // ALX-06: mirrors CONFIGURE-SUBMISSION-ENDPOINT.md's MAX_QTY_PER_LINE /
+  // MAX_LINES_PER_ORDER / MAX_TOTAL_QTY / MAX_CUSTOM_* / MAX_TEXT exactly —
+  // that file is the source of truth; keep both in sync if either changes.
+  const MAX_QTY_PER_LINE = 20;
+  const MAX_LINES_PER_ORDER = 20;
+  const MAX_TOTAL_QTY = 60;
+  const MAX_CUSTOM_STEMS_PER_FLOWER = 60;
+  const MAX_CUSTOM_TOTAL_STEMS = 60;
+  const MAX_CUSTOM_ADDITION_PER_KEY = 60;
+  const MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
 
   // State
   let currentLang = 'id';
@@ -66,9 +83,12 @@
    * Load data directly from site-content.js (window.ALXANTHIA_DATA)
    */
   function loadData() {
-    if (window.ALXANTHIA_DATA) {
-      siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
+    if (!window.ALXANTHIA_DATA) {
+      // A vague "Cannot read properties of null" surfaces later, from every
+      // call site that reads siteData — name the real cause here instead (ALX-22).
+      throw new Error('site-content.js failed to load or has a syntax error: window.ALXANTHIA_DATA is missing.');
     }
+    siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
   }
 
   /**
@@ -80,7 +100,7 @@
   function persistCart() {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify({
-        cart, wrapKey: selectedWrap, orderNote, customCounts,
+        cart, wrapKey: selectedWrap, orderNote, customCounts, customAdditions,
         messageCardEnabled, orderRecipientName, orderCardSenderName
       }));
     } catch (e) {}
@@ -155,9 +175,24 @@
         orderNote = parsed.orderNote.slice(0, CARD_NOTE_MAX);
       }
       if (parsed.customCounts && typeof parsed.customCounts === 'object') {
+        // ALX-06: re-clamp on restore too — a stale or hand-edited payload
+        // must never bypass the per-flower/total-stem caps.
+        let restoredTotal = 0;
         order.forEach(key => {
           const c = Math.floor(Number(parsed.customCounts[key]));
-          customCounts[key] = c > 0 ? c : 0;
+          const clamped = c > 0 ? Math.min(c, MAX_CUSTOM_STEMS_PER_FLOWER) : 0;
+          const withinTotal = Math.min(clamped, Math.max(0, MAX_CUSTOM_TOTAL_STEMS - restoredTotal));
+          customCounts[key] = withinTotal;
+          restoredTotal += withinTotal;
+        });
+      }
+      // ALX-14: the in-progress custom-builder draft's leaf additions were
+      // never persisted at all — a reload silently zeroed them out even
+      // though committed cart lines kept theirs.
+      if (parsed.customAdditions && typeof parsed.customAdditions === 'object') {
+        (siteData.customAdditions || []).forEach(addition => {
+          const c = Math.floor(Number(parsed.customAdditions[addition.key]));
+          customAdditions[addition.key] = c > 0 ? Math.min(c, MAX_CUSTOM_ADDITION_PER_KEY) : 0;
         });
       }
       messageCardEnabled = !!parsed.messageCardEnabled;
@@ -183,6 +218,23 @@
     const isShown = siteData.store.channels?.showShopee !== false;
     const url = String(siteData.store.shopeeUrl || '').trim();
     return isShown && !!url && url !== '#' && url !== 'https://shopee.co.id';
+  }
+
+  /**
+   * ALX-11: the single source of truth for whether the native checkout
+   * (website ordering) should be offered at all — separate from cosmetic
+   * WhatsApp/Shopee button visibility. Every order here still needs a
+   * manual studio confirmation afterward (order-request model, not instant
+   * purchase — see AUDIT.md instruction 4), so it only makes sense while
+   * the endpoint is actually configured AND at least one manual channel is
+   * reachable for that follow-up. A client-side check like this is a UX
+   * convenience, never an access control — see doPost's ORDERING_PAUSED
+   * Script Property for the real server-side stop.
+   */
+  function isWebsiteOrderingAvailable() {
+    if (!siteData || !siteData.store) return false;
+    const endpointConfigured = !!String(siteData.store.orderSubmissionUrl || '').trim();
+    return endpointConfigured && (isWhatsAppReady() || isShopeeReady());
   }
 
   /**
@@ -596,6 +648,26 @@
   }
 
   /**
+   * Visible + screen-reader-announced feedback when a cart/custom-builder
+   * limit is hit, instead of silently clamping or letting the order reach
+   * the server only to fail there (ALX-06).
+   */
+  let cartLimitNoticeTimer = null;
+  function showCartLimitNotice(key, vars) {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const message = fillTemplate(t[key] || '', vars);
+    if (!message) return;
+    const el = document.getElementById('cart-limit-notice');
+    if (el) {
+      el.textContent = message;
+      el.hidden = false;
+      if (cartLimitNoticeTimer) clearTimeout(cartLimitNoticeTimer);
+      cartLimitNoticeTimer = setTimeout(() => { el.hidden = true; }, 5000);
+    }
+    announceToScreenReader(message);
+  }
+
+  /**
    * Announce a cart mutation via the single #order-announcer live region.
    * Throttled to at most one DOM write per 500ms so holding a stepper
    * button doesn't flood the queue — a rapid burst still ends with one
@@ -629,20 +701,36 @@
    * never merge — each committed bouquet is a distinct line.
    */
   function addLine(lineSpec) {
-    const addQty = lineSpec.qty || 1;
+    const requestedQty = lineSpec.qty || 1;
     let line;
+    let existing;
     if (lineSpec.type !== 'custom') {
-      const existing = cart.find(l => l.type === lineSpec.type && (
+      existing = cart.find(l => l.type === lineSpec.type && (
         lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey :
         lineSpec.type === 'pot' ? l.potKey === lineSpec.potKey :
         l.pkgIndex === lineSpec.pkgIndex
       ));
-      if (existing) {
-        existing.qty += addQty;
-        line = existing;
-      }
     }
-    if (!line) {
+
+    // ALX-06: never let a merge or a new line exceed the server's caps —
+    // MAX_QTY_PER_LINE for one line, MAX_LINES_PER_ORDER for distinct
+    // lines, MAX_TOTAL_QTY for the whole order.
+    if (!existing && cart.length >= MAX_LINES_PER_ORDER) {
+      showCartLimitNotice('cartLimitLines', { max: MAX_LINES_PER_ORDER });
+      return existing || null;
+    }
+    const lineCeiling = existing ? Math.max(0, MAX_QTY_PER_LINE - existing.qty) : MAX_QTY_PER_LINE;
+    const totalCeiling = Math.max(0, MAX_TOTAL_QTY - cartUnitCount());
+    const addQty = Math.max(0, Math.min(requestedQty, lineCeiling, totalCeiling));
+    if (addQty < requestedQty) {
+      showCartLimitNotice(addQty < requestedQty && lineCeiling < totalCeiling ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: lineCeiling < totalCeiling ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+    }
+    if (addQty <= 0) return existing || null;
+
+    if (existing) {
+      existing.qty += addQty;
+      line = existing;
+    } else {
       line = { ...lineSpec, id: nextLineId++, qty: addQty };
       cart.push(line);
     }
@@ -693,10 +781,21 @@
   function bumpLineQty(id, delta) {
     const line = cart.find(l => l.id === id);
     if (!line) return;
-    const newQty = line.qty + delta;
+    let newQty = line.qty + delta;
     if (newQty <= 0) {
       removeLine(id);
       return;
+    }
+    // ALX-06: mirrors the server's MAX_QTY_PER_LINE / MAX_TOTAL_QTY caps —
+    // an increment can't push a line, or the order, past what doPost would
+    // reject anyway.
+    if (delta > 0) {
+      const totalCeiling = MAX_TOTAL_QTY - (cartUnitCount() - line.qty);
+      const clamped = Math.min(newQty, MAX_QTY_PER_LINE, totalCeiling);
+      if (clamped < newQty) {
+        showCartLimitNotice(newQty > MAX_QTY_PER_LINE ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: newQty > MAX_QTY_PER_LINE ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+      }
+      newQty = Math.max(line.qty, clamped);
     }
     line.qty = newQty;
     renderCartLines();
@@ -800,7 +899,19 @@
    */
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
-    customCounts[flowerKey] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_STEMS_PER_FLOWER /
+    // MAX_CUSTOM_TOTAL_STEMS caps on a custom bouquet definition.
+    if (delta > 0) {
+      const currentTotal = getCustomTotals().stems;
+      const totalCeiling = MAX_CUSTOM_TOTAL_STEMS - (currentTotal - cur);
+      const clamped = Math.min(next, MAX_CUSTOM_STEMS_PER_FLOWER, totalCeiling);
+      if (clamped < next) {
+        showCartLimitNotice(next > MAX_CUSTOM_STEMS_PER_FLOWER ? 'customLimitStemsPerFlower' : 'customLimitTotalStems', { max: next > MAX_CUSTOM_STEMS_PER_FLOWER ? MAX_CUSTOM_STEMS_PER_FLOWER : MAX_CUSTOM_TOTAL_STEMS });
+      }
+      next = Math.max(cur, clamped);
+    }
+    customCounts[flowerKey] = next;
     renderCustomBuilder();
     renderBouquetsUI();
     persistCart();
@@ -822,8 +933,15 @@
   function bumpCustomAddition(key, delta) {
     if (!Object.prototype.hasOwnProperty.call(customAdditions, key)) return;
     const cur = customAdditions[key] || 0;
-    customAdditions[key] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_ADDITION_PER_KEY cap.
+    if (delta > 0 && next > MAX_CUSTOM_ADDITION_PER_KEY) {
+      showCartLimitNotice('customLimitAddition', { max: MAX_CUSTOM_ADDITION_PER_KEY });
+      next = MAX_CUSTOM_ADDITION_PER_KEY;
+    }
+    customAdditions[key] = next;
     renderCustomBuilder();
+    persistCart(); // ALX-14: was never persisted, so a reload silently dropped selected additions
   }
 
   /**
@@ -2022,7 +2140,7 @@
         btn.setAttribute('tabindex', active ? '0' : '-1');
         btn.setAttribute('data-wrap-key', w.key);
         btn.setAttribute('data-wrap-index', wIdx);
-        btn.setAttribute('aria-label', `${name} wrap paper`);
+        btn.setAttribute('aria-label', `${name} ${t.wrapAriaSuffix || 'wrap paper'}`);
         btn.innerHTML = `
           <span class="wrap-swatch" style="background:${w.swatch}"></span>
           <span>${name}</span>
@@ -2151,7 +2269,11 @@
 
     const checkoutButton = document.getElementById('btn-checkout');
     if (checkoutButton) {
-      const enabled = cartHasSelection && !cartInvalid;
+      // ALX-11: website ordering must respect the same availability rule as
+      // every other order-entry point, not just cart validity — a paused
+      // store (or an unconfigured endpoint) must never offer submission.
+      const orderingAvailable = isWebsiteOrderingAvailable();
+      const enabled = cartHasSelection && !cartInvalid && orderingAvailable;
       checkoutButton.disabled = !enabled;
       checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
       checkoutButton.classList.toggle('btn-disabled', !enabled);
@@ -2159,7 +2281,9 @@
       const action = checkoutButton.querySelector('.channel-action');
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
-        : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
+        : !orderingAvailable
+          ? (currentLang === 'en' ? 'Ordering paused — contact us directly' : 'Pemesanan dijeda — hubungi kami langsung')
+          : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
       if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
@@ -2635,6 +2759,10 @@
     const relockBtn = document.getElementById('btn-lock-site');
 
     const authConfig = siteData.auth || { enabled: true, passcode: '22062024' };
+    // Single source of truth for the expected passcode (ALX-22) — computed
+    // once here, not re-read with its own fallback at every comparison site,
+    // so rotating it is one edit instead of three.
+    const expectedPasscode = String(authConfig.passcode || '22062024').trim();
 
     if (!authConfig.enabled) {
       if (lockScreen) lockScreen.classList.add('unlocked');
@@ -2644,14 +2772,8 @@
     }
 
     try {
-      if (typeof window !== 'undefined' && window.location && window.location.search) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const expected = String(authConfig.passcode || '22062024').trim();
-        if (urlParams.get('unlock') === expected) {
-          localStorage.setItem(AUTH_KEY, 'true');
-        }
-      }
-
+      // No `?unlock=` query-parameter branch here by design: it placed the
+      // passcode into browser history and outbound Referer headers (ALX-22).
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) {
           lockScreen.classList.add('unlocked');
@@ -2674,9 +2796,8 @@
       lockForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const entered = (passInput ? passInput.value : '').trim();
-        const expected = String(authConfig.passcode || '22062024').trim();
 
-        if (entered === expected) {
+        if (entered === expectedPasscode) {
           try {
             localStorage.setItem(AUTH_KEY, 'true');
           } catch (err) {}
@@ -3191,7 +3312,82 @@
     if (isSubmitting && notice && !notice.textContent) notice.textContent = '';
   }
 
+  /**
+   * Identity of "what would be submitted right now" — used both to decide
+   * whether a review reuses the in-flight attempt's reference (DEV-04) and,
+   * on success, to detect that the cart has since diverged from what was
+   * actually recorded (ALX-05).
+   */
+  function checkoutFingerprint(state) {
+    return JSON.stringify({
+      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
+      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
+    });
+  }
+
+  /**
+   * ALX-03: write the pending attempt's identity BEFORE the network call —
+   * this is the only copy that survives a reload while the outcome is
+   * still unknown. Cleared once the outcome is definitively "success" or
+   * "duplicate" (the order is safely recorded); kept for every other
+   * outcome (conflict/ambiguous/connection/rejected) so a retry after
+   * reload still reuses the same idempotency key.
+   */
+  function persistPendingAttempt() {
+    try {
+      localStorage.setItem(PENDING_ATTEMPT_KEY, JSON.stringify({
+        reference: checkoutAttempt.reference,
+        idempotencyKey: checkoutAttempt.idempotencyKey,
+        fingerprint: checkoutAttempt.fingerprint,
+        startedAt: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  function clearPendingAttempt() {
+    try { localStorage.removeItem(PENDING_ATTEMPT_KEY); } catch (e) {}
+  }
+
+  /**
+   * Called once at startup, after the cart/draft has been restored, so the
+   * fingerprint comparison is against the same order the pending attempt
+   * was recorded for. A mismatched or expired record belongs to an order
+   * that no longer exists in this form — safe to discard, never to reuse.
+   */
+  function restorePendingAttempt() {
+    let pending;
+    try {
+      const raw = localStorage.getItem(PENDING_ATTEMPT_KEY);
+      if (!raw) return;
+      pending = JSON.parse(raw);
+    } catch (e) { clearPendingAttempt(); return; }
+    if (!pending || typeof pending !== 'object' || !pending.reference || !pending.idempotencyKey || !pending.fingerprint) {
+      clearPendingAttempt();
+      return;
+    }
+    if (!(Date.now() - Number(pending.startedAt || 0) < PENDING_ATTEMPT_MAX_AGE_MS)) {
+      clearPendingAttempt();
+      return;
+    }
+    const currentFingerprint = checkoutFingerprint(normalizedCheckoutState());
+    if (pending.fingerprint !== currentFingerprint) {
+      // The cart no longer matches what was pending — reusing this key for
+      // a different order would be wrong, and a genuinely new order must
+      // get a genuinely new UUID (ALX-03/ALX-05).
+      clearPendingAttempt();
+      return;
+    }
+    checkoutAttempt = { reference: pending.reference, idempotencyKey: pending.idempotencyKey, fingerprint: pending.fingerprint };
+  }
+
   function openCheckoutReview() {
+    // ALX-11: defense in depth — the checkout button is already gated on
+    // this, but nothing stops a stale render or a direct call from
+    // reaching here while ordering isn't actually available.
+    if (!isWebsiteOrderingAvailable()) {
+      announceToScreenReader(ck('checkoutNotConfigured'));
+      return;
+    }
     const state = normalizedCheckoutState();
     if (!state.isValid) {
       // DEV-19: this message used to be written into #checkout-error inside a
@@ -3208,10 +3404,7 @@
     // reviews of an unsubmitted, unchanged order (so a retry stays one
     // attempt); only start a fresh attempt once the order has actually
     // changed, or the previous attempt already succeeded.
-    const fingerprint = JSON.stringify({
-      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
-      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
-    });
+    const fingerprint = checkoutFingerprint(state);
     if (!checkoutAttempt || checkoutAttempt.submitted || checkoutAttempt.fingerprint !== fingerprint) {
       checkoutAttempt = { reference: generateOrderReference(), idempotencyKey: generateIdempotencyKey(), fingerprint };
     }
@@ -3281,8 +3474,16 @@
 
   function openCheckoutDialog() {
     if (checkoutAttempt && checkoutAttempt.submitted) {
-      reopenCheckoutSuccess();
-      return;
+      // ALX-05: only reopen the recorded order's success screen if the cart
+      // still matches exactly what was submitted. Products added since
+      // success must lead to a fresh review of the new draft, not a stale
+      // success screen that hides them — the recorded order stays reachable
+      // separately through the recent-order banner (saveRecentOrder()).
+      const state = normalizedCheckoutState();
+      if (state.isValid && checkoutFingerprint(state) === checkoutAttempt.fingerprint) {
+        reopenCheckoutSuccess();
+        return;
+      }
     }
     openCheckoutReview();
   }
@@ -3591,12 +3792,16 @@
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
-      '#buyer-name-label': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
-      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label': `${ck('checkoutLocationTypeLabel')} `, '#regency-label': `${ck('checkoutRegencyLabel')} `,
-      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label': `${ck('checkoutAddressLabel')} `, '#city-label': `${ck('checkoutCityLabel')} `, '#postal-label': `${ck('checkoutPostalLabel')} `,
+      // Targets the dedicated text child, not the parent `-label` span, which
+      // also contains the nested `-required` mark span — setText() replaces
+      // the element's entire textContent, so writing to the parent would
+      // destroy that child every time (ALX-21).
+      '#buyer-name-label-text': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label-text': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
+      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label-text': `${ck('checkoutLocationTypeLabel')} `, '#regency-label-text': `${ck('checkoutRegencyLabel')} `,
+      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label-text': `${ck('checkoutAddressLabel')} `, '#city-label-text': `${ck('checkoutCityLabel')} `, '#postal-label-text': `${ck('checkoutPostalLabel')} `,
       '#pickup-help': ck('checkoutPickupHelp'),
       '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
-      '#date-label': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
+      '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
       '#checkout-back-to-review': ck('checkoutBackToReview'),
       '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
@@ -3728,6 +3933,10 @@
       if (!window.turnstile) return;
       turnstileWidgetId = window.turnstile.render(container, {
         sitekey: siteKey,
+        // ALX-10: must match TURNSTILE_ACTION in the Worker exactly — the
+        // Worker checks this so a token can't be replayed for some other
+        // action on a site sharing the same Turnstile account.
+        action: 'order_submission',
         callback: (token) => { turnstileToken = token; },
         'expired-callback': () => { turnstileToken = ''; },
         'error-callback': () => { turnstileToken = ''; }
@@ -3757,6 +3966,10 @@
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
+    // ALX-04: explicit guard at entry — a double `submit` (double-click,
+    // Enter held down) must issue exactly one request, not queue a second
+    // one behind the first's still-open button-disable.
+    if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
     const invalidFields = validateCheckoutForm(form);
     if (invalidFields.length > 0) {
       error.textContent = ck('checkoutFieldsIncomplete', { count: invalidFields.length });
@@ -3787,6 +4000,9 @@
     button.disabled = true;
     button.textContent = ck('checkoutSaving');
     error.textContent = '';
+    // ALX-03: written before the network call — the only record that
+    // survives if the response never comes back.
+    persistPendingAttempt();
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS) : null;
@@ -3796,46 +4012,75 @@
     let outcome;
     let response = null;
     try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller ? controller.signal : undefined
-      });
-    } catch (networkError) {
-      outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
-    }
-    if (timeoutId) clearTimeout(timeoutId);
+      // ALX-04: the timeout stays active across this ENTIRE try block —
+      // request, body read, and response validation — not just until
+      // fetch()'s promise settles at headers-received. response.json()
+      // below shares the same AbortSignal-backed body read, so a stalled
+      // body still aborts within CHECKOUT_TIMEOUT_MS instead of hanging
+      // forever on "Saving…".
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller ? controller.signal : undefined
+        });
+      } catch (networkError) {
+        // A request that never got a response at all: an abort (whether
+        // from our own timeout or a stalled body — see below) is
+        // uncertain, never a definite failure; anything else is a plain
+        // connection failure.
+        outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
+      }
 
-    if (!outcome) {
-      if (response.status === 409) {
-        outcome = 'conflict';
-      } else if (response.status >= 500) {
-        outcome = 'ambiguous';
-      } else if (!response.ok) {
-        outcome = 'rejected';
-      } else {
-        try {
-          const result = await response.json();
-          // DEV-06: both the success flag and the exact matching reference
-          // are required — `{ "ok": true }` alone is no longer accepted.
-          if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
-            outcome = result.duplicate === true ? 'duplicate' : 'success';
-          } else {
+      if (!outcome) {
+        if (response.status === 409) {
+          outcome = 'conflict';
+        } else if (response.status >= 500) {
+          outcome = 'ambiguous';
+        } else if (!response.ok) {
+          outcome = 'rejected';
+        } else {
+          try {
+            const result = await response.json();
+            // DEV-06: both the success flag and the exact matching reference
+            // are required — `{ "ok": true }` alone is no longer accepted.
+            // ALX-09: the one exception is a server-side rename after a rare
+            // reference collision — accepted only when the server explicitly
+            // echoes back the exact reference THIS attempt sent as
+            // `renamed_from`, so a stale/replayed response for a different
+            // order still can't be mistaken for this one's success.
+            const referenceMatches = result && (
+              result.order_reference === checkoutAttempt.reference ||
+              (result.renamed_from === checkoutAttempt.reference && !!result.order_reference)
+            );
+            if (result && result.ok === true && referenceMatches) {
+              if (result.order_reference !== checkoutAttempt.reference) {
+                checkoutAttempt.reference = result.order_reference;
+              }
+              outcome = result.duplicate === true ? 'duplicate' : 'success';
+            } else {
+              outcome = 'ambiguous';
+            }
+          } catch (parseError) {
+            // Headers came back fine, but the body read was aborted (a
+            // stalled body past CHECKOUT_TIMEOUT_MS) or was malformed —
+            // either way the server may have already stored the order,
+            // so this is ambiguous, never a plain rejection (ALX-04).
             outcome = 'ambiguous';
           }
-        } catch (parseError) {
-          outcome = 'ambiguous';
         }
       }
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setCheckoutSubmitGuard(false);
+      button.disabled = false;
+      button.textContent = ck('checkoutSaveOrder');
+      resetTurnstile(); // a Turnstile token is single-use regardless of outcome
     }
 
-    setCheckoutSubmitGuard(false);
-    button.disabled = false;
-    button.textContent = ck('checkoutSaveOrder');
-    resetTurnstile(); // a Turnstile token is single-use regardless of outcome
-
     if (outcome === 'success' || outcome === 'duplicate') {
+      clearPendingAttempt(); // ALX-03: safely recorded — no longer "uncertain"
       showRecordedOrder(payload, outcome === 'duplicate');
     } else if (outcome === 'conflict') {
       checkoutAttempt.conflicted = true;
@@ -4042,17 +4287,34 @@
    * Initialize App
    */
   function init() {
-    loadData();
-    restoreCartFromStorage();
-    initLang();
-    setupEventListeners();
-    setupReducedMotionListener();
-    setupAuth();
-    renderAll();
-    initCheckout();
-    initTurnstile();
-    renderRecentOrderBanner();
-    initScrollReveals();
+    try {
+      loadData();
+      restoreCartFromStorage();
+      restorePendingAttempt();
+      initLang();
+      setupEventListeners();
+      setupReducedMotionListener();
+      setupAuth();
+      renderAll();
+      initCheckout();
+      initTurnstile();
+      renderRecentOrderBanner();
+      initScrollReveals();
+    } catch (err) {
+      // Fail closed (ALX-22): a broken site-content.js must never publish
+      // the unfinished draft. Keep the passcode curtain up regardless of
+      // its previous state, and surface a hardcoded (never siteData-driven)
+      // contact fallback, since nothing behind the curtain can be trusted.
+      console.error('Alxanthia failed to initialize — the site is showing its fallback state: ' + (err && err.message ? err.message : err));
+      const lockScreen = document.getElementById('lock-screen');
+      if (lockScreen) {
+        lockScreen.classList.remove('unlocked');
+        lockScreen.style.display = 'flex';
+      }
+      const fallback = document.getElementById('site-unavailable');
+      if (fallback) fallback.classList.add('is-visible');
+      return;
+    }
 
     try {
       if (typeof window !== 'undefined' && window.location && window.location.search) {
@@ -4138,6 +4400,7 @@
       bumpLineQty: bumpLineQty,
       isWhatsAppReady: isWhatsAppReady,
       isShopeeReady: isShopeeReady,
+      isWebsiteOrderingAvailable: isWebsiteOrderingAvailable,
       setCategory: setCategory,
       interpolateRules: interpolateRules,
       getState: () => ({

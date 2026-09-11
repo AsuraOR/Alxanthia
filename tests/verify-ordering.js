@@ -326,6 +326,11 @@ registerEl('span', 'custom-min-warning-text');
 registerEl('p', 'order-note');
 registerEl('div', 'order-announcer');
 
+// Native checkout trigger (ALX-11)
+const btnCheckout = registerEl('button', 'btn-checkout', 'btn-channel');
+btnCheckout.appendChild(createMockElement('span', '', 'channel-name'));
+btnCheckout.appendChild(createMockElement('span', '', 'channel-action'));
+
 // Channel elements
 const btnWhatsapp = registerEl('a', 'btn-whatsapp', 'btn-channel btn-whatsapp-primary');
 btnWhatsapp.appendChild(createMockElement('span', '', 'channel-name'));
@@ -1588,8 +1593,37 @@ app.resetToInitial();
 console.log('✔ Suite 27 Passed: cart lines, order totals, and the custom-builder draft all enforce the same limits as the server, and draft additions persist');
 
 // ---------------------------------------------------------------------------
+console.log('\n--- SUITE 28: Website Ordering Availability (ALX-11) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false); // a valid, otherwise-checkoutable cart
+
+const origDataA11 = JSON.parse(JSON.stringify(app.getData()));
+
+const pausedData = JSON.parse(JSON.stringify(origDataA11));
+pausedData.store.channels.showWhatsapp = false;
+pausedData.store.channels.showShopee = false;
+app.setData(pausedData);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, true, 'The checkout button must disable when both manual channels are unavailable, even with a valid cart');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), false, 'isWebsiteOrderingAvailable must report false when both channels are paused');
+
+const unconfiguredData = JSON.parse(JSON.stringify(origDataA11));
+unconfiguredData.store.orderSubmissionUrl = '';
+app.setData(unconfiguredData);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, true, 'The checkout button must disable when the submission endpoint is not configured, even with a valid cart and active channels');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), false, 'isWebsiteOrderingAvailable must report false when the endpoint is unconfigured');
+
+app.setData(origDataA11);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, false, 'The checkout button must re-enable once channels and the endpoint are both available again');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), true, 'isWebsiteOrderingAvailable must report true when at least one channel and the endpoint are both available');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 28 Passed: website ordering availability follows one explicit rule, applied to the checkout button and independent of cosmetic channel visibility');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 27 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 28 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

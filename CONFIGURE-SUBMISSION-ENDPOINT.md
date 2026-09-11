@@ -165,6 +165,15 @@ var REQUIRED_HEADERS = [
 // ============================================================================
 function doPost(event) {
   try {
+    // ALX-11: an optional hard stop independent of anything the client
+    // sends — a paused *website* (client-side channel visibility) is not
+    // an access control; this Script Property is. Set it to 'true' under
+    // Project Settings → Script Properties to reject every submission
+    // while the studio is genuinely closed to new orders.
+    if (PropertiesService.getScriptProperties().getProperty('ORDERING_PAUSED') === 'true') {
+      return jsonResponse({ ok: false, code: 'ORDERING_PAUSED', error: 'Ordering is temporarily paused.' });
+    }
+
     const raw = (event && event.postData && event.postData.contents) || '';
     if (raw.length > MAX_BODY_BYTES) {
       return jsonResponse({ ok: false, code: 'PAYLOAD_TOO_LARGE', error: 'Request body too large.' });
@@ -733,6 +742,7 @@ function jsonResponse(value) {
    | --- | --- |
    | `WEBHOOK_SECRET` | A unique random value of at least 30 letters and numbers. Do not use example text and do not share it. |
    | `OWNER_NOTIFY_EMAIL` | The inbox that should receive a short email for every new order (OWNER-03, OWNER-21). Leave blank to skip this — see OWNER-08 for the interim option. |
+   | `ORDERING_PAUSED` | Leave unset. Only set to exactly `true` when you need every submission rejected regardless of what the website shows (ALX-11) — a real, server-side stop, unlike pausing the WhatsApp/Shopee buttons on the site itself. Remove it (not just set to `false`) to resume. |
 
 7. Click **Save**. Do not click **Run**; `doPost` only works when it receives a web request.
 
@@ -758,6 +768,10 @@ If you ever change a price, add a product, or edit the Bali kabupaten/kota list 
 4. Open **Edit code**, delete the starter code, and paste:
 
 ```javascript
+// ALX-10: the exact Turnstile widget action app.js renders with — pinned
+// here too so a token issued for some other action/site can't be replayed.
+const TURNSTILE_ACTION = 'order_submission';
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -773,19 +787,70 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     if (request.method !== 'POST') return reply({ ok: false, error: 'Method not allowed' }, 405, headers);
 
+    // ALX-10: reject an unsupported content type before touching the body at all.
+    const contentType = (request.headers.get('Content-Type') || '').toLowerCase();
+    if (!contentType.includes('application/json')) {
+      return reply({ ok: false, error: 'Unsupported content type.' }, 415, headers);
+    }
+
+    // An early, cheap rejection for an obviously oversized request — the
+    // byte-length check after reading the body (below) is the real limit,
+    // since Content-Length is only a declared value, not a guarantee.
+    const declaredLength = Number(request.headers.get('Content-Length') || '0');
+    if (declaredLength > MAX_BODY_BYTES) {
+      return reply({ ok: false, error: 'The order is too large to submit.' }, 413, headers);
+    }
+
+    // ALX-10: rate-limited by IP before any parsing or upstream work. Add a
+    // Rate Limiting binding named RATE_LIMITER (Settings → Bindings → Add →
+    // Rate Limiting) to enforce this — bindings are local to each Cloudflare
+    // location, not a strict global quota, so treat this as one layer, not
+    // the only one. The Worker still functions without the binding, just
+    // without this layer; confirm it's bound before launch (O-02).
+    if (env.RATE_LIMITER) {
+      const rateLimitKey = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.RATE_LIMITER.limit({ key: rateLimitKey });
+      if (!success) {
+        log(null, 'RATE_LIMITED', origin);
+        return reply({ ok: false, error: 'Too many requests. Please try again shortly.' }, 429, headers);
+      }
+    }
+
+    let rawBody;
+    try {
+      rawBody = await request.text();
+    } catch (readError) {
+      return reply({ ok: false, error: 'Some details could not be saved. Please check the form and try again.' }, 400, headers);
+    }
+    if (rawBody.length > MAX_BODY_BYTES) {
+      return reply({ ok: false, error: 'The order is too large to submit.' }, 413, headers);
+    }
+
     let order;
     try {
-      order = await request.json();
+      order = JSON.parse(rawBody);
     } catch (parseError) {
       return reply({ ok: false, error: 'Some details could not be saved. Please check the form and try again.' }, 400, headers);
     }
+    // ALX-10: a JSON `null`, an array, or any other non-object top-level
+    // value used to reach the Turnstile check below and throw an unhandled
+    // exception reading `order.cf_turnstile_token` off it.
+    if (!order || typeof order !== 'object' || Array.isArray(order)) {
+      return reply({ ok: false, error: 'Some details could not be saved. Please check the form and try again.' }, 400, headers);
+    }
 
-    // DEV-07 / OWNER-05: Turnstile bot check. Skipped only while
-    // TURNSTILE_SECRET is not yet configured, so setup can proceed in
-    // stages — enforced for real once you complete OWNER-05.
+    // ALX-10: fail CLOSED — a missing TURNSTILE_SECRET must never silently
+    // skip bot protection in production. Set ALLOW_INSECURE_TESTING to
+    // exactly 'true' on a dedicated test/staging Worker only, to let setup
+    // proceed in stages before Turnstile is configured (OWNER-05).
+    if (!env.TURNSTILE_SECRET && env.ALLOW_INSECURE_TESTING !== 'true') {
+      log(order.order_reference, 'TURNSTILE_NOT_CONFIGURED', origin);
+      return reply({ ok: false, error: 'Ordering is temporarily unavailable.' }, 503, headers);
+    }
     if (env.TURNSTILE_SECRET) {
       const token = order.cf_turnstile_token;
-      if (!token || !(await verifyTurnstile(token, env.TURNSTILE_SECRET, request.headers.get('CF-Connecting-IP')))) {
+      const expectedHostname = hostnameOf(env.ALLOWED_ORIGIN);
+      if (!token || !(await verifyTurnstile(token, env.TURNSTILE_SECRET, request.headers.get('CF-Connecting-IP'), expectedHostname))) {
         log(order.order_reference, 'TURNSTILE_FAILED', origin);
         return reply({ ok: false, error: 'Verification failed. Please try again.' }, 403, headers);
       }
@@ -807,7 +872,9 @@ export default {
 
     if (googleResult.ok === true) {
       log(googleResult.order_reference, googleResult.duplicate ? 'DUPLICATE' : 'STORED', origin);
-      return reply({ ok: true, order_reference: googleResult.order_reference, duplicate: googleResult.duplicate === true }, 200, headers);
+      // ALX-09: relay renamed_from too, so a rare reference collision the
+      // Apps Script resolved is not silently dropped on the way back.
+      return reply({ ok: true, order_reference: googleResult.order_reference, duplicate: googleResult.duplicate === true, renamed_from: googleResult.renamed_from }, 200, headers);
     }
 
     // DEV-07: fixed, public error codes — never relay the Apps Script's raw
@@ -818,6 +885,10 @@ export default {
     return reply({ ok: false, error: publicMessage, order_reference: googleResult.order_reference }, status, headers);
   }
 };
+
+function hostnameOf(originUrl) {
+  try { return new URL(originUrl).hostname; } catch (e) { return ''; }
+}
 
 const STATUS_BY_CODE = {
   VALIDATION: 400,
@@ -831,7 +902,10 @@ const STATUS_BY_CODE = {
   STORAGE_ERROR: 502,
   // ALX-07: also an owner setup problem (a missing/duplicated sheet column),
   // never something the customer caused or can fix.
-  SCHEMA_ERROR: 502
+  SCHEMA_ERROR: 502,
+  // ALX-11: a deliberate, owner-set hard stop — not the customer's fault,
+  // but real and worth its own status rather than a generic 502.
+  ORDERING_PAUSED: 503
 };
 
 const PUBLIC_MESSAGE_BY_CODE = {
@@ -840,10 +914,11 @@ const PUBLIC_MESSAGE_BY_CODE = {
   PAYLOAD_TOO_LARGE: 'The order is too large to submit.',
   CONFLICT: 'This order reference was already used with different details.',
   STORAGE_ERROR: 'Order could not be stored.',
-  SCHEMA_ERROR: 'Order could not be stored.'
+  SCHEMA_ERROR: 'Order could not be stored.',
+  ORDERING_PAUSED: 'Ordering is temporarily paused. Please contact us directly to place an order.'
 };
 
-async function verifyTurnstile(token, secret, remoteIp) {
+async function verifyTurnstile(token, secret, remoteIp, expectedHostname) {
   try {
     const form = new FormData();
     form.append('secret', secret);
@@ -851,7 +926,13 @@ async function verifyTurnstile(token, secret, remoteIp) {
     if (remoteIp) form.append('remoteip', remoteIp);
     const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
     const result = await response.json();
-    return result.success === true;
+    if (result.success !== true) return false;
+    // ALX-10: also pin the action and hostname the token was issued for —
+    // otherwise a token is valid for ANY action or site sharing the same
+    // Turnstile account, not just this order form.
+    if (result.action && result.action !== TURNSTILE_ACTION) return false;
+    if (expectedHostname && result.hostname && result.hostname !== expectedHostname) return false;
+    return true;
   } catch (verifyError) {
     return false;
   }
@@ -878,10 +959,12 @@ function reply(body, status, headers) {
 | `ALLOWED_ORIGIN` | Your exact website origin, such as `https://alxanthia.com`, with no trailing slash | Plain text |
 | `GOOGLE_SCRIPT_URL` | The Google Apps Script URL ending in `/exec` | Secret if available |
 | `WEBHOOK_SECRET` | The exact random secret used in Apps Script's Script Properties | Secret |
-| `TURNSTILE_SECRET` | The Turnstile **secret key** from OWNER-05, once created. Leave unset until then — Turnstile checking is skipped while this is empty. | Secret |
+| `TURNSTILE_SECRET` | The Turnstile **secret key** from OWNER-05. Required in production (ALX-10) — the Worker now rejects every submission with "Ordering is temporarily unavailable" while this is empty, instead of silently skipping bot protection. | Secret |
+| `ALLOW_INSECURE_TESTING` | Leave unset on the production Worker. Set to exactly `true` only on a separate test/staging Worker, to let setup proceed before `TURNSTILE_SECRET` exists. | Plain text |
 
-8. Save the variables and redeploy if Cloudflare asks.
-9. Copy the public Worker URL, such as `https://alxanthia-order-endpoint.your-name.workers.dev`.
+8. Add a **Rate Limiting** binding (ALX-10): **Settings → Bindings → Add → Rate Limiting**, variable name `RATE_LIMITER`, and a reasonable limit for real customer traffic (start conservative — this only rejects with a 429 once actually exceeded, and requests within the limit are unaffected). Confirm it's bound before launch (O-02); a Worker without it still runs, just without this layer.
+9. Save the variables and redeploy if Cloudflare asks.
+10. Copy the public Worker URL, such as `https://alxanthia-order-endpoint.your-name.workers.dev`.
 
 The Worker code itself never needs to change when you add fields, rename regencies, or adjust prices — it forwards whatever the website sends and lets the Apps Script decide what is valid. Only Part 1 (Sheet columns) and Part 2 (Apps Script `CATALOG`/`BALI_REGENCIES`) need updating for that kind of change.
 

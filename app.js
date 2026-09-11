@@ -221,6 +221,23 @@
   }
 
   /**
+   * ALX-11: the single source of truth for whether the native checkout
+   * (website ordering) should be offered at all — separate from cosmetic
+   * WhatsApp/Shopee button visibility. Every order here still needs a
+   * manual studio confirmation afterward (order-request model, not instant
+   * purchase — see AUDIT.md instruction 4), so it only makes sense while
+   * the endpoint is actually configured AND at least one manual channel is
+   * reachable for that follow-up. A client-side check like this is a UX
+   * convenience, never an access control — see doPost's ORDERING_PAUSED
+   * Script Property for the real server-side stop.
+   */
+  function isWebsiteOrderingAvailable() {
+    if (!siteData || !siteData.store) return false;
+    const endpointConfigured = !!String(siteData.store.orderSubmissionUrl || '').trim();
+    return endpointConfigured && (isWhatsAppReady() || isShopeeReady());
+  }
+
+  /**
    * Dynamic rule interpolation helper (A2)
    */
   function interpolateRules(template) {
@@ -2252,7 +2269,11 @@
 
     const checkoutButton = document.getElementById('btn-checkout');
     if (checkoutButton) {
-      const enabled = cartHasSelection && !cartInvalid;
+      // ALX-11: website ordering must respect the same availability rule as
+      // every other order-entry point, not just cart validity — a paused
+      // store (or an unconfigured endpoint) must never offer submission.
+      const orderingAvailable = isWebsiteOrderingAvailable();
+      const enabled = cartHasSelection && !cartInvalid && orderingAvailable;
       checkoutButton.disabled = !enabled;
       checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
       checkoutButton.classList.toggle('btn-disabled', !enabled);
@@ -2260,7 +2281,9 @@
       const action = checkoutButton.querySelector('.channel-action');
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
-        : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
+        : !orderingAvailable
+          ? (currentLang === 'en' ? 'Ordering paused — contact us directly' : 'Pemesanan dijeda — hubungi kami langsung')
+          : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
       if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
@@ -3358,6 +3381,13 @@
   }
 
   function openCheckoutReview() {
+    // ALX-11: defense in depth — the checkout button is already gated on
+    // this, but nothing stops a stale render or a direct call from
+    // reaching here while ordering isn't actually available.
+    if (!isWebsiteOrderingAvailable()) {
+      announceToScreenReader(ck('checkoutNotConfigured'));
+      return;
+    }
     const state = normalizedCheckoutState();
     if (!state.isValid) {
       // DEV-19: this message used to be written into #checkout-error inside a
@@ -3903,6 +3933,10 @@
       if (!window.turnstile) return;
       turnstileWidgetId = window.turnstile.render(container, {
         sitekey: siteKey,
+        // ALX-10: must match TURNSTILE_ACTION in the Worker exactly — the
+        // Worker checks this so a token can't be replayed for some other
+        // action on a site sharing the same Turnstile account.
+        action: 'order_submission',
         callback: (token) => { turnstileToken = token; },
         'expired-callback': () => { turnstileToken = ''; },
         'error-callback': () => { turnstileToken = ''; }
@@ -4366,6 +4400,7 @@
       bumpLineQty: bumpLineQty,
       isWhatsAppReady: isWhatsAppReady,
       isShopeeReady: isShopeeReady,
+      isWebsiteOrderingAvailable: isWebsiteOrderingAvailable,
       setCategory: setCategory,
       interpolateRules: interpolateRules,
       getState: () => ({

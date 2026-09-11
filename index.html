@@ -998,8 +998,9 @@
               <p class="form-help" id="outside-bali-help">Pengiriman akan dikirim sesuai dengan alamat yang ditulis,
                 mohon diperhatikan dengan benar.</p>
             </div>
-            <label><span id="date-label">Tanggal yang diinginkan <span class="required-mark" id="date-required">(wajib)</span></span><input name="preferred_date" type="date"
-                aria-describedby="delivery-help" required></label>
+            <label><span id="date-label">Tanggal yang diinginkan <span class="required-mark" id="date-required">(wajib)</span></span><div class="date-field" id="date-field"><input
+                    name="preferred_date" id="preferred-date-input" type="text" inputmode="none" autocomplete="off" pattern="\d{4}-\d{2}-\d{2}"
+                    aria-describedby="delivery-help" aria-haspopup="dialog" aria-expanded="false" required><span class="date-field-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"></rect><path d="M7 2.5v4M17 2.5v4M3.5 9.5h17"></path></svg></span></div></label>
             <p class="form-help" id="delivery-help">Tanggal merupakan preferensi dan akan dikonfirmasi melalui
               WhatsApp.</p>
           </fieldset>

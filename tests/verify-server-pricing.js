@@ -74,10 +74,11 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(appsScriptSrc, sandbox);
 
-const { computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter } = sandbox;
+const { computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter, normalizeIndonesianPhone } = sandbox;
 assert(typeof computeVerifiedTotals === 'function', 'computeVerifiedTotals must be exposed');
 assert(typeof resolveOrderMode === 'function', 'resolveOrderMode must be exposed');
 assert(typeof validateOrder === 'function', 'validateOrder must be exposed');
+assert(typeof normalizeIndonesianPhone === 'function', 'normalizeIndonesianPhone must be exposed');
 
 // ---------------------------------------------------------------------------
 // 3. Also load the real app.js client pricing (computeCartTotals) so the two
@@ -166,7 +167,7 @@ function validOrder(overrides) {
     order_reference: 'ALX-260915-ABCD',
     idempotency_key: '11111111-1111-4111-8111-111111111111',
     submitted_language: 'id', currency: 'IDR', source: 'website', acknowledgement: true,
-    buyer_name: 'Sagita', buyer_whatsapp: '081234567890',
+    buyer_name: 'Sagita', buyer_whatsapp: '+6281234567890', // validateOrder is called directly here, after doPost's normalization step
     location_type: 'bali', regency: 'Denpasar', delivery_method: 'grab_gojek',
     preferred_date: '2026-09-15', // fixedNow is 2026-09-10; lead time default 2 days
     wrap: 'kraft', message_card_enabled: false, gift_message: '', recipient_name: '', card_sender_name: '',
@@ -196,6 +197,16 @@ assert.strictEqual(validateOrder(validOrder({ location_type: 'luar_bali', addres
 assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: 'not-a-number' })).ok, false, 'An invalid WhatsApp number must be rejected');
 assert.strictEqual(validateOrder(validOrder({ order_reference: 'NOT-A-REFERENCE' })).ok, false, 'A malformed order reference must be rejected');
 assert.strictEqual(validateOrder(validOrder({ idempotency_key: 'not-a-uuid' })).ok, false, 'A malformed idempotency key must be rejected');
+
+// Phone contract, pinned both ways so this cannot silently regress again (ALX-02):
+// doPost() normalizes buyer_whatsapp to +62... *before* calling validateOrder, so
+// validateOrder itself must only ever accept the already-normalized form.
+assert.strictEqual(normalizeIndonesianPhone('081234567890'), '+6281234567890', 'normalizeIndonesianPhone must convert a local 08... number to +62...');
+assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: '+6281234567890' })).ok, true, 'validateOrder must accept an already-normalized +62 number');
+// By design: validateOrder alone rejects a raw local number. Normalization is
+// doPost's job (see line ~163 of the guide), not validateOrder's — a direct
+// call that skips doPost must fail exactly like this, not be "fixed" here.
+assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: '081234567890' })).ok, false, 'validateOrder must reject a raw local number — normalization happens in doPost, not here');
 console.log('✔ Suite S4 Passed: manipulated totals, IDs, quantities, card state, and wrap IDs are all rejected\n');
 
 // ---------------------------------------------------------------------------

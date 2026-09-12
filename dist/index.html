@@ -9,6 +9,17 @@
     content="Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang." />
   <link rel="canonical" href="https://alxanthia.com/" />
 
+  <!-- Content-Security-Policy (ALX-26): defence in depth, since the site posts
+       customer PII (name, phone, address) to an external endpoint. GitHub
+       Pages can't set response headers, so this covers everything except
+       frame-ancestors. 'unsafe-inline' is required by the inline unlock
+       script below and by inline style="" attributes app.js writes into
+       card markup. connect-src is scoped to the exact configured order
+       endpoint — update it here too if orderSubmissionUrl in
+       site-content.js ever changes to a different hostname. -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://alxanthia-order-endpoint.ketut-ketut92.workers.dev; frame-src https://challenges.cloudflare.com; base-uri 'self'; form-action 'none'" />
+
   <!-- Robots Directive (Development / Staging Mode: change to 'index, follow' upon public release) -->
   <meta name="robots" content="noindex, nofollow" />
 

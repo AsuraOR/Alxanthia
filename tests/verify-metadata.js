@@ -97,6 +97,24 @@ clientData.miniPots.forEach((pot) => {
 
 console.log(`✔ Suite M2 Passed: all ${products.length} JSON-LD products mirror site-content.js's real prices, and no bouquet package claims a flower-specific variant that doesn't exist\n`);
 
+// ---------------------------------------------------------------------------
+console.log('--- SUITE M3: Content-Security-Policy is present and scoped (ALX-26) ---');
+const cspMatch = html.match(/<meta http-equiv="Content-Security-Policy"\s+content="([^"]*)"/);
+assert(cspMatch, 'index.html must declare a Content-Security-Policy meta tag');
+const csp = cspMatch[1];
+['default-src', 'script-src', 'style-src', 'font-src', 'img-src', 'connect-src', 'frame-src', 'base-uri', "form-action 'none'"].forEach((directive) => {
+  assert(csp.includes(directive), `CSP must include a "${directive}" directive: "${csp}"`);
+});
+// The endpoint really configured in site-content.js must be allow-listed —
+// a stale connect-src would silently break checkout the day this URL changes.
+const endpointMatch = siteContentSrc.match(/orderSubmissionUrl:\s*"([^"]*)"/);
+const configuredEndpoint = endpointMatch ? endpointMatch[1] : '';
+if (configuredEndpoint) {
+  const endpointHost = new URL(configuredEndpoint).origin;
+  assert(csp.includes(endpointHost), `CSP connect-src must allow-list the actually configured order endpoint (${endpointHost}): "${csp}"`);
+}
+console.log('✔ Suite M3 Passed: the CSP is present, covers every relevant directive, and connect-src matches the real configured endpoint\n');
+
 console.log('======================================================================');
-console.log('✔ ALL 2 METADATA SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 3 METADATA SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

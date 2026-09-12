@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cart/pricing/metadata suites
+        run: npm test
+
+      - name: Build the deployed dist/ output
+        run: npm run build
+
+      - name: Confirm dist/ is up to date
+        run: |
+          git diff --exit-code -- dist/ || {
+            echo "::error::dist/ is out of date — run 'npm run build' locally and commit the result.";
+            exit 1;
+          }
+
+      - name: Install Chromium for the browser suite
+        run: npx playwright install --with-deps chromium
+
+      - name: Real-browser suite
+        run: |
+          npm run serve &
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:8080/index.html > /dev/null && break
+            sleep 1
+          done
+          npm run test:browser

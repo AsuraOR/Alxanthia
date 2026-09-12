@@ -1788,7 +1788,7 @@ function buildTicketLines_(items, catalog) {
       '<div class="ticket-head' + headCls + '">' +
         '<div class="id"><div class="ref">' + esc(o.ref) + ' · baris ' + o.row + '</div>' +
           '<h2>' + esc(o.buyer) + '</h2>' +
-          '<a class="wa" href="https://wa.me/' + esc(String(o.wa).replace('+', '')) + '">' + esc(o.wa) + '</a>' +
+          '<a class="wa" href="https://wa.me/' + esc(String(o.wa).replace('+', '')) + '" target="_blank" rel="noopener">' + esc(o.wa) + '</a>' +
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span></div>' +
         '<div class="when"><span class="d">' + esc(fmtDate(o.date)) + '</span>' +
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +

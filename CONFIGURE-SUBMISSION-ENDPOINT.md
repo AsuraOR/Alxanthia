@@ -45,6 +45,7 @@ A quick guide to the new/changed columns:
 - **Submitted Product/Message Card/Total** are exactly what the customer's browser calculated. **Verified Product/Message Card/Total** are what the Apps Script recalculated from its own price list. They usually match. Treat **Verified Total**, never Submitted Total, as the real order amount.
 - **Price Mismatch** is normally blank. The script writes `REVIEW` here if the submitted and verified totals disagree — this can mean the customer's browser tab was open across a price change, or that someone tried to tamper with the totals in their browser. Either way, double-check the row before sending a payment link.
 - **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once **Shipping Fee** has a value. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove. For any Bali order (**Delivery Method** `grab_gojek` or `self_pickup`), the script fills in `0` for you — Grab/Gojek is paid straight to the driver and self-pickup has no delivery at all, so the studio never collects either — and **Final Total** appears immediately with no manual entry. Only an out-of-Bali order (a real, studio-arranged courier) still leaves **Shipping Fee** blank for you to type in.
+- **Midtrans Payment Link** is unused now that payment is by manual bank transfer, confirmed by hand in the Studio Desk (`STUDIO-DESK-SETUP.md`). It stays in the header row — the script already writes it empty — so the column layout does not change; re-enabling a payment gateway later is a separate change if you ever want the column back.
 
 A reminder about the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank. For an out-of-Bali order, it's the reverse. Always check **Location Type** first before reading the other columns.
 
@@ -53,11 +54,9 @@ A reminder about the location columns: **Location Type** is `bali` or `luar_bali
 Select the **Payment Status** column, then choose **Data → Data validation → Dropdown** and add exactly:
 
 ```text
-Awaiting confirmation
-Awaiting payment
+Unpaid
+Checking transfer
 Paid
-Expired
-Refunded
 Cancelled
 ```
 
@@ -65,16 +64,15 @@ Select the **Work Phase** column and add exactly:
 
 ```text
 Not started
-Materials prepared
-Flowers being made
-Bouquet assembly
-Quality check
-Packed
+Assembly and packing
 Ready for dispatch
 Shipped
 Delivered
 Cancelled
 ```
+
+(Payment is now confirmed by hand — see the note on `Midtrans Payment Link` below and
+`STUDIO-DESK-SETUP.md`, which is where these two dropdowns are actually worked from day to day.)
 
 Format **Submitted Product Subtotal**, **Submitted Message Card Fee**, **Submitted Total**, **Verified Product Subtotal**, **Verified Message Card Fee**, **Verified Total**, **Shipping Fee**, and **Final Total** as Indonesian rupiah while keeping them numeric.
 
@@ -293,7 +291,7 @@ function doPost(event) {
         'Shipping Fee': defaultShippingFee(isBali, order.delivery_method),
         'Final Total': '',
         'Midtrans Payment Link': '',
-        'Payment Status': 'Awaiting confirmation',
+        'Payment Status': 'Unpaid',
         'Work Phase': 'Not started',
         'Delivery Service': '',
         'Tracking Link/Number': '',
@@ -1054,7 +1052,7 @@ Deploy the updated website, then, using test data only:
    - the **Verified Total** matches what the page showed you, and **Price Mismatch** is blank;
    - **Total Stems**, **Order Mode**, and **Item Data** look correct;
    - the location columns are filled correctly for the path you tested (Bali columns filled and address columns blank, or vice versa);
-   - **Payment Status** is **Awaiting confirmation** and **Work Phase** is **Not started**;
+   - **Payment Status** is **Unpaid** and **Work Phase** is **Not started**;
    - **Final Total** is blank until **Shipping Fee** has a value — for any Bali order (`grab_gojek` or `self_pickup`) that happens immediately (the script fills in `0`); for an out-of-Bali order, it appears once you type a **Shipping Fee** in yourself;
    - exactly one row was added — resubmitting the same still-open checkout (e.g. clicking Save twice, or retrying after closing/reopening a slow connection) must never add a second row for the same attempt;
    - if `OWNER_NOTIFY_EMAIL` is set, an email arrived with the reference and a link to the row, and no private customer fields.

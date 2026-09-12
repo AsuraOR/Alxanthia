@@ -44,6 +44,40 @@ async function runCheckoutDialogChecks(browser) {
   await page.addInitScript(() => {
     try { localStorage.setItem('alxanthia_unlocked', 'true'); } catch (e) {}
   });
+  // site-content.js now carries a real Turnstile site key (ALX-10), so
+  // app.js's checkout guard genuinely requires a token before submitting.
+  // A live challenge can't (and shouldn't) be solved by a CI browser, so
+  // stub the widget the same way any external dependency gets mocked in
+  // tests: intercept Cloudflare's script and hand back a fake `turnstile`
+  // object that immediately reports success via the real callback app.js
+  // registers. This never talks to Cloudflare and never touches the real
+  // site key/secret — it only proves the checkout flow still works when a
+  // token IS present, which is all these suites are responsible for.
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: `
+        window.turnstile = (function () {
+          var savedCallback = null;
+          return {
+            render: function (container, opts) {
+              savedCallback = opts && opts.callback;
+              setTimeout(function () { if (savedCallback) savedCallback('test-turnstile-token'); }, 0);
+              return 'mock-widget-id';
+            },
+            // Mirrors real Turnstile: a reset widget re-verifies and calls
+            // back with a fresh token on its own, since app.js's token is
+            // single-use and resets it after every submission attempt.
+            reset: function () {
+              setTimeout(function () { if (savedCallback) savedCallback('test-turnstile-token-' + Date.now()); }, 0);
+            }
+          };
+        })();
+        if (typeof window.__alxanthiaTurnstileReady === 'function') window.__alxanthiaTurnstileReady();
+      `
+    });
+  });
   let mockMode = 'success'; // 'success' | 'duplicate' | 'conflict' | 'timeout' | 'serverError'
   let capturedRequests = 0;
   const capturedBodies = []; // ALX-03: inspected to prove a retry reuses the same idempotency_key
@@ -428,7 +462,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Error running browser runner:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Error running browser runner:', err.message);
+    process.exit(1);
+  });
+}
+module.exports = { runCheckoutDialogChecks };

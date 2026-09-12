@@ -1489,6 +1489,14 @@ function buildTicketLines_(items, catalog) {
 
   function laneOf(order) { return order.phase; }
 
+  /* Finished orders are archived out of the working queue the moment
+     Work Phase reaches Delivered — the "Aktif" lane is everything still
+     in progress. They stay reachable from the Selesai chip and, from the
+     sheet's own side, for KEEP_DELIVERED_DAYS after that (see
+     includeOrder_ in the server code) before listOrders() drops them
+     entirely. */
+  function isActive(order) { return order.phase !== 'Delivered'; }
+
   /* =====================================================================
      The gate: four checks read from the sheet, one she ticks herself.
      ===================================================================== */
@@ -1605,12 +1613,12 @@ function buildTicketLines_(items, catalog) {
       '<div class="pay"><b>' + pay + '</b><span>menunggu bayar</span></div>' +
       '<div><b>' + working + '</b><span>sedang dikerjakan</span></div>';
 
-    var lanes = [{ key: 'all', label: 'Semua' }, { key: 'pay', label: 'Menunggu bayar' }]
+    var lanes = [{ key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
       .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }));
 
     elChips.innerHTML = lanes.map(function (l) {
       var n = state.orders.filter(function (o) {
-        if (l.key === 'all') return true;
+        if (l.key === 'all') return isActive(o);
         if (l.key === 'pay') return waitingPay(o);
         return laneOf(o) === l.key;
       }).length;
@@ -1626,7 +1634,7 @@ function buildTicketLines_(items, catalog) {
   function renderQueue() {
     var catalog = state.catalog;
     var list = state.orders.filter(function (o) {
-      if (state.lane === 'all') return true;
+      if (state.lane === 'all') return isActive(o);
       if (state.lane === 'pay') return waitingPay(o);
       return laneOf(o) === state.lane;
     }).sort(function (a, b) {
@@ -1715,18 +1723,15 @@ function buildTicketLines_(items, catalog) {
       '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
       '<span>Ongkir ' + (ship === null || ship === undefined || ship === '' ? 'belum diisi' : esc(rupiah(ship))) + '</span></div>';
 
-    if (o.locationType === 'bali') {
-      html += '<div class="ongkir"><span class="hint">Ongkir Rp 0 — ' +
-        (o.method === 'self_pickup' ? 'diambil sendiri di studio.' : 'Grab/Gojek dibayar langsung ke driver.') +
-        '</span></div>';
-    } else {
-      html += '<div class="ongkir"><label for="ongkir-' + esc(o.ref) + '">Ongkir</label>' +
-        '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
-        'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
-        (shippingPending ? ' disabled' : '') + '>' +
-        '<span class="hint">Kurir ke ' + esc(o.city) + '. Final Total di sheet mengisi sendiri begitu ongkir ada.</span></div>';
-      if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
-    }
+    var ongkirHint = o.locationType === 'bali'
+      ? ('Biasanya Rp 0 — ' + (o.method === 'self_pickup' ? 'diambil sendiri di studio.' : 'Grab/Gojek dibayar langsung ke driver.') + ' Ubah kalau ada biaya tambahan.')
+      : ('Kurir ke ' + esc(o.city) + '. Final Total di sheet mengisi sendiri begitu ongkir ada.');
+    html += '<div class="ongkir"><label for="ongkir-' + esc(o.ref) + '">Ongkir</label>' +
+      '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
+      'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
+      (shippingPending ? ' disabled' : '') + '>' +
+      '<span class="hint">' + ongkirHint + '</span></div>';
+    if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
 
     html += '<div class="paystate">' + PAYMENTS.filter(function (p) { return p.key !== 'Cancelled'; }).map(function (p, i, arr) {
       var cur = arr.findIndex(function (x) { return x.key === pay; });

@@ -182,6 +182,10 @@ Sheet based on a WhatsApp screenshot or a customer's word. Only mark it `Paid` a
 personally confirmed the payment in the Midtrans dashboard, or via an authenticated
 Midtrans notification.
 
+Payment is now confirmed by hand in the Studio Desk (`STUDIO-DESK-SETUP.md`), not in the Sheet
+directly — the Desk is the one screen that shows the exact amount to check against, but the rule
+above still stands: confirm the money in your bank's mutasi, never from a screenshot.
+
 ## Step 10 — Remove the staging gates together
 
 Only once every step above is done and Step 8's test orders all worked correctly:

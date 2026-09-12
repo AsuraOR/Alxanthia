@@ -1,0 +1,1339 @@
+<title>Alxanthia Studio Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* ---------------------------------------------------------------------
+     Alxanthia Studio Desk — maker-facing order interface (design prototype)
+     Palette is taken from the studio's own materials: the four wrap swatches
+     in site-content.js (kraft / cream / sage / blush). Pine is the chrome
+     accent; attention states use kraft-amber and madder red so "done" can
+     stay quiet ink instead of competing green.
+     --------------------------------------------------------------------- */
+  :root {
+    --ground: #F2F4EF;
+    --surface: #FCFCF9;
+    --surface-2: #EDEFE8;
+    --ink: #1B201B;
+    --ink-2: #4E564D;
+    --muted: #737B70;
+    --rule: #D9DDD3;
+    --rule-strong: #C2C8BA;
+    --pine: #33503F;
+    --pine-soft: #E2EAE1;
+    --on-accent: #FCFCF9;
+    --amber: #8E6318;
+    --amber-soft: #F6ECD8;
+    --madder: #972E34;
+    --madder-soft: #F7E3E2;
+    --kraft: #B79A6E;
+    --cream: #F0E7D6;
+    --sage: #7E8F7C;
+    --blush: #C9A4A8;
+    --shadow: 0 1px 2px rgba(27, 32, 27, .06), 0 8px 24px -16px rgba(27, 32, 27, .28);
+    --r: 10px;
+    --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141711;
+      --surface: #1C201B;
+      --surface-2: #242923;
+      --ink: #EDEFE7;
+      --ink-2: #C3C9BD;
+      --muted: #929A8C;
+      --rule: #2E332C;
+      --rule-strong: #414739;
+      --pine: #93BC9D;
+      --pine-soft: #23301F;
+      --on-accent: #141711;
+      --amber: #DFA94F;
+      --amber-soft: #332714;
+      --madder: #E58E91;
+      --madder-soft: #341D1D;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #141711;
+    --surface: #1C201B;
+    --surface-2: #242923;
+    --ink: #EDEFE7;
+    --ink-2: #C3C9BD;
+    --muted: #929A8C;
+    --rule: #2E332C;
+    --rule-strong: #414739;
+    --pine: #93BC9D;
+    --pine-soft: #23301F;
+    --on-accent: #141711;
+    --amber: #DFA94F;
+    --amber-soft: #332714;
+    --madder: #E58E91;
+    --madder-soft: #341D1D;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 16px 56px;
+  }
+
+  /* ---------- top bar ---------- */
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 16px;
+    padding-block: 22px 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .bar h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .bar h1 small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .bar .today {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-2);
+    margin-inline-start: auto;
+  }
+  .lang {
+    display: flex;
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .lang button {
+    font: 600 11px/1 var(--sans);
+    letter-spacing: .08em;
+    padding: 7px 11px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .lang button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+
+  /* ---------- load strip ---------- */
+  .pulse {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    padding-block: 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .pulse div { display: flex; align-items: baseline; gap: 8px; }
+  .pulse b {
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .pulse span {
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .pulse .late b { color: var(--madder); }
+  .pulse .check b { color: var(--amber); }
+
+  /* ---------- lane chips ---------- */
+  .chips {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding-block: 14px;
+    scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips button {
+    flex: 0 0 auto;
+    font: 500 13px/1 var(--sans);
+    padding: 9px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .chips button .n {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-inline-start: 5px;
+  }
+  .chips button[aria-pressed="true"] {
+    background: var(--pine);
+    border-color: var(--pine);
+    color: var(--on-accent);
+  }
+  .chips button[aria-pressed="true"] .n { color: inherit; opacity: .7; }
+
+  /* ---------- two-pane layout ---------- */
+  .panes { display: grid; gap: 20px; align-items: start; }
+  @media (min-width: 900px) {
+    .panes { grid-template-columns: 352px minmax(0, 1fr); }
+  }
+
+  /* ---------- queue ---------- */
+  .queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .queue-empty {
+    border: 1px dashed var(--rule-strong);
+    border-radius: var(--r);
+    padding: 26px 18px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  .card {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr);
+    gap: 0 12px;
+    text-align: start;
+    font: inherit;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--r);
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .card:hover { border-color: var(--rule-strong); }
+  .card[aria-current="true"] {
+    border-color: var(--pine);
+    box-shadow: var(--shadow);
+  }
+  .card .stripe { background: var(--rule-strong); }
+  .card.is-late .stripe { background: var(--madder); }
+  .card.is-today .stripe { background: var(--amber); }
+  .card.is-working .stripe { background: var(--pine); }
+  .card .body { padding: 12px 14px 13px 2px; min-width: 0; }
+  .card .row1 { display: flex; align-items: baseline; gap: 8px; }
+  .card .ref {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: -0.01em;
+  }
+  .card .due {
+    margin-inline-start: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .card.is-late .due { color: var(--madder); }
+  .card.is-today .due { color: var(--amber); }
+  .card .who {
+    font-family: var(--serif);
+    font-size: 17.5px;
+    line-height: 1.25;
+    margin: 3px 0 1px;
+  }
+  .card .what {
+    font-size: 13px;
+    color: var(--ink-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 5px 7px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .tag.warn { background: var(--amber-soft); color: var(--amber); }
+  .tag.stop { background: var(--madder-soft); color: var(--madder); }
+  .tag.go { background: var(--pine-soft); color: var(--pine); }
+  .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .swatch {
+    width: 11px; height: 11px; border-radius: 2px;
+    border: 1px solid rgba(27, 32, 27, .25);
+    flex: 0 0 auto;
+  }
+
+  /* ---------- ticket ---------- */
+  .ticket {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .ticket .back {
+    display: none;
+    font: 600 12px/1 var(--sans);
+    letter-spacing: .04em;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--pine);
+    padding: 13px 16px;
+    width: 100%;
+    text-align: start;
+    cursor: pointer;
+  }
+  .ticket-head {
+    padding: 16px 18px 15px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    align-items: flex-start;
+  }
+  .ticket-head .id { min-width: 0; }
+  .ticket-head .ref {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .ticket-head h2 {
+    font-family: var(--serif);
+    font-size: 23px;
+    font-weight: 600;
+    margin: 2px 0 6px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .ticket-head .wa {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-2);
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .ticket-head .when {
+    margin-inline-start: auto;
+    text-align: end;
+  }
+  .ticket-head .when .d {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  .ticket-head .when .rel {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ticket-head.is-late .when .d, .ticket-head.is-late .when .rel { color: var(--madder); }
+  .ticket-head.is-today .when .d, .ticket-head.is-today .when .rel { color: var(--amber); }
+
+  .block { padding: 17px 18px; border-bottom: 1px solid var(--rule); }
+  .block:last-child { border-bottom: 0; }
+  .block > h3 {
+    margin: 0 0 12px;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .block > h3 .count {
+    margin-inline-start: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+  }
+
+  /* verify gate */
+  .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .checks li {
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr);
+    gap: 9px;
+    align-items: start;
+    padding: 6px 0;
+    font-size: 13.5px;
+  }
+  .checks .mark {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .checks .pass .mark { color: var(--pine); }
+  .checks .fail .mark { color: var(--madder); }
+  .checks .fail { color: var(--madder); }
+  .checks .fail .sub { color: var(--madder); opacity: .85; }
+  .checks .sub { display: block; font-size: 12px; color: var(--muted); }
+
+  .manual { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .tick {
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr);
+    gap: 9px;
+    align-items: start;
+    width: 100%;
+    text-align: start;
+    background: none;
+    border: 0;
+    padding: 7px 0;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .tick .box {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--rule-strong);
+    border-radius: 3px;
+    margin-top: 2px;
+    display: grid;
+    place-items: center;
+    font: 700 11px/1 var(--sans);
+    color: transparent;
+  }
+  .tick[aria-pressed="true"] .box {
+    background: var(--pine);
+    border-color: var(--pine);
+    color: var(--on-accent);
+  }
+  .tick[aria-pressed="true"] .label { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+  .gate { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn {
+    font: 600 13.5px/1 var(--sans);
+    padding: 12px 17px;
+    border-radius: 7px;
+    border: 1px solid var(--pine);
+    background: var(--pine);
+    color: var(--on-accent);
+    cursor: pointer;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--ink-2);
+    border-color: var(--rule-strong);
+  }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .gate .why { font-size: 12.5px; color: var(--muted); flex: 1 1 180px; }
+
+  /* make list */
+  .make { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .make > li { border-top: 1px solid var(--rule); }
+  .make > li:first-child { border-top: 0; }
+  .comp {
+    display: grid;
+    grid-template-columns: 17px 34px minmax(0, 1fr);
+    gap: 11px;
+    align-items: start;
+    width: 100%;
+    text-align: start;
+    background: none;
+    border: 0;
+    padding: 12px 0;
+    font: inherit;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .comp .qty {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+  .comp .name { display: block; font-size: 15px; line-height: 1.35; }
+  .comp .spec { display: block; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .comp[aria-pressed="true"] .name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .comp .grp {
+    display: block;
+    font: 600 10px/1 var(--sans);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+
+  /* wrap + card */
+  .pairs { display: grid; gap: 11px; }
+  @media (min-width: 620px) { .pairs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .pair .k {
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .pair .v { font-size: 14.5px; display: flex; align-items: center; gap: 7px; }
+  .pair .v .swatch { width: 15px; height: 15px; }
+
+  .cardnote {
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--blush);
+    border-radius: 4px;
+    padding: 13px 14px;
+    margin-top: 4px;
+  }
+  .cardnote p {
+    margin: 0;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 16.5px;
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+  .cardnote .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .copy {
+    font: 600 11.5px/1 var(--sans);
+    background: none;
+    border: 1px solid var(--rule-strong);
+    border-radius: 5px;
+    padding: 7px 9px;
+    color: var(--ink-2);
+    cursor: pointer;
+    margin-top: 10px;
+  }
+
+  /* phase stepper */
+  .phases { display: flex; gap: 0; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+  .phase {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-inline-end: 16px;
+    min-width: 96px;
+  }
+  .phase .line { height: 3px; border-radius: 2px; background: var(--rule); }
+  .phase.done .line { background: var(--rule-strong); }
+  .phase.now .line { background: var(--pine); }
+  .phase .t { font-size: 12px; color: var(--muted); line-height: 1.3; }
+  .phase.now .t { color: var(--ink); font-weight: 600; }
+  .phase.locked .t { font-style: italic; }
+  .phase .t .lock { font-family: var(--mono); font-size: 10.5px; }
+
+  .notes {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 11px 12px;
+    min-height: 74px;
+    resize: vertical;
+  }
+  .notes::placeholder { color: var(--muted); }
+
+  .provenance {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding: 13px 18px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 14px;
+  }
+
+  .foot {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 12.5px;
+    color: var(--muted);
+    max-width: 62ch;
+  }
+  .foot b { color: var(--ink-2); font-weight: 600; }
+
+  :focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; border-radius: 3px; }
+
+  @media (max-width: 899px) {
+    .ticket .back { display: block; }
+    body.detail .queue, body.detail .pulse, body.detail .chips { display: none; }
+    body:not(.detail) .ticket { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+  <header class="bar">
+    <h1><small>Alxanthia</small>Studio Desk</h1>
+    <div class="today" id="today"></div>
+    <div class="lang" role="group" aria-label="Bahasa / Language">
+      <button type="button" id="lang-id" aria-pressed="true">ID</button>
+      <button type="button" id="lang-en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <section class="pulse" id="pulse" aria-live="polite"></section>
+  <nav class="chips" id="chips" aria-label="Filter"></nav>
+
+  <main class="panes">
+    <ol class="queue" id="queue"></ol>
+    <section class="ticket" id="ticket" aria-live="polite"></section>
+  </main>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+  'use strict';
+
+  /* =====================================================================
+     Catalogue — the same numbers and keys as site-content.js / the Apps
+     Script CATALOG. The build list and the totals below are DERIVED from
+     the Item Data JSON exactly the way the real interface would, so the
+     prototype cannot show a bouquet that pricing disagrees with.
+     ===================================================================== */
+  var CATALOG = {
+    wrapFeeUnitStems: 3,
+    wrapFeePerUnit: 35000,
+    messageCardPrice: 5000,
+    flowers: {
+      Sunflower: { price: 55000, id: 'Bunga Matahari', en: 'Sunflower', spec: '45 cm · kepala 12 cm', specEn: '45 cm stem · 12 cm head', accent: '#C89A3C' },
+      Rose:      { price: 60000, id: 'Mawar',          en: 'Rose',      spec: '40 cm · kepala melingkar', specEn: '40 cm stem · spiralled head', accent: '#A8586A' },
+      Tulip:     { price: 50000, id: 'Tulip',          en: 'Tulip',     spec: '38 cm · 6 kelopak', specEn: '38 cm stem · 6 petals', accent: '#C0614E' },
+      Gerbera:   { price: 55000, id: 'Gerbera',        en: 'Gerbera',   spec: '40 cm · koral dua nada', specEn: '40 cm stem · two-tone coral', accent: '#C97A45' }
+    },
+    pots: {
+      sunflower:             { price: 125000, id: 'Mini Pot Bunga Matahari', en: 'Sunflower Mini Pot', spec: 'tinggi 14 cm', specEn: '14 cm tall' },
+      'lily-of-the-valley':  { price: 125000, id: 'Mini Pot Lily of the Valley', en: 'Lily of the Valley Mini Pot', spec: 'tinggi 11 cm', specEn: '11 cm tall' },
+      daisy:                 { price: 125000, id: 'Mini Pot Daisy', en: 'Daisy Mini Pot', spec: 'tinggi 13 cm', specEn: '13 cm tall' }
+    },
+    additions: {
+      rounded: { price: 12000, id: 'Daun Bulat', en: 'Rounded Leaves' },
+      fern:    { price: 12000, id: 'Daun Pakis', en: 'Fern Leaves' }
+    },
+    packages: [
+      { price: 195000, stems: 3 },
+      { price: 295000, stems: 5 },
+      { price: 465000, stems: 9 },
+      { price: 745000, stems: 15 }
+    ],
+    wraps: {
+      kraft: { swatch: '#B79A6E', id: 'Kraft', en: 'Kraft' },
+      cream: { swatch: '#F0E7D6', id: 'Krem', en: 'Cream' },
+      sage:  { swatch: '#7E8F7C', id: 'Sage', en: 'Sage' },
+      blush: { swatch: '#C9A4A8', id: 'Blush', en: 'Blush' }
+    },
+    minimumLeadDays: 2
+  };
+
+  /* Work Phase — the Sheet's existing dropdown, split by who owns it.
+     The last three belong to whoever ships the parcel, not the maker. */
+  var PHASES = [
+    { key: 'Not started',       id: 'Belum mulai',        en: 'Not started' },
+    { key: 'Materials prepared', id: 'Bahan disiapkan',   en: 'Materials prepared' },
+    { key: 'Flowers being made', id: 'Bunga dibuat',      en: 'Flowers being made' },
+    { key: 'Bouquet assembly',  id: 'Dirangkai',          en: 'Bouquet assembly' },
+    { key: 'Quality check',     id: 'Diperiksa',          en: 'Quality check' },
+    { key: 'Packed',            id: 'Dikemas',            en: 'Packed' },
+    { key: 'Ready for dispatch', id: 'Siap dikirim',      en: 'Ready for dispatch' },
+    { key: 'Shipped',           id: 'Dikirim',            en: 'Shipped', owner: true },
+    { key: 'Delivered',         id: 'Diterima',           en: 'Delivered', owner: true }
+  ];
+
+  /* =====================================================================
+     Sample rows. Every field here exists in the Orders sheet — nothing is
+     invented, and the diagnostic columns (payload hash, catalog version,
+     submitted-vs-verified subtotals) are deliberately absent: the maker
+     never needs them. Marked as examples in the footer.
+     ===================================================================== */
+  var TODAY = '2026-09-12';
+
+  var ORDERS = [
+    {
+      row: 128, ref: 'ALX-260912-K4T9', buyer: 'Ni Putu Ayu Lestari', wa: '+6281234567890',
+      locationType: 'bali', regency: 'Denpasar', method: 'grab_gojek',
+      date: '2026-09-14', wrap: 'sage', payment: 'Paid', mismatch: false, shippingFee: 0,
+      phase: 'Not started',
+      items: [
+        { type: 'custom', qty: 1, stems: { Sunflower: 3, Rose: 2 }, additions: { fern: 1 } },
+        { type: 'pot', id: 'daisy', qty: 1 }
+      ],
+      card: { to: 'Kadek Surya', from: 'Ayu', text: 'Selamat ulang tahun, Kadek. Semoga harimu secerah bunga ini.' },
+      notes: ''
+    },
+    {
+      row: 127, ref: 'ALX-260912-H7RB', buyer: 'Luh Ratna Dewi', wa: '+6287712349900',
+      locationType: 'bali', regency: 'Badung', method: 'grab_gojek',
+      date: '2026-09-12', wrap: 'blush', payment: 'Paid', mismatch: false, shippingFee: 0,
+      phase: 'Quality check',
+      items: [ { type: 'custom', qty: 2, stems: { Gerbera: 3 }, additions: { rounded: 2 } } ],
+      card: null,
+      notes: 'Dua rangkaian kembar — jaga tinggi kepala sama.'
+    },
+    {
+      row: 126, ref: 'ALX-260911-B8QX', buyer: 'Komang Sari', wa: '+6281998877665',
+      locationType: 'bali', regency: 'Gianyar', method: 'self_pickup',
+      date: '2026-09-13', wrap: 'cream', payment: 'Paid', mismatch: false, shippingFee: 0,
+      phase: 'Flowers being made',
+      items: [ { type: 'stem', id: 'Tulip', qty: 6 } ],
+      card: { to: 'Ibu Wayan', from: 'Komang', text: 'Terima kasih untuk semuanya, Ibu. Sampai jumpa minggu depan.' },
+      notes: ''
+    },
+    {
+      row: 125, ref: 'ALX-260911-P2M7', buyer: 'Gede Wirawan', wa: '+6281377665544',
+      locationType: 'luar_bali', address: 'Jl. Kemang Selatan 12A, Kebayoran Baru', city: 'Jakarta Selatan', postal: '12190',
+      date: '2026-09-16', wrap: 'kraft', payment: 'Awaiting payment', mismatch: false, shippingFee: null,
+      phase: 'Not started',
+      items: [ { type: 'package', id: '2', qty: 1 } ],
+      card: null,
+      notes: ''
+    },
+    {
+      row: 124, ref: 'ALX-260910-T3WH', buyer: 'Made Bagus Prayoga', wa: '+6285611223344',
+      locationType: 'luar_bali', address: 'Jl. Dharmahusada Indah 45', city: 'Surabaya', postal: '60285',
+      date: '2026-09-18', wrap: 'blush', payment: 'Awaiting confirmation', mismatch: true, shippingFee: null,
+      phase: 'Not started',
+      items: [
+        { type: 'stem', id: 'Rose', qty: 3 },
+        { type: 'pot', id: 'lily-of-the-valley', qty: 1 }
+      ],
+      card: { to: 'Dinda', from: 'Bagus', text: 'Untuk hari pertamamu di kantor baru. Semangat!' },
+      notes: ''
+    },
+    {
+      row: 123, ref: 'ALX-260909-J9FN', buyer: 'Ni Kadek Dwi', wa: '+6281255443322',
+      locationType: 'bali', regency: 'Tabanan', method: 'grab_gojek',
+      date: '2026-09-12', wrap: 'kraft', payment: 'Paid', mismatch: false, shippingFee: 0,
+      phase: 'Ready for dispatch',
+      items: [ { type: 'package', id: '0', qty: 1 } ],
+      card: null,
+      notes: ''
+    }
+  ];
+
+  /* =====================================================================
+     Copy — Indonesian first (she works in it), English alongside.
+     ===================================================================== */
+  var T = {
+    id: {
+      dueToday: 'jatuh tempo hari ini', late: 'terlambat', toCheck: 'perlu diperiksa', inHand: 'sedang dikerjakan',
+      all: 'Semua', unstarted: 'Belum mulai', working: 'Dikerjakan', ready: 'Siap kirim', done: 'Selesai',
+      empty: 'Tidak ada pesanan di kelompok ini.',
+      back: '← Daftar pesanan', verify: 'Periksa dulu', make: 'Yang dibuat', finishing: 'Penyelesaian',
+      deliver: 'Pengantaran', phase: 'Tahap kerja', notesTitle: 'Catatan kerja',
+      notesPlaceholder: 'Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…',
+      paidOk: 'Pembayaran sudah dikonfirmasi', paidNo: 'Pembayaran belum masuk',
+      paidSub: 'Status di Sheet: ', priceOk: 'Harga terverifikasi', priceNo: 'Harga ditandai REVIEW',
+      priceSub: 'Tunggu Kak konfirmasi total sebelum mulai.',
+      dateOk: 'Tanggal masih cukup', dateTight: 'Tanggal mepet', dateLate: 'Sudah lewat tanggal',
+      addrOk: 'Tujuan lengkap', addrNo: 'Tujuan belum lengkap',
+      shipOk: 'Biaya kirim sudah diisi', shipNo: 'Biaya kirim belum diisi',
+      shipSub: 'Kolom Shipping Fee masih kosong — diisi Kak, bukan kamu.',
+      mStock: 'Bahan cukup (chenille, kawat, pot)', mCard: 'Teks kartu sudah dibaca ulang',
+      start: 'Mulai kerjakan', readyToStart: 'Siap dikerjakan', next: 'Lanjut: ', backPhase: 'Kembali',
+      blocked: 'Belum bisa dimulai — lihat tanda merah di atas.',
+      needTicks: 'Centang dua baris di atas dulu.',
+      ownerPhase: 'Tahap ini dipegang Kak (pengiriman).',
+      doneAll: 'Selesai dari sisi studio. Menunggu pengiriman.',
+      wrap: 'Kertas pembungkus', stems: 'Total tangkai', mode: 'Jenis pesanan', total: 'Total terverifikasi',
+      cardYes: 'Kartu ucapan — tulis apa adanya', cardNo: 'Tanpa kartu ucapan',
+      cardTo: 'Untuk', cardFrom: 'Dari', copy: 'Salin teks kartu', copied: 'Tersalin',
+      pickup: 'Ambil sendiri di studio', grab: 'Grab / Gojek', courier: 'Kurir ke luar Bali',
+      components: ' komponen', bouquet: 'Rangkaian custom', paket: 'Paket',
+      single: 'Tangkai satuan', potG: 'Mini pot', addG: 'Tambahan daun',
+      today: 'hari ini', tomorrow: 'besok', inDays: ' hari lagi', daysLate: ' hari lewat',
+      mixed: 'campuran', row: 'Baris Sheet ', readonly: 'Data pesanan dibaca dari sheet Orders — tidak bisa diubah dari sini.',
+      footer: '<b>Prototipe tampilan.</b> Enam pesanan contoh, bukan data pembeli sungguhan. Semua angka dihitung ulang dari Item Data dengan rumus harga yang sama seperti Apps Script, jadi total di sini selalu cocok dengan sheet. Centang dan tahap kerja tersimpan di browser ini saja.'
+    },
+    en: {
+      dueToday: 'due today', late: 'overdue', toCheck: 'to verify', inHand: 'in progress',
+      all: 'All', unstarted: 'Not started', working: 'In progress', ready: 'Ready to ship', done: 'Finished',
+      empty: 'No orders in this group.',
+      back: '← Order list', verify: 'Check first', make: 'What to make', finishing: 'Finishing',
+      deliver: 'Delivery', phase: 'Work phase', notesTitle: 'Work notes',
+      notesPlaceholder: 'Short supply, a swapped colour, a note from the buyer…',
+      paidOk: 'Payment confirmed', paidNo: 'Payment not in yet',
+      paidSub: 'Sheet status: ', priceOk: 'Price verified', priceNo: 'Price flagged REVIEW',
+      priceSub: 'Wait for the total to be confirmed before starting.',
+      dateOk: 'Enough time left', dateTight: 'Tight date', dateLate: 'Past the date',
+      addrOk: 'Destination complete', addrNo: 'Destination incomplete',
+      shipOk: 'Shipping fee filled in', shipNo: 'Shipping fee still empty',
+      shipSub: 'The Shipping Fee column is blank — the owner fills that, not you.',
+      mStock: 'Materials in stock (chenille, wire, pot)', mCard: 'Card text read back once',
+      start: 'Start making', readyToStart: 'Ready to start', next: 'Next: ', backPhase: 'Back',
+      blocked: 'Not ready to start — see the red lines above.',
+      needTicks: 'Tick the two lines above first.',
+      ownerPhase: 'This phase belongs to the owner (shipping).',
+      doneAll: 'Done on the studio side. Waiting on dispatch.',
+      wrap: 'Wrap', stems: 'Total stems', mode: 'Order type', total: 'Verified total',
+      cardYes: 'Message card — copy it exactly', cardNo: 'No message card',
+      cardTo: 'To', cardFrom: 'From', copy: 'Copy card text', copied: 'Copied',
+      pickup: 'Self pickup at studio', grab: 'Grab / Gojek', courier: 'Courier outside Bali',
+      components: ' components', bouquet: 'Custom bouquet', paket: 'Package',
+      single: 'Single stems', potG: 'Mini pot', addG: 'Leaf additions',
+      today: 'today', tomorrow: 'tomorrow', inDays: ' days left', daysLate: ' days over',
+      mixed: 'mixed', row: 'Sheet row ', readonly: 'Order data is read from the Orders sheet — it cannot be edited here.',
+      footer: '<b>Interface prototype.</b> Six example orders, not real buyer data. Every figure is recomputed from Item Data with the same price formula the Apps Script uses, so the totals here always agree with the sheet. Ticks and work phases are stored in this browser only.'
+    }
+  };
+
+  /* =====================================================================
+     Derivation — Item Data JSON → build list, stems, verified total.
+     ===================================================================== */
+  function buildList(order, lang) {
+    var t = T[lang];
+    var rows = [];
+    order.items.forEach(function (item, i) {
+      if (item.type === 'stem') {
+        var f = CATALOG.flowers[item.id];
+        rows.push({ key: 'i' + i, qty: item.qty, name: f[lang], spec: lang === 'id' ? f.spec : f.specEn, group: t.single });
+      } else if (item.type === 'pot') {
+        var p = CATALOG.pots[item.id];
+        rows.push({ key: 'i' + i, qty: item.qty, name: p[lang], spec: lang === 'id' ? p.spec : p.specEn, group: t.potG });
+      } else if (item.type === 'package') {
+        var pkg = CATALOG.packages[Number(item.id)];
+        rows.push({
+          key: 'i' + i, qty: item.qty,
+          name: t.paket + ' ' + pkg.stems + (lang === 'id' ? ' tangkai' : ' stems'),
+          spec: lang === 'id' ? 'pilihan bunga studio' : 'studio-chosen mix', group: t.paket
+        });
+      } else {
+        var label = item.qty > 1 ? item.qty + '× ' + t.bouquet : t.bouquet;
+        Object.keys(item.stems).forEach(function (k) {
+          var fl = CATALOG.flowers[k];
+          rows.push({
+            key: 'i' + i + 's' + k, qty: item.stems[k] * item.qty, name: fl[lang],
+            spec: lang === 'id' ? fl.spec : fl.specEn, group: label
+          });
+        });
+        Object.keys(item.additions || {}).forEach(function (k) {
+          if (!item.additions[k]) return;
+          var ad = CATALOG.additions[k];
+          rows.push({ key: 'i' + i + 'a' + k, qty: item.additions[k] * item.qty, name: ad[lang], spec: '', group: t.addG });
+        });
+      }
+    });
+    return rows;
+  }
+
+  /* Mirrors computeVerifiedTotals() in the Apps Script, including the
+     per-bouquet wrap fee of Rp 35.000 per 3 stems (rounded up). */
+  function totals(order) {
+    var subtotal = 0, stems = 0;
+    order.items.forEach(function (item) {
+      if (item.type === 'stem') {
+        subtotal += CATALOG.flowers[item.id].price * item.qty;
+        stems += item.qty;
+      } else if (item.type === 'pot') {
+        subtotal += CATALOG.pots[item.id].price * item.qty;
+      } else if (item.type === 'package') {
+        var pkg = CATALOG.packages[Number(item.id)];
+        subtotal += pkg.price * item.qty;
+        stems += pkg.stems * item.qty;
+      } else {
+        var bStems = 0, bSub = 0;
+        Object.keys(item.stems).forEach(function (k) {
+          bStems += item.stems[k];
+          bSub += item.stems[k] * CATALOG.flowers[k].price;
+        });
+        Object.keys(item.additions || {}).forEach(function (k) {
+          bSub += item.additions[k] * CATALOG.additions[k].price;
+        });
+        var wrapFee = bStems > 0 ? Math.ceil(bStems / CATALOG.wrapFeeUnitStems) * CATALOG.wrapFeePerUnit : 0;
+        subtotal += (bSub + wrapFee) * item.qty;
+        stems += bStems * item.qty;
+      }
+    });
+    var cardFee = order.card ? CATALOG.messageCardPrice : 0;
+    return { subtotal: subtotal, total: subtotal + cardFee, stems: stems };
+  }
+
+  function orderMode(order, lang) {
+    var types = [];
+    order.items.forEach(function (i) { if (types.indexOf(i.type) < 0) types.push(i.type); });
+    if (types.length > 1) return T[lang].mixed;
+    var t = T[lang];
+    return { stem: t.single, pot: t.potG, package: t.paket, custom: t.bouquet }[types[0]];
+  }
+
+  function daysUntil(dateStr) {
+    var a = new Date(dateStr + 'T00:00:00'), b = new Date(TODAY + 'T00:00:00');
+    return Math.round((a - b) / 86400000);
+  }
+
+  function relDate(dateStr, lang) {
+    var d = daysUntil(dateStr), t = T[lang];
+    if (d < 0) return (-d) + t.daysLate;
+    if (d === 0) return t.today;
+    if (d === 1) return t.tomorrow;
+    return d + t.inDays;
+  }
+
+  function rupiah(n) {
+    return 'Rp ' + n.toLocaleString('id-ID');
+  }
+
+  function fmtDate(dateStr, lang) {
+    var months = lang === 'id'
+      ? ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+      : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var p = dateStr.split('-');
+    return Number(p[2]) + ' ' + months[Number(p[1]) - 1];
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  /* =====================================================================
+     Local state — per-order ticks and phase. Kept in this browser only;
+     the real interface writes the phase back to the sheet.
+     ===================================================================== */
+  var KEY = 'alxanthia-desk-v1';
+  var state = { lang: 'id', lane: 'all', selected: ORDERS[0].ref, per: {} };
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      state.lang = saved.lang === 'en' ? 'en' : 'id';
+      state.per = saved.per && typeof saved.per === 'object' ? saved.per : {};
+    }
+  } catch (e) { /* private window or blocked storage — defaults are fine */ }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ lang: state.lang, per: state.per })); } catch (e) {}
+  }
+
+  function per(ref) {
+    if (!state.per[ref]) state.per[ref] = { ticks: {}, comps: {}, phase: null, notes: null };
+    return state.per[ref];
+  }
+
+  function phaseOf(order) {
+    var p = per(order.ref).phase;
+    return p || order.phase;
+  }
+
+  function notesOf(order) {
+    var n = per(order.ref).notes;
+    return n === null || n === undefined ? order.notes : n;
+  }
+
+  /* =====================================================================
+     Verification gate — four automatic checks read from the sheet, then
+     two she confirms by hand. Nothing starts until all six are green.
+     ===================================================================== */
+  function gate(order, lang) {
+    var t = T[lang];
+    var auto = [];
+    auto.push({
+      ok: order.payment === 'Paid',
+      label: order.payment === 'Paid' ? t.paidOk : t.paidNo,
+      sub: t.paidSub + order.payment
+    });
+    auto.push({
+      ok: !order.mismatch,
+      label: order.mismatch ? t.priceNo : t.priceOk,
+      sub: order.mismatch ? t.priceSub : rupiah(totals(order).total)
+    });
+    var d = daysUntil(order.date);
+    auto.push({
+      ok: d >= 0,
+      label: d < 0 ? t.dateLate : (d < CATALOG.minimumLeadDays ? t.dateTight : t.dateOk),
+      sub: fmtDate(order.date, lang) + ' · ' + relDate(order.date, lang)
+    });
+    if (order.locationType === 'bali') {
+      auto.push({ ok: !!(order.regency && order.method), label: t.addrOk, sub: order.regency + ' · ' + (order.method === 'self_pickup' ? t.pickup : t.grab) });
+    } else {
+      auto.push({
+        ok: order.shippingFee !== null,
+        label: order.shippingFee === null ? t.shipNo : t.shipOk,
+        sub: order.shippingFee === null ? t.shipSub : order.city + ' ' + order.postal
+      });
+    }
+    var manual = [{ key: 'stock', label: t.mStock }];
+    if (order.card) manual.push({ key: 'card', label: t.mCard });
+    var ticks = per(order.ref).ticks;
+    var allAuto = auto.every(function (c) { return c.ok; });
+    var allManual = manual.every(function (m) { return ticks[m.key]; });
+    return { auto: auto, manual: manual, autoOk: allAuto, ready: allAuto && allManual };
+  }
+
+  function laneOf(order) {
+    var p = phaseOf(order);
+    var i = PHASES.findIndex(function (x) { return x.key === p; });
+    if (i <= 0) return 'unstarted';
+    if (i <= 3) return 'working';
+    if (i <= 6) return 'ready';
+    return 'done';
+  }
+
+  /* =====================================================================
+     Render
+     ===================================================================== */
+  var elQueue = document.getElementById('queue');
+  var elTicket = document.getElementById('ticket');
+  var elChips = document.getElementById('chips');
+  var elPulse = document.getElementById('pulse');
+  var refocus = null;
+
+  function renderTop() {
+    var lang = state.lang, t = T[lang];
+    document.getElementById('today').textContent =
+      (lang === 'id' ? 'Sabtu, ' : 'Saturday, ') + '12 Sep 2026 · Asia/Makassar';
+    document.getElementById('lang-id').setAttribute('aria-pressed', String(lang === 'id'));
+    document.getElementById('lang-en').setAttribute('aria-pressed', String(lang === 'en'));
+    document.getElementById('foot').innerHTML = t.footer;
+
+    var late = 0, today = 0, check = 0, hand = 0;
+    ORDERS.forEach(function (o) {
+      var d = daysUntil(o.date), lane = laneOf(o);
+      if (lane === 'done') return;
+      if (d < 0) late++;
+      else if (d === 0) today++;
+      if (lane === 'unstarted') check++;
+      if (lane === 'working') hand++;
+    });
+    elPulse.innerHTML =
+      '<div><b>' + today + '</b><span>' + t.dueToday + '</span></div>' +
+      (late ? '<div class="late"><b>' + late + '</b><span>' + t.late + '</span></div>' : '') +
+      '<div class="check"><b>' + check + '</b><span>' + t.toCheck + '</span></div>' +
+      '<div><b>' + hand + '</b><span>' + t.inHand + '</span></div>';
+
+    var lanes = [
+      { key: 'all', label: t.all },
+      { key: 'unstarted', label: t.unstarted },
+      { key: 'working', label: t.working },
+      { key: 'ready', label: t.ready },
+      { key: 'done', label: t.done }
+    ];
+    elChips.innerHTML = lanes.map(function (l) {
+      var n = l.key === 'all' ? ORDERS.length : ORDERS.filter(function (o) { return laneOf(o) === l.key; }).length;
+      return '<button type="button" data-lane="' + l.key + '" aria-pressed="' + (state.lane === l.key) +
+        '">' + esc(l.label) + '<span class="n">' + n + '</span></button>';
+    }).join('');
+  }
+
+  function renderQueue() {
+    var lang = state.lang, t = T[lang];
+    var list = ORDERS.filter(function (o) { return state.lane === 'all' || laneOf(o) === state.lane; })
+      .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+
+    if (!list.length) {
+      elQueue.innerHTML = '<li class="queue-empty">' + esc(t.empty) + '</li>';
+      return;
+    }
+
+    elQueue.innerHTML = list.map(function (o) {
+      var d = daysUntil(o.date);
+      var lane = laneOf(o);
+      var g = gate(o, lang);
+      var cls = 'card';
+      if (lane !== 'done') {
+        if (d < 0) cls += ' is-late';
+        else if (d === 0) cls += ' is-today';
+        else if (lane === 'working' || lane === 'ready') cls += ' is-working';
+      }
+      var tags = [];
+      if (o.mismatch) tags.push('<span class="tag stop"><span class="dot"></span>REVIEW</span>');
+      if (o.payment !== 'Paid') tags.push('<span class="tag warn"><span class="dot"></span>' + esc(o.payment) + '</span>');
+      if (lane !== 'unstarted') {
+        tags.push('<span class="tag go"><span class="dot"></span>' + esc(PHASES.find(function (p) { return p.key === phaseOf(o); })[lang]) + '</span>');
+      } else if (g.autoOk) {
+        tags.push('<span class="tag go"><span class="dot"></span>' + esc(t.readyToStart) + '</span>');
+      }
+      tags.push('<span class="tag"><span class="swatch" style="background:' + CATALOG.wraps[o.wrap].swatch + '"></span>' + esc(CATALOG.wraps[o.wrap][lang]) + '</span>');
+      if (o.card) tags.push('<span class="tag">' + (lang === 'id' ? 'Kartu' : 'Card') + '</span>');
+
+      var summary = buildList(o, lang).map(function (r) { return r.qty + '× ' + r.name; }).join(' · ');
+
+      return '<li><button type="button" class="' + cls + '" data-ref="' + o.ref + '"' +
+        (state.selected === o.ref ? ' aria-current="true"' : '') + '>' +
+        '<span class="stripe"></span>' +
+        '<span class="body">' +
+          '<span class="row1"><span class="ref">' + esc(o.ref) + '</span>' +
+            '<span class="due">' + esc(fmtDate(o.date, lang)) + ' · ' + esc(relDate(o.date, lang)) + '</span></span>' +
+          '<span class="who">' + esc(o.buyer) + '</span>' +
+          '<span class="what">' + esc(summary) + '</span>' +
+          '<span class="tags">' + tags.join('') + '</span>' +
+        '</span></button></li>';
+    }).join('');
+  }
+
+  function renderTicket() {
+    var lang = state.lang, t = T[lang];
+    var o = ORDERS.find(function (x) { return x.ref === state.selected; });
+    if (!o) { elTicket.innerHTML = ''; return; }
+
+    var g = gate(o, lang);
+    var tot = totals(o);
+    var comps = buildList(o, lang);
+    var ticks = per(o.ref).ticks;
+    var compState = per(o.ref).comps;
+    var doneComps = comps.filter(function (c) { return compState[c.key]; }).length;
+    var d = daysUntil(o.date);
+    var phase = phaseOf(o);
+    var pIndex = PHASES.findIndex(function (p) { return p.key === phase; });
+    var headCls = d < 0 ? ' is-late' : (d === 0 ? ' is-today' : '');
+
+    /* --- head --- */
+    var html = '<button type="button" class="back" data-back="1">' + esc(t.back) + '</button>' +
+      '<div class="ticket-head' + headCls + '">' +
+        '<div class="id"><div class="ref">' + esc(o.ref) + ' · ' + esc(t.row) + o.row + '</div>' +
+          '<h2>' + esc(o.buyer) + '</h2>' +
+          '<a class="wa" href="https://wa.me/' + o.wa.replace('+', '') + '">' + esc(o.wa) + '</a></div>' +
+        '<div class="when"><span class="d">' + esc(fmtDate(o.date, lang)) + '</span>' +
+          '<span class="rel">' + esc(relDate(o.date, lang)) + '</span></div>' +
+      '</div>';
+
+    /* --- verify gate (only while the work has not started) --- */
+    if (pIndex <= 0) {
+      html += '<div class="block"><h3>' + esc(t.verify) + '</h3><ul class="checks">' +
+        g.auto.map(function (c) {
+          return '<li class="' + (c.ok ? 'pass' : 'fail') + '"><span class="mark" aria-hidden="true">' +
+            (c.ok ? '✓' : '✕') + '</span><span>' + esc(c.label) +
+            '<span class="sub">' + esc(c.sub) + '</span></span></li>';
+        }).join('') + '</ul><div class="manual">' +
+        g.manual.map(function (m) {
+          var on = !!ticks[m.key];
+          return '<button type="button" class="tick" data-tick="' + m.key + '" data-fk="tick-' + m.key + '" aria-pressed="' + on + '">' +
+            '<span class="box" aria-hidden="true">✓</span><span class="label">' + esc(m.label) + '</span></button>';
+        }).join('') + '</div>' +
+        '<div class="gate"><button type="button" class="btn" data-advance="1"' + (g.ready ? '' : ' disabled') + '>' +
+        esc(t.start) + '</button><span class="why">' +
+        (g.ready ? '' : esc(g.autoOk ? t.needTicks : t.blocked)) + '</span></div></div>';
+    }
+
+    /* --- what to make --- */
+    var lastGroup = null;
+    html += '<div class="block"><h3>' + esc(t.make) +
+      '<span class="count">' + doneComps + '/' + comps.length + esc(t.components) + '</span></h3><ul class="make">' +
+      comps.map(function (c) {
+        var on = !!compState[c.key];
+        var grp = c.group !== lastGroup ? '<span class="grp">' + esc(c.group) + '</span>' : '';
+        lastGroup = c.group;
+        return '<li><button type="button" class="comp" data-comp="' + c.key + '" data-fk="comp-' + c.key + '" aria-pressed="' + on + '">' +
+          '<span class="box" aria-hidden="true" style="width:16px;height:16px;border:1.5px solid ' +
+          (on ? 'var(--pine);background:var(--pine)' : 'var(--rule-strong)') +
+          ';border-radius:3px;margin-top:3px;display:grid;place-items:center;font:700 11px/1 var(--sans);color:' +
+          (on ? 'var(--on-accent)' : 'transparent') + '">✓</span>' +
+          '<span class="qty">' + c.qty + '×</span>' +
+          '<span>' + grp + '<span class="name">' + esc(c.name) + '</span>' +
+          (c.spec ? '<span class="spec">' + esc(c.spec) + '</span>' : '') + '</span></button></li>';
+      }).join('') + '</ul></div>';
+
+    /* --- finishing: wrap, card, figures --- */
+    var w = CATALOG.wraps[o.wrap];
+    html += '<div class="block"><h3>' + esc(t.finishing) + '</h3><div class="pairs">' +
+      '<div class="pair"><span class="k">' + esc(t.wrap) + '</span><span class="v">' +
+        '<span class="swatch" style="background:' + w.swatch + '"></span>' + esc(w[lang]) + '</span></div>' +
+      '<div class="pair"><span class="k">' + esc(t.stems) + '</span><span class="v">' + tot.stems + '</span></div>' +
+      '<div class="pair"><span class="k">' + esc(t.mode) + '</span><span class="v">' + esc(orderMode(o, lang)) + '</span></div>' +
+      '<div class="pair"><span class="k">' + esc(t.total) + '</span><span class="v">' + esc(rupiah(tot.total)) + '</span></div>' +
+      '</div>';
+
+    if (o.card) {
+      html += '<div style="margin-top:14px"><span class="k" style="font:600 10.5px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">' +
+        esc(t.cardYes) + '</span>' +
+        '<div class="cardnote"><p>' + esc(o.card.text) + '</p>' +
+        '<div class="meta"><span>' + esc(t.cardTo) + ': ' + esc(o.card.to) + '</span>' +
+        '<span>' + esc(t.cardFrom) + ': ' + esc(o.card.from) + '</span></div>' +
+        '<button type="button" class="copy" data-copy="1">' + esc(t.copy) + '</button></div></div>';
+    } else {
+      html += '<p style="margin:14px 0 0;font-size:13px;color:var(--muted)">' + esc(t.cardNo) + '</p>';
+    }
+    html += '</div>';
+
+    /* --- delivery --- */
+    var dest = o.locationType === 'bali'
+      ? (o.method === 'self_pickup' ? t.pickup : t.grab) + ' · ' + o.regency
+      : t.courier + ' · ' + o.address + ', ' + o.city + ' ' + o.postal;
+    html += '<div class="block"><h3>' + esc(t.deliver) + '</h3>' +
+      '<div style="font-size:14.5px">' + esc(dest) + '</div></div>';
+
+    /* --- phases --- */
+    html += '<div class="block"><h3>' + esc(t.phase) + '</h3><div class="phases">' +
+      PHASES.map(function (p, i) {
+        var cls = i < pIndex ? 'done' : (i === pIndex ? 'now' : '');
+        if (p.owner) cls += ' locked';
+        return '<div class="phase ' + cls + '"><span class="line"></span><span class="t">' + esc(p[lang]) +
+          (p.owner ? ' <span class="lock" aria-hidden="true">🔒</span>' : '') + '</span></div>';
+      }).join('') + '</div>';
+
+    var nextPhase = PHASES[pIndex + 1];
+    if (pIndex > 0) {
+      html += '<div class="gate">';
+      if (nextPhase && !nextPhase.owner) {
+        html += '<button type="button" class="btn" data-advance="1">' + esc(t.next) + esc(nextPhase[lang]) + '</button>';
+      } else {
+        html += '<span class="why">' + esc(nextPhase && nextPhase.owner ? t.ownerPhase : t.doneAll) + '</span>';
+      }
+      html += '<button type="button" class="btn ghost" data-retreat="1">' + esc(t.backPhase) + '</button></div>';
+    }
+    html += '</div>';
+
+    /* --- notes --- */
+    html += '<div class="block"><h3>' + esc(t.notesTitle) + '</h3>' +
+      '<textarea class="notes" id="notes-' + o.ref + '" data-fk="notes" placeholder="' + esc(t.notesPlaceholder) + '"></textarea></div>' +
+      '<div class="provenance"><span>Orders · ' + esc(t.row) + o.row + '</span><span>' + esc(t.readonly) + '</span></div>';
+
+    elTicket.innerHTML = html;
+    elTicket.querySelector('.notes').value = notesOf(o);
+
+    if (refocus) {
+      var target = elTicket.querySelector('[data-fk="' + refocus + '"]');
+      if (target) target.focus();
+      refocus = null;
+    }
+  }
+
+  function render() {
+    renderTop();
+    renderQueue();
+    renderTicket();
+  }
+
+  /* =====================================================================
+     Events
+     ===================================================================== */
+  elChips.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-lane]');
+    if (!b) return;
+    state.lane = b.dataset.lane;
+    renderTop();
+    renderQueue();
+  });
+
+  elQueue.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-ref]');
+    if (!b) return;
+    state.selected = b.dataset.ref;
+    document.body.classList.add('detail');
+    renderQueue();
+    renderTicket();
+    elTicket.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+
+  elTicket.addEventListener('click', function (e) {
+    var o = ORDERS.find(function (x) { return x.ref === state.selected; });
+    if (!o) return;
+    var p = per(o.ref);
+
+    var back = e.target.closest('[data-back]');
+    if (back) { document.body.classList.remove('detail'); return; }
+
+    var tick = e.target.closest('[data-tick]');
+    if (tick) {
+      var k = tick.dataset.tick;
+      p.ticks[k] = !p.ticks[k];
+      refocus = 'tick-' + k;
+      save(); renderTicket(); renderQueue(); return;
+    }
+
+    var comp = e.target.closest('[data-comp]');
+    if (comp) {
+      var ck = comp.dataset.comp;
+      p.comps[ck] = !p.comps[ck];
+      refocus = 'comp-' + ck;
+      save(); renderTicket(); return;
+    }
+
+    if (e.target.closest('[data-advance]')) {
+      var i = PHASES.findIndex(function (x) { return x.key === phaseOf(o); });
+      var nxt = PHASES[i + 1];
+      if (nxt && !nxt.owner) { p.phase = nxt.key; save(); render(); }
+      return;
+    }
+
+    if (e.target.closest('[data-retreat]')) {
+      var j = PHASES.findIndex(function (x) { return x.key === phaseOf(o); });
+      if (j > 0) { p.phase = PHASES[j - 1].key; save(); render(); }
+      return;
+    }
+
+    var copyBtn = e.target.closest('[data-copy]');
+    if (copyBtn && o.card) {
+      var text = o.card.text + '\n— ' + o.card.from;
+      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+      copyBtn.textContent = T[state.lang].copied;
+      return;
+    }
+  });
+
+  elTicket.addEventListener('input', function (e) {
+    if (!e.target.classList.contains('notes')) return;
+    per(state.selected).notes = e.target.value;
+    save();
+  });
+
+  document.getElementById('lang-id').addEventListener('click', function () {
+    state.lang = 'id'; save(); render();
+  });
+  document.getElementById('lang-en').addEventListener('click', function () {
+    state.lang = 'en'; save(); render();
+  });
+
+  render();
+</script>

@@ -74,10 +74,14 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(appsScriptSrc, sandbox);
 
-const { computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter } = sandbox;
+const {
+  computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter,
+  normalizeIndonesianPhone, validateHeaderSchema, buildOrderSummary, regenerateOrderReference, REQUIRED_HEADERS
+} = sandbox;
 assert(typeof computeVerifiedTotals === 'function', 'computeVerifiedTotals must be exposed');
 assert(typeof resolveOrderMode === 'function', 'resolveOrderMode must be exposed');
 assert(typeof validateOrder === 'function', 'validateOrder must be exposed');
+assert(typeof normalizeIndonesianPhone === 'function', 'normalizeIndonesianPhone must be exposed');
 
 // ---------------------------------------------------------------------------
 // 3. Also load the real app.js client pricing (computeCartTotals) so the two
@@ -166,7 +170,7 @@ function validOrder(overrides) {
     order_reference: 'ALX-260915-ABCD',
     idempotency_key: '11111111-1111-4111-8111-111111111111',
     submitted_language: 'id', currency: 'IDR', source: 'website', acknowledgement: true,
-    buyer_name: 'Sagita', buyer_whatsapp: '081234567890',
+    buyer_name: 'Sagita', buyer_whatsapp: '+6281234567890', // validateOrder is called directly here, after doPost's normalization step
     location_type: 'bali', regency: 'Denpasar', delivery_method: 'grab_gojek',
     preferred_date: '2026-09-15', // fixedNow is 2026-09-10; lead time default 2 days
     wrap: 'kraft', message_card_enabled: false, gift_message: '', recipient_name: '', card_sender_name: '',
@@ -186,16 +190,37 @@ assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'R
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 9999 }] })).ok, false, 'An absurd quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 1 } }] })).ok, false, 'A custom bouquet below the minimum stem count must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { glitter: 1 } } ] })).ok, false, 'An unknown addition id must be rejected');
+// ALX-06: a huge nested count must be rejected even though MAX_TOTAL_QTY only
+// counts line quantities, not stems/additions inside one custom bouquet.
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 1000000 } }] })).ok, false, 'An absurd per-flower stem count in a custom bouquet must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 20, Tulip: 20, Sunflower: 20 } }] })).ok, true, 'A custom bouquet at the total-stem boundary must be accepted');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 20, Tulip: 20, Sunflower: 21 } }] })).ok, false, 'A custom bouquet over the total-stem boundary must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { rounded: 1000000 } }] })).ok, false, 'An absurd addition count must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 1.7976931348623157e+308 }] })).ok, false, 'A non-safe-integer quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ wrap: 'rainbow' })).ok, false, 'An unlisted wrap id must be rejected');
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: false })).ok, false, 'A false acknowledgement must be rejected');
 assert.strictEqual(validateOrder(validOrder({ acknowledgement: 'true' })).ok, false, 'Acknowledgement must be a real boolean, not the string "true"');
 assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, gift_message: 'sneaked in' })).ok, false, 'Gift text without the card enabled must be rejected');
+// ALX-13: recipient/card-sender names are card-specific fields too, same as gift_message.
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, recipient_name: 'sneaked in' })).ok, false, 'A recipient name without the card enabled must be rejected');
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: false, card_sender_name: 'sneaked in' })).ok, false, 'A card sender name without the card enabled must be rejected');
+assert.strictEqual(validateOrder(validOrder({ message_card_enabled: true, recipient_name: 'Ayu', card_sender_name: 'Sagita' })).ok, true, 'A recipient/sender name WITH the card enabled must be accepted');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'bali', regency: 'Nowhereville' })).ok, false, 'An unlisted Bali regency must be rejected');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'luar_bali', address: 'Jl. Aman 1', city: 'Jakarta', postal_code: '123' })).ok, false, 'A postal code that is not exactly 5 digits must be rejected');
 assert.strictEqual(validateOrder(validOrder({ location_type: 'luar_bali', address: '', city: 'Jakarta', postal_code: '12345' })).ok, false, 'A missing out-of-Bali address must be rejected');
 assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: 'not-a-number' })).ok, false, 'An invalid WhatsApp number must be rejected');
 assert.strictEqual(validateOrder(validOrder({ order_reference: 'NOT-A-REFERENCE' })).ok, false, 'A malformed order reference must be rejected');
 assert.strictEqual(validateOrder(validOrder({ idempotency_key: 'not-a-uuid' })).ok, false, 'A malformed idempotency key must be rejected');
+
+// Phone contract, pinned both ways so this cannot silently regress again (ALX-02):
+// doPost() normalizes buyer_whatsapp to +62... *before* calling validateOrder, so
+// validateOrder itself must only ever accept the already-normalized form.
+assert.strictEqual(normalizeIndonesianPhone('081234567890'), '+6281234567890', 'normalizeIndonesianPhone must convert a local 08... number to +62...');
+assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: '+6281234567890' })).ok, true, 'validateOrder must accept an already-normalized +62 number');
+// By design: validateOrder alone rejects a raw local number. Normalization is
+// doPost's job (see line ~163 of the guide), not validateOrder's — a direct
+// call that skips doPost must fail exactly like this, not be "fixed" here.
+assert.strictEqual(validateOrder(validOrder({ buyer_whatsapp: '081234567890' })).ok, false, 'validateOrder must reject a raw local number — normalization happens in doPost, not here');
 console.log('✔ Suite S4 Passed: manipulated totals, IDs, quantities, card state, and wrap IDs are all rejected\n');
 
 // ---------------------------------------------------------------------------
@@ -207,6 +232,12 @@ assert.strictEqual(isValidLeadTimeDate('2026-09-11'), false, 'One day of lead ti
 assert.strictEqual(isValidLeadTimeDate('2026-09-12'), true, 'Exactly the minimum lead time must be accepted');
 assert.strictEqual(isValidLeadTimeDate('2026-09-20'), true, 'A date further out must be accepted');
 assert.strictEqual(isValidLeadTimeDate('not-a-date'), false, 'A malformed date must be rejected');
+// ALX-12: new Date('2027-02-31') silently rolls forward to March 3rd —
+// a round-trip check against the original Y-M-D is what actually catches it.
+assert.strictEqual(new Date('2027-02-31T00:00:00').getMonth(), 2, 'sanity check: JS Date really does roll an impossible date forward instead of failing');
+assert.strictEqual(isValidLeadTimeDate('2027-02-31'), false, 'An impossible calendar date (Feb 31) must be rejected, not silently rolled forward to March 3rd');
+assert.strictEqual(isValidLeadTimeDate('2026-13-01'), false, 'An impossible month must be rejected');
+assert.strictEqual(isValidLeadTimeDate('2026-09-31'), false, 'A day that does not exist in the given month must be rejected');
 assert.strictEqual(validateOrder(validOrder({ preferred_date: '2026-09-11' })).ok, false, 'validateOrder must enforce the same lead time as isValidLeadTimeDate');
 console.log('✔ Suite S5 Passed: the server enforces the same minimum production lead time as the checkout form\n');
 
@@ -218,6 +249,50 @@ assert.strictEqual(columnToLetter(27), 'AA');
 assert.strictEqual(columnToLetter(37), 'AK');
 console.log('✔ Suite S6 Passed: column index → A1 letter conversion is correct\n');
 
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S7: Sheet schema validation (ALX-07) ---');
+function fakeHeaders(names) {
+  const map = {};
+  const duplicates = [];
+  names.forEach((name, idx) => {
+    if (Object.prototype.hasOwnProperty.call(map, name)) duplicates.push(name);
+    else map[name] = idx;
+  });
+  return { map, length: names.length, duplicates };
+}
+assert.strictEqual(validateHeaderSchema(fakeHeaders(REQUIRED_HEADERS)).ok, true, 'Every required header present exactly once must validate');
+assert.strictEqual(validateHeaderSchema(fakeHeaders(REQUIRED_HEADERS.filter(h => h !== 'Idempotency Key'))).ok, false, 'A missing "Idempotency Key" column must fail schema validation, not silently disable deduplication');
+assert.strictEqual(validateHeaderSchema(fakeHeaders([...REQUIRED_HEADERS, 'Order Reference'])).ok, false, 'A duplicated header must fail schema validation, not silently alias to one column');
+console.log('✔ Suite S7 Passed: missing and duplicated required headers are both rejected before any append\n');
+
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S8: Server-built order summary (ALX-08) ---');
+const summaryItems = [
+  { type: 'stem', id: 'Rose', qty: 1 },
+  { type: 'pot', id: 'lily-of-the-valley', qty: 2 },
+  { type: 'package', id: '2', qty: 1 },
+  { type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { rounded: 1 } }
+];
+const summary = buildOrderSummary(summaryItems, CATALOG);
+assert.ok(summary.includes('1× Rose'), `summary must name the actual stem ordered: "${summary}"`);
+assert.ok(summary.includes('Lily Of The Valley'), `summary must humanize the mini-pot key: "${summary}"`);
+assert.ok(summary.includes(`${CATALOG.packageStems[2]} stems`), `summary must derive the package's real stem count from CATALOG, not trust the browser: "${summary}"`);
+assert.ok(summary.includes('3× Rose') && summary.includes('Rounded'), `summary must include custom-bouquet stems and additions: "${summary}"`);
+// The defect this guards against: a manipulated order_summary claiming
+// something totally different from the validated item_data.
+assert.ok(!summary.toLowerCase().includes('sunflower'), 'the summary must reflect item_data, never an unrelated browser-supplied string');
+console.log('✔ Suite S8 Passed: the stored summary is derived only from validated item_data and CATALOG\n');
+
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S9: Reference collision handling (ALX-09) ---');
+const takenRefs = new Set(['ALX-260915-ABCD', 'ALX-260915-EFGH']);
+const freshRef = regenerateOrderReference('ALX-260915-ABCD', (candidate) => takenRefs.has(candidate));
+assert.ok(freshRef, 'regenerateOrderReference must return a candidate when one is available');
+assert.ok(/^ALX-260915-[A-HJ-NP-Z2-9]{4}$/.test(freshRef), `the regenerated reference must keep the original date segment and match the reference format: "${freshRef}"`);
+assert.ok(!takenRefs.has(freshRef), 'the regenerated reference must not be one that is already taken');
+assert.strictEqual(regenerateOrderReference('ALX-260915-ABCD', () => true), null, 'exhausting every retry must return null so the caller fails loudly instead of storing an ambiguous reference');
+console.log('✔ Suite S9 Passed: a reference collision is resolved to a fresh, unique, correctly-formatted reference\n');
+
 console.log('======================================================================');
-console.log('✔ ALL 6 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 9 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

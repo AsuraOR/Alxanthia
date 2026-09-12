@@ -38,8 +38,49 @@ async function runCheckoutDialogChecks(browser) {
   const endpoint = endpointMatch ? endpointMatch[1] : '';
 
   const page = await browser.newPage();
+  // Unlock via the same localStorage flag app.js checks, seeded before any
+  // page script runs — never the real passcode, and never the removed
+  // `?unlock=` query parameter (ALX-22 instruction 12).
+  await page.addInitScript(() => {
+    try { localStorage.setItem('alxanthia_unlocked', 'true'); } catch (e) {}
+  });
+  // site-content.js now carries a real Turnstile site key (ALX-10), so
+  // app.js's checkout guard genuinely requires a token before submitting.
+  // A live challenge can't (and shouldn't) be solved by a CI browser, so
+  // stub the widget the same way any external dependency gets mocked in
+  // tests: intercept Cloudflare's script and hand back a fake `turnstile`
+  // object that immediately reports success via the real callback app.js
+  // registers. This never talks to Cloudflare and never touches the real
+  // site key/secret — it only proves the checkout flow still works when a
+  // token IS present, which is all these suites are responsible for.
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: `
+        window.turnstile = (function () {
+          var savedCallback = null;
+          return {
+            render: function (container, opts) {
+              savedCallback = opts && opts.callback;
+              setTimeout(function () { if (savedCallback) savedCallback('test-turnstile-token'); }, 0);
+              return 'mock-widget-id';
+            },
+            // Mirrors real Turnstile: a reset widget re-verifies and calls
+            // back with a fresh token on its own, since app.js's token is
+            // single-use and resets it after every submission attempt.
+            reset: function () {
+              setTimeout(function () { if (savedCallback) savedCallback('test-turnstile-token-' + Date.now()); }, 0);
+            }
+          };
+        })();
+        if (typeof window.__alxanthiaTurnstileReady === 'function') window.__alxanthiaTurnstileReady();
+      `
+    });
+  });
   let mockMode = 'success'; // 'success' | 'duplicate' | 'conflict' | 'timeout' | 'serverError'
   let capturedRequests = 0;
+  const capturedBodies = []; // ALX-03: inspected to prove a retry reuses the same idempotency_key
 
   if (endpoint) {
     await page.route(endpoint, async (route) => {
@@ -47,6 +88,7 @@ async function runCheckoutDialogChecks(browser) {
       if (req.method() !== 'POST') return route.continue();
       capturedRequests += 1;
       const body = JSON.parse(req.postData() || '{}');
+      capturedBodies.push(body);
       if (mockMode === 'timeout') {
         // Never resolve within the test's window — simulates an unreachable
         // upstream; the app's own 20s AbortController would eventually fire
@@ -61,6 +103,15 @@ async function runCheckoutDialogChecks(browser) {
       if (mockMode === 'serverError') {
         return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream' }) });
       }
+      if (mockMode === 'renamed') {
+        // ALX-09: simulates the server resolving a rare reference collision —
+        // a different order_reference than the one sent, echoed back via
+        // renamed_from so the client can tell it's the SAME attempt succeeding.
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ ok: true, order_reference: body.order_reference + '-R', renamed_from: body.order_reference })
+        });
+      }
       return route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({ ok: true, order_reference: body.order_reference, duplicate: mockMode === 'duplicate' })
@@ -71,7 +122,7 @@ async function runCheckoutDialogChecks(browser) {
   page.on('pageerror', (err) => assert('No uncaught page error during checkout flow', false, String(err)));
 
   try {
-    await page.goto(URL.replace('/tests/browser-runner.html', '/index.html?unlock=22062024'), { waitUntil: 'load', timeout: 15000 });
+    await page.goto(URL.replace('/tests/browser-runner.html', '/index.html'), { waitUntil: 'load', timeout: 15000 });
     await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
 
     // A `hidden`-attribute element must actually render hidden — regression
@@ -213,6 +264,28 @@ async function runCheckoutDialogChecks(browser) {
     assert('DEV-10: reopening checkout after success shows the success step again', reviewHiddenOnReopen && successVisibleOnReopen);
     assert('DEV-10: the reference is unchanged on reopen', referenceBefore === referenceAfter, `before=${referenceBefore} after=${referenceAfter}`);
 
+    // --- ALX-05: adding a product after success must open a fresh review
+    //     of the new draft, not silently reopen the stale success screen
+    //     over products the customer hasn't submitted yet. The recorded
+    //     order must stay reachable separately, via the recent-order banner.
+    await page.click('#checkout-close');
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { window.AlxanthiaApp.selectStem('Tulip', false); });
+    await page.click('#btn-checkout');
+    await page.waitForSelector('#checkout-modal[open]', { timeout: 5000 });
+    const reviewVisibleAfterCartChange = await page.evaluate(() => !document.getElementById('checkout-review').hidden);
+    const successHiddenAfterCartChange = await page.evaluate(() => document.getElementById('checkout-success').hidden);
+    assert('ALX-05: adding a product after a recorded success opens a fresh review, not the stale success screen', reviewVisibleAfterCartChange && successHiddenAfterCartChange, `reviewVisible=${reviewVisibleAfterCartChange} successHidden=${successHiddenAfterCartChange}`);
+    const reviewItemsAfterCartChange = await page.locator('#checkout-items').textContent();
+    assert('ALX-05: the fresh review reflects the newly added product', !!(reviewItemsAfterCartChange && reviewItemsAfterCartChange.toLowerCase().includes('tulip')), `items: "${reviewItemsAfterCartChange}"`);
+    const bannerStillShowsRecordedOrder = await page.evaluate(() => {
+      const el = document.getElementById('recent-order-banner');
+      return !!el && !el.hidden;
+    });
+    assert('ALX-05: the previously recorded order stays reachable via the recent-order banner after starting a new draft', bannerStillShowsRecordedOrder === true);
+    await page.click('#checkout-edit'); // back out without submitting the new draft
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+
     // --- DEV-10: recent-order banner survives a reload --------------------
     await page.reload({ waitUntil: 'load' });
     await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
@@ -227,6 +300,18 @@ async function runCheckoutDialogChecks(browser) {
     await page.click('#recent-order-view');
     await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
 
+    // --- ALX-18: the recent-order record never persists the buyer's name,
+    //     and its WhatsApp link is rebuilt without one on recovery.
+    const recoveredWaHref = await page.getAttribute('#checkout-whatsapp', 'href');
+    assert('ALX-18: the recovered WhatsApp link does not contain the buyer\'s name', !!(recoveredWaHref && !recoveredWaHref.includes('Sagita')), `href: "${recoveredWaHref}"`);
+    const storedRecordHasNoWaUrl = await page.evaluate(() => {
+      const raw = localStorage.getItem('alxanthia_recent_order_v1');
+      if (!raw) return false;
+      const record = JSON.parse(raw);
+      return !('waUrl' in record) && JSON.stringify(record).indexOf('Sagita') === -1;
+    });
+    assert('ALX-18: the stored recent-order record contains no waUrl field and no buyer name', storedRecordHasNoWaUrl === true);
+
     // --- DEV-18: clipboard-denied fallback ---------------------------------
     await page.evaluate(() => {
       // Force the clipboard write to reject, as it would with denied permission.
@@ -239,6 +324,89 @@ async function runCheckoutDialogChecks(browser) {
       return !!el && !el.hidden && el.textContent.length > 0;
     });
     assert('DEV-18: a denied clipboard write shows a selectable manual-copy fallback', fallbackVisible === true);
+
+    // The clipboard test left the success screen open — close it before
+    // starting a fresh attempt, since #btn-checkout is unreachable while a
+    // modal dialog covers it.
+    await page.evaluate(() => { const m = document.getElementById('checkout-modal'); if (m.hasAttribute('open')) m.close(); });
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+
+    // --- ALX-18: dismissing the banner is persistent, not just in-memory --
+    await page.click('#recent-order-dismiss');
+    const bannerHiddenAfterDismiss = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    assert('ALX-18: dismissing the banner hides it immediately', bannerHiddenAfterDismiss === true);
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    const bannerStillHiddenAfterReload = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    assert('ALX-18: a dismissed banner stays dismissed after a reload, not just for the current session', bannerStillHiddenAfterReload === true);
+
+    // --- ALX-18: an expired record (older than the 14-day retention
+    //     window) must stop reappearing as "recent" ------------------------
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('alxanthia_recent_order_v1');
+      const record = JSON.parse(raw);
+      record.dismissed = false; // undo the dismiss above so expiry is what's under test
+      record.timestamp = Date.now() - (15 * 24 * 60 * 60 * 1000); // 15 days old
+      localStorage.setItem('alxanthia_recent_order_v1', JSON.stringify(record));
+    });
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    const bannerHiddenWhenExpired = await page.evaluate(() => document.getElementById('recent-order-banner').hidden);
+    const recordClearedWhenExpired = await page.evaluate(() => localStorage.getItem('alxanthia_recent_order_v1') === null);
+    assert('ALX-18: an expired recent-order record no longer shows the banner', bannerHiddenWhenExpired === true);
+    assert('ALX-18: an expired recent-order record is cleared from storage, not just hidden', recordClearedWhenExpired === true);
+
+    // --- ALX-03: an uncertain submission survives a reload and retries
+    //     with the SAME idempotency key — never minting a new UUID for a
+    //     request the server may already have stored under the first one.
+    await openCheckoutOnFreshStem();
+    const referenceBeforeAmbiguous = await page.locator('#checkout-reference').textContent();
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'timeout'; // aborted mid-flight — the outcome is uncertain, not a definite failure
+    const requestsBeforeUncertain = capturedRequests;
+    await page.click('#save-order');
+    await page.waitForFunction(() => document.getElementById('save-order') && !document.getElementById('save-order').disabled, { timeout: 5000 });
+    assert('ALX-03 setup: the uncertain submission actually reached the network once', capturedRequests === requestsBeforeUncertain + 1, `before=${requestsBeforeUncertain} after=${capturedRequests}`);
+    const firstIdempotencyKey = capturedBodies[capturedBodies.length - 1].idempotency_key;
+
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.AlxanthiaApp, { timeout: 10000 });
+    await page.click('#btn-checkout');
+    await page.waitForSelector('#checkout-modal[open]', { timeout: 5000 });
+    const reviewVisibleAfterUncertainReload = await page.evaluate(() => !document.getElementById('checkout-review').hidden);
+    assert('ALX-03: reopening after an uncertain outcome shows the (unsubmitted) review, since the order was never confirmed', reviewVisibleAfterUncertainReload === true);
+    const referenceAfterUncertainReload = await page.locator('#checkout-reference').textContent();
+    assert('ALX-03: the order reference is unchanged after reloading following an uncertain submission', referenceAfterUncertainReload === referenceBeforeAmbiguous, `before=${referenceBeforeAmbiguous} after=${referenceAfterUncertainReload}`);
+
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'success';
+    await page.click('#save-order');
+    await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
+    const secondIdempotencyKey = capturedBodies[capturedBodies.length - 1].idempotency_key;
+    assert('ALX-03: retrying after an uncertain outcome reuses the same idempotency key, not a freshly minted UUID', secondIdempotencyKey === firstIdempotencyKey, `first=${firstIdempotencyKey} second=${secondIdempotencyKey}`);
+    const finalReference = await page.locator('#success-reference').textContent();
+    assert('ALX-03: the retried submission is recorded under the original reference', finalReference === referenceBeforeAmbiguous, `original=${referenceBeforeAmbiguous} recorded=${finalReference}`);
+
+    // --- ALX-09: a server-resolved reference collision (a different
+    //     order_reference, echoed back via renamed_from) is accepted as a
+    //     genuine success for THIS attempt, and the success screen shows
+    //     the server's renamed reference, not the one the client proposed.
+    await page.evaluate(() => { const m = document.getElementById('checkout-modal'); if (m.hasAttribute('open')) m.close(); });
+    await page.waitForSelector('#checkout-modal:not([open])', { state: 'attached', timeout: 5000 });
+    await openCheckoutOnFreshStem();
+    const referenceProposed = await page.locator('#checkout-reference').textContent();
+    await page.click('#checkout-continue');
+    await page.waitForSelector('#checkout-form-step:not([hidden])');
+    await fillValidForm();
+    mockMode = 'renamed';
+    await page.click('#save-order');
+    await page.waitForSelector('#checkout-success:not([hidden])', { timeout: 5000 });
+    const referenceRecorded = await page.locator('#success-reference').textContent();
+    assert('ALX-09: a server-side rename after a reference collision is accepted as success', referenceRecorded === `${referenceProposed}-R`, `proposed=${referenceProposed} recorded=${referenceRecorded}`);
   } catch (err) {
     assert('Checkout dialog flow completed without throwing', false, err && err.stack ? err.stack : String(err));
   } finally {
@@ -294,7 +462,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Error running browser runner:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Error running browser runner:', err.message);
+    process.exit(1);
+  });
+}
+module.exports = { runCheckoutDialogChecks };

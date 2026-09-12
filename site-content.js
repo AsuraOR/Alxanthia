@@ -44,7 +44,7 @@ window.ALXANTHIA_DATA = {
     // not a secret). Leave blank until you create a Turnstile widget for
     // alxanthia.com; the checkout form simply skips the verification step while
     // this is empty. See CONFIGURE-SUBMISSION-ENDPOINT.md Part 3a.
-    turnstileSiteKey: "",
+    turnstileSiteKey: "0x4AAAAAAEw6umRU8UfK3ORl",
     whatsappTemplates: {
       id: {
         stem: "Halo Alxanthia! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",
@@ -381,7 +381,7 @@ window.ALXANTHIA_DATA = {
         "Kartu petunjuk perawatan disertakan"
       ],
       pkgBtn: "Tambahkan buket ini",
-      pkgBtnActive: "✓ Dipilih",
+      pkgBtnActive: "✓ {qty} di keranjang — tambah lagi",
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
@@ -406,6 +406,7 @@ window.ALXANTHIA_DATA = {
       estTotalLabel: "Estimasi total",
       stemsWord: "tangkai",
       stemWord: "tangkai",
+      stickyMultiItemLabel: "{n} produk",
       minHint: "Tambahkan minimal {minStems} tangkai untuk memesan buket custom.",
       okHint: "Estimasi — total akhir dan ongkir kami konfirmasikan via chat sebelum pembayaran.",
       customAddAnotherHint: "Buket custom yang sudah ada di keranjang tidak akan berubah — ini menambahkan buket baru.",
@@ -495,8 +496,15 @@ window.ALXANTHIA_DATA = {
       floatingCartLabel: "di keranjang",
       floatingCartAriaLabel: "Lihat keranjang — {n} item",
       announceQtyChanged: "{item} diperbarui menjadi {qty}. {n} item di keranjang.",
+      cartLimitQtyPerLine: "Maksimum {max} per baris pesanan.",
+      cartLimitLines: "Maksimum {max} baris berbeda dalam satu pesanan.",
+      cartLimitTotalQty: "Maksimum {max} item dalam satu pesanan.",
+      customLimitStemsPerFlower: "Maksimum {max} tangkai per jenis bunga.",
+      customLimitTotalStems: "Maksimum {max} tangkai per buket custom.",
+      customLimitAddition: "Maksimum {max} per jenis tambahan.",
 
       wrapNames: { kraft: "Kraft", cream: "Krem", sage: "Sage", blush: "Blush" },
+      wrapAriaSuffix: "kertas pembungkus",
 
       // Native checkout dialog copy (DEV-13) — every string the checkout dialog shows,
       // in one place per language, including live-status and error text.
@@ -542,7 +550,7 @@ window.ALXANTHIA_DATA = {
       checkoutDateLabel: "Tanggal yang diinginkan",
       checkoutDeliveryHelp: "Tanggal merupakan preferensi dan akan dikonfirmasi melalui WhatsApp. Pesanan butuh minimal {days} hari persiapan sebelum tanggal ini.",
       checkoutAckLabel: "Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.",
-      checkoutPrivacyNotice: "Nama, nomor WhatsApp, alamat, dan detail penerima yang Anda isi hanya dipakai untuk memproses, mengirim, dan mengonfirmasi pesanan ini. Data disimpan di spreadsheet internal Alxanthia yang aksesnya dibatasi hanya untuk tim studio, selama {retention}, lalu dihapus kecuali dibutuhkan untuk catatan keuangan. Dengan mencentang kotak di bawah, Anda menyetujui data ini diproses sebagaimana dijelaskan di atas.",
+      checkoutPrivacyNotice: "Nama, nomor WhatsApp, alamat, dan detail penerima yang Anda isi hanya dipakai untuk memproses, mengirim, dan mengonfirmasi pesanan ini. Data disimpan di spreadsheet internal Alxanthia yang aksesnya dibatasi hanya untuk tim studio, selama {retention}, lalu dihapus kecuali dibutuhkan untuk catatan keuangan. Browser Anda juga menyimpan keranjang belanja dan nomor referensi pesanan terakhir secara lokal di perangkat ini (bukan di server kami) selama 14 hari agar mudah ditemukan lagi — ini terpisah dari jangka waktu penyimpanan di atas. Gunakan tombol \"Kosongkan keranjang\" untuk menghapusnya kapan saja, terutama pada perangkat bersama. Dengan mencentang kotak di bawah, Anda menyetujui data ini diproses sebagaimana dijelaskan di atas.",
       checkoutPrivacyLinkText: "Kebijakan privasi",
       checkoutRequiredMark: "(wajib)",
       checkoutSaveOrder: "Simpan pesanan",
@@ -691,7 +699,7 @@ window.ALXANTHIA_DATA = {
         "Care guide card included"
       ],
       pkgBtn: "Add this bouquet",
-      pkgBtnActive: "✓ Selected",
+      pkgBtnActive: "✓ {qty} in cart — add another",
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
@@ -716,6 +724,7 @@ window.ALXANTHIA_DATA = {
       estTotalLabel: "Estimated total",
       stemsWord: "stems",
       stemWord: "stem",
+      stickyMultiItemLabel: "{n} products",
       minHint: "Add at least {minStems} stems to order a custom bouquet.",
       okHint: "An estimate — final totals and shipping are confirmed via chat before payment.",
       customAddAnotherHint: "Custom bouquets already in your cart won't change — this adds a new one.",
@@ -805,8 +814,15 @@ window.ALXANTHIA_DATA = {
       floatingCartLabel: "in cart",
       floatingCartAriaLabel: "View cart — {n} item(s)",
       announceQtyChanged: "{item} updated to {qty}. {n} item(s) in cart.",
+      cartLimitQtyPerLine: "Maximum {max} per order line.",
+      cartLimitLines: "Maximum {max} different lines in one order.",
+      cartLimitTotalQty: "Maximum {max} items in one order.",
+      customLimitStemsPerFlower: "Maximum {max} stems per flower type.",
+      customLimitTotalStems: "Maximum {max} stems per custom bouquet.",
+      customLimitAddition: "Maximum {max} per addition type.",
 
       wrapNames: { kraft: "Kraft", cream: "Cream", sage: "Sage", blush: "Blush" },
+      wrapAriaSuffix: "wrap paper",
 
       // Native checkout dialog copy (DEV-13) — every string the checkout dialog shows,
       // in one place per language, including live-status and error text.
@@ -852,7 +868,7 @@ window.ALXANTHIA_DATA = {
       checkoutDateLabel: "Preferred date",
       checkoutDeliveryHelp: "The date is a preference and will be confirmed through WhatsApp. Orders need at least {days} day(s) of preparation before this date.",
       checkoutAckLabel: "I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.",
-      checkoutPrivacyNotice: "The name, WhatsApp number, address, and recipient details you enter are only used to process, deliver, and confirm this order. Data is stored in Alxanthia's internal spreadsheet, access-restricted to the studio team only, for {retention}, then deleted unless it is needed for financial records. By checking the box below, you consent to this data being processed as described above.",
+      checkoutPrivacyNotice: "The name, WhatsApp number, address, and recipient details you enter are only used to process, deliver, and confirm this order. Data is stored in Alxanthia's internal spreadsheet, access-restricted to the studio team only, for {retention}, then deleted unless it is needed for financial records. Your browser also keeps your cart and your most recent order reference stored locally on this device (not on our servers) for 14 days so you can find them again — this is separate from the retention period above. Use the \"Clear cart\" button to remove it at any time, especially on a shared device. By checking the box below, you consent to this data being processed as described above.",
       checkoutPrivacyLinkText: "Privacy notice",
       checkoutRequiredMark: "(required)",
       checkoutSaveOrder: "Save order",

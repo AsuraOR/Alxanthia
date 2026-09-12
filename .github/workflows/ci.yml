@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cart/pricing/metadata suites
+        run: npm test
+
+      - name: Build the deployed dist/ output
+        run: npm run build
+
+      - name: Auto-commit dist/ if source files changed
+        run: |
+          if git diff --quiet -- dist/; then
+            echo "dist/ already matches the source files — nothing to do."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add dist/
+            git commit -m "chore: rebuild dist/ [skip ci]"
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
+      - name: Install Chromium for the browser suite
+        run: npx playwright install --with-deps chromium
+
+      - name: Real-browser suite
+        run: |
+          npm run serve &
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:8080/index.html > /dev/null && break
+            sleep 1
+          done
+          npm run test:browser

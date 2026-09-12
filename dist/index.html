@@ -9,6 +9,17 @@
     content="Bunga kawat bulu chenille yang tak pernah layu: Bunga Matahari, Mawar, Tulip, dan Gerbera. Dirangkai rapi oleh kami, tersedia per tangkai atau buket siap pajang." />
   <link rel="canonical" href="https://alxanthia.com/" />
 
+  <!-- Content-Security-Policy (ALX-26): defence in depth, since the site posts
+       customer PII (name, phone, address) to an external endpoint. GitHub
+       Pages can't set response headers, so this covers everything except
+       frame-ancestors. 'unsafe-inline' is required by the inline unlock
+       script below and by inline style="" attributes app.js writes into
+       card markup. connect-src is scoped to the exact configured order
+       endpoint — update it here too if orderSubmissionUrl in
+       site-content.js ever changes to a different hostname. -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://alxanthia-order-endpoint.ketut-ketut92.workers.dev; frame-src https://challenges.cloudflare.com; base-uri 'self'; form-action 'none'" />
+
   <!-- Robots Directive (Development / Staging Mode: change to 'index, follow' upon public release) -->
   <meta name="robots" content="noindex, nofollow" />
 
@@ -21,7 +32,7 @@
     content="Bunga yang tak pernah layu — dirangkai tangan kami untuk Anda. Bunga Matahari, Mawar, Tulip, dan Gerbera." />
   <meta property="og:image" content="https://alxanthia.com/img/hero-1122.webp" />
   <meta property="og:image:width" content="1122" />
-  <meta property="og:image:height" content="1122" />
+  <meta property="og:image:height" content="1402" />
   <meta property="og:image:alt" content="Alxanthia handcrafted chenille stem sunflower botanical plate" />
 
   <!-- Twitter Card -->
@@ -71,58 +82,16 @@
             "position": 1,
             "item": {
               "@type": "Product",
-              "name": "Bunga Matahari (Helianthus annuus) — Tangkai Jadi & Buket",
+              "name": "Bunga Matahari (Helianthus annuus) — Tangkai Jadi",
               "image": "https://alxanthia.com/img/sunflower-720.webp",
-              "description": "Bunga matahari kawat bulu chenille dengan mahkota cokelat bertekstur rapat dan kelopak kuning hangat.",
+              "description": "Bunga matahari kawat bulu chenille dengan mahkota cokelat bertekstur rapat dan kelopak kuning hangat, dijual per tangkai.",
               "brand": { "@id": "https://alxanthia.com/#organization" },
               "offers": {
-                "@type": "AggregateOffer",
+                "@type": "Offer",
+                "price": 55000,
                 "priceCurrency": "IDR",
-                "lowPrice": 55000,
-                "highPrice": 745000,
-                "offerCount": 5,
-                "offers": [
-                  {
-                    "@type": "Offer",
-                    "name": "Bunga Matahari — Tangkai Jadi",
-                    "price": 55000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#order"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Mini Bunga Matahari (3 Tangkai)",
-                    "price": 195000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Sedang Bunga Matahari (5 Tangkai)",
-                    "price": 295000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Besar Bunga Matahari (9 Tangkai)",
-                    "price": 465000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Istimewa Bunga Matahari (15 Tangkai)",
-                    "price": 745000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  }
-                ]
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#order"
               }
             }
           },
@@ -131,58 +100,16 @@
             "position": 2,
             "item": {
               "@type": "Product",
-              "name": "Mawar (Rosa centifolia) — Tangkai Jadi & Buket",
+              "name": "Mawar (Rosa centifolia) — Tangkai Jadi",
               "image": "https://alxanthia.com/img/rose-720.webp",
-              "description": "Bunga mawar kawat bulu chenille dengan kelopak berlapis spiral lembut untuk pajangan meja elegan.",
+              "description": "Bunga mawar kawat bulu chenille dengan kelopak berlapis spiral lembut, dijual per tangkai.",
               "brand": { "@id": "https://alxanthia.com/#organization" },
               "offers": {
-                "@type": "AggregateOffer",
+                "@type": "Offer",
+                "price": 60000,
                 "priceCurrency": "IDR",
-                "lowPrice": 60000,
-                "highPrice": 745000,
-                "offerCount": 5,
-                "offers": [
-                  {
-                    "@type": "Offer",
-                    "name": "Mawar — Tangkai Jadi",
-                    "price": 60000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#order"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Mini Mawar (3 Tangkai)",
-                    "price": 195000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Sedang Mawar (5 Tangkai)",
-                    "price": 295000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Besar Mawar (9 Tangkai)",
-                    "price": 465000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Istimewa Mawar (15 Tangkai)",
-                    "price": 745000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  }
-                ]
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#order"
               }
             }
           },
@@ -191,58 +118,16 @@
             "position": 3,
             "item": {
               "@type": "Product",
-              "name": "Tulip (Tulipa gesneriana) — Tangkai Jadi & Buket",
+              "name": "Tulip (Tulipa gesneriana) — Tangkai Jadi",
               "image": "https://alxanthia.com/img/tulip-720.webp",
-              "description": "Bunga tulip kawat bulu chenille enam kelopak rapi dengan daun ramping anggun.",
+              "description": "Bunga tulip kawat bulu chenille enam kelopak rapi dengan daun ramping anggun, dijual per tangkai.",
               "brand": { "@id": "https://alxanthia.com/#organization" },
               "offers": {
-                "@type": "AggregateOffer",
+                "@type": "Offer",
+                "price": 50000,
                 "priceCurrency": "IDR",
-                "lowPrice": 50000,
-                "highPrice": 745000,
-                "offerCount": 5,
-                "offers": [
-                  {
-                    "@type": "Offer",
-                    "name": "Tulip — Tangkai Jadi",
-                    "price": 50000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#order"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Mini Tulip (3 Tangkai)",
-                    "price": 195000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Sedang Tulip (5 Tangkai)",
-                    "price": 295000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Besar Tulip (9 Tangkai)",
-                    "price": 465000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Istimewa Tulip (15 Tangkai)",
-                    "price": 745000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  }
-                ]
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#order"
               }
             }
           },
@@ -251,58 +136,142 @@
             "position": 4,
             "item": {
               "@type": "Product",
-              "name": "Gerbera (Gerbera jamesonii) — Tangkai Jadi & Buket",
+              "name": "Gerbera (Gerbera jamesonii) — Tangkai Jadi",
               "image": "https://alxanthia.com/img/gerbera-720.webp",
-              "description": "Bunga gerbera kawat bulu chenille dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
+              "description": "Bunga gerbera kawat bulu chenille dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji, dijual per tangkai.",
               "brand": { "@id": "https://alxanthia.com/#organization" },
               "offers": {
-                "@type": "AggregateOffer",
+                "@type": "Offer",
+                "price": 55000,
                 "priceCurrency": "IDR",
-                "lowPrice": 55000,
-                "highPrice": 745000,
-                "offerCount": 5,
-                "offers": [
-                  {
-                    "@type": "Offer",
-                    "name": "Gerbera — Tangkai Jadi",
-                    "price": 55000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#order"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Mini Gerbera (3 Tangkai)",
-                    "price": 195000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Sedang Gerbera (5 Tangkai)",
-                    "price": 295000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Besar Gerbera (9 Tangkai)",
-                    "price": 465000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  },
-                  {
-                    "@type": "Offer",
-                    "name": "Buket Istimewa Gerbera (15 Tangkai)",
-                    "price": 745000,
-                    "priceCurrency": "IDR",
-                    "availability": "https://schema.org/InStock",
-                    "url": "https://alxanthia.com/#bouquets"
-                  }
-                ]
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#order"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "item": {
+              "@type": "Product",
+              "name": "Buket Mini Campuran (3 Tangkai)",
+              "image": "https://alxanthia.com/img/bouquet-3-720.webp",
+              "description": "Buket 3 tangkai bunga kawat bulu chenille dengan komposisi campuran pilihan studio — bukan buket satu jenis bunga.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 195000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#bouquets"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 6,
+            "item": {
+              "@type": "Product",
+              "name": "Buket Sedang Campuran (5 Tangkai)",
+              "image": "https://alxanthia.com/img/bouquet-5-720.webp",
+              "description": "Buket 5 tangkai bunga kawat bulu chenille dengan komposisi campuran pilihan studio — bukan buket satu jenis bunga.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 295000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#bouquets"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 7,
+            "item": {
+              "@type": "Product",
+              "name": "Buket Besar Campuran (9 Tangkai)",
+              "image": "https://alxanthia.com/img/bouquet-9-720.webp",
+              "description": "Buket 9 tangkai bunga kawat bulu chenille dengan komposisi campuran pilihan studio — bukan buket satu jenis bunga.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 465000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#bouquets"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 8,
+            "item": {
+              "@type": "Product",
+              "name": "Buket Istimewa Campuran (15 Tangkai)",
+              "image": "https://alxanthia.com/img/bouquet-15-720.webp",
+              "description": "Buket 15 tangkai bunga kawat bulu chenille dengan komposisi campuran pilihan studio — bukan buket satu jenis bunga.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 745000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#bouquets"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 9,
+            "item": {
+              "@type": "Product",
+              "name": "Mini Pot Bunga Matahari",
+              "image": "https://alxanthia.com/img/mini-pot-sunflower.webp",
+              "description": "Bunga matahari cerah dalam pot mini yang seluruhnya dibuat dari kawat bulu chenille.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 125000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#mini-pots"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 10,
+            "item": {
+              "@type": "Product",
+              "name": "Mini Pot Lily of the Valley",
+              "image": "https://alxanthia.com/img/mini-pot-lily-of-the-valley.webp",
+              "description": "Lonceng putih mungil yang dirangkai lembut di dalam pot kawat bulu chenille.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 125000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#mini-pots"
+              }
+            }
+          },
+          {
+            "@type": "ListItem",
+            "position": 11,
+            "item": {
+              "@type": "Product",
+              "name": "Mini Pot Daisy",
+              "image": "https://alxanthia.com/img/mini-pot-daisy.webp",
+              "description": "Daisy putih dengan pusat keemasan dalam pot kawat bulu chenille untuk sudut kecil.",
+              "brand": { "@id": "https://alxanthia.com/#organization" },
+              "offers": {
+                "@type": "Offer",
+                "price": 125000,
+                "priceCurrency": "IDR",
+                "availability": "https://schema.org/InStock",
+                "url": "https://alxanthia.com/#mini-pots"
               }
             }
           }
@@ -354,6 +323,28 @@
       <p id="lock-error" class="lock-error" aria-live="polite" role="alert"></p>
     </div>
   </div>
+
+  <!-- ========================================================================
+       STATIC FALLBACK — shown when JavaScript is disabled (ALX-24) or the
+       site fails to initialize (ALX-22). Deliberately hardcoded: it must
+       stay readable even when site-content.js itself is what's broken.
+       ======================================================================== -->
+  <div id="site-unavailable" class="site-unavailable">
+    <div class="site-unavailable-card">
+      <p class="site-unavailable-brand">Alxanthia</p>
+      <p class="site-unavailable-message">
+        Situs sedang tidak dapat dimuat. Hubungi kami melalui WhatsApp untuk memesan.<br />
+        The site can't load right now. Contact us on WhatsApp to place an order.
+      </p>
+      <a class="site-unavailable-link" href="https://wa.me/628972000622" target="_blank" rel="noopener noreferrer">WhatsApp: +62 897-2000-622</a>
+    </div>
+  </div>
+  <noscript>
+    <style>
+      .lock-screen { display: none !important; }
+      .site-unavailable { display: flex !important; }
+    </style>
+  </noscript>
   <script>
     // Instant unlock check to prevent flash of lock screen for verified visitors
     try {
@@ -507,7 +498,7 @@
       <!-- Category 01 Header Row -->
       <div class="category-header-row">
         <span class="category-mono-label" id="cat1-label">Kategori 01</span>
-        <h3 class="category-serif-title" id="cat1-title">Bunga jadi</h3>
+        <h3 class="category-serif-title" id="cat1-title" tabindex="-1">Bunga jadi</h3>
         <p class="category-note" id="cat1-note">Empat bunga, semuanya kami rangkai dan dijual per tangkai.</p>
       </div>
 
@@ -550,7 +541,7 @@
       <div class="custom-builder-panel" id="custom-builder">
         <div class="custom-builder-header">
           <p class="eyebrow" id="custom-eyebrow">Buket custom</p>
-          <h4 class="custom-builder-title" id="custom-title">Atau hitung sendiri isinya</h4>
+          <h3 class="custom-builder-title" id="custom-title">Atau hitung sendiri isinya</h3>
           <p class="custom-builder-intro" id="custom-intro">Tambahkan bunga yang Anda inginkan, estimasi harga
             diperbarui seketika. Minimal 3 tangkai; 9 tangkai ke atas otomatis mendapat potongan 10% untuk bunganya.</p>
           <button type="button" class="btn-toggle-custom" id="btn-toggle-custom" aria-expanded="true"
@@ -572,15 +563,8 @@
             </div>
             <fieldset class="custom-additions-fieldset">
               <legend class="step-label" id="custom-additions-label">Pilih tambahan</legend>
-              <p class="custom-additions-note" id="custom-additions-note">Tambahkan daun pilihan atau kartu ucapan.</p>
+              <p class="custom-additions-note" id="custom-additions-note">Tambahkan daun pilihan untuk buket Anda.</p>
               <div class="custom-additions-grid" id="custom-additions-grid"></div>
-              <label class="custom-message-card-option">
-                <input type="checkbox" id="custom-message-card" />
-                <span>
-                  <strong id="custom-message-card-label">Tambahkan kartu ucapan</strong>
-                  <small id="custom-message-card-note">Gratis · isi pesannya dapat ditulis saat menyelesaikan pesanan.</small>
-                </span>
-              </label>
             </fieldset>
           </div>
 
@@ -591,10 +575,6 @@
               <div class="custom-est-row">
                 <dt id="est-flowers-label">Bunga (0)</dt>
                 <dd id="est-flowers-val">Rp 0</dd>
-              </div>
-              <div class="custom-est-row est-discount-row" id="est-discount-row" style="display: none;">
-                <dt id="est-discount-label">Potongan grosir (9+ tangkai)</dt>
-                <dd id="est-discount-val">− Rp 0</dd>
               </div>
               <div class="custom-est-row">
                 <dt id="est-wrap-label">Bungkus & pita</dt>
@@ -625,6 +605,14 @@
 
       <div id="order-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+      <div id="recent-order-banner" class="recent-order-banner" hidden>
+        <p id="recent-order-text"></p>
+        <div class="recent-order-actions">
+          <button type="button" id="recent-order-view">Lihat lagi</button>
+          <button type="button" id="recent-order-dismiss" aria-label="Tutup">Tutup</button>
+        </div>
+      </div>
+
       <div class="order-grid">
         <!-- Left Column: Finishing Options -->
         <div class="order-controls-col">
@@ -653,14 +641,30 @@
             <!-- Dynamically populated wrap chips -->
           </div>
 
-          <!-- Handwritten Message Card Textarea -->
+          <!-- Handwritten Message Card (paid add-on, checkbox-gated) -->
           <h3 class="step-label" id="card-label">Kartu ucapan</h3>
-          <textarea id="card-note-input" class="card-note-textarea" rows="4" maxlength="200"
-            placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
-          <div class="card-note-footer">
-            <p class="card-note-hint" id="card-note-hint">Kosongkan saja kalau tidak perlu. Ditulis tangan di kartu kecil,
-              tanpa biaya tambahan.</p>
-            <span class="card-note-counter" id="card-note-counter" aria-live="polite"></span>
+          <label class="check-label message-card-option">
+            <input type="checkbox" id="card-note-toggle" />
+            <span id="card-note-toggle-label">Tambahkan kartu ucapan (+Rp 5.000)</span>
+          </label>
+          <div id="card-note-fields" hidden>
+            <textarea id="card-note-input" class="card-note-textarea" rows="4" maxlength="200"
+              placeholder="mis. Selamat wisuda, Sagita — sukses selalu!" aria-label="Pesan kartu ucapan"></textarea>
+            <div class="card-note-footer">
+              <p class="card-note-hint" id="card-note-hint">Ditulis tangan di kartu kecil.</p>
+              <span class="card-note-counter" id="card-note-counter" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <!-- Recipient & Card Sender Name (optional, only relevant once a card is added) -->
+          <div id="gift-details-fields" hidden>
+            <h3 class="step-label" id="gift-details-label">Detail penerima (opsional)</h3>
+            <div class="form-row">
+              <label><span id="recipient-name-order-label">Nama penerima</span><input id="order-recipient-name"
+                  autocomplete="name" maxlength="120"></label>
+              <label><span id="card-sender-order-label">Nama pengirim pada kartu</span><input
+                  id="order-card-sender-name" maxlength="120"></label>
+            </div>
           </div>
         </div>
 
@@ -669,10 +673,14 @@
           <div class="order-summary-card-inner">
             <div class="summary-top-row">
               <h3 class="step-label" id="selection-label">Pilihan Anda</h3>
-              <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
+              <div class="summary-top-actions">
+                <button type="button" class="btn-clear-cart" id="btn-clear-cart">Kosongkan keranjang</button>
+                <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
+              </div>
             </div>
 
             <ul class="cart-lines" id="cart-lines" tabindex="-1"></ul>
+            <p id="cart-limit-notice" class="cart-limit-notice" aria-live="polite" role="alert" hidden></p>
 
             <div class="summary-price-container">
               <p class="summary-price" id="summary-price">Rp 55.000</p>
@@ -806,7 +814,7 @@
     <aside class="kit-teaser-band container" id="kit-teaser-band" aria-label="Informasi Kit DIY / DIY Kit Teaser">
       <div class="kit-teaser-text">
         <p class="eyebrow" id="kit-soon-eyebrow">Segera menyusul</p>
-        <h4 class="kit-teaser-title" id="kit-soon-title">Kit DIY-nya masih kami siapkan</h4>
+        <h3 class="kit-teaser-title" id="kit-soon-title">Kit DIY-nya masih kami siapkan</h3>
         <p class="kit-teaser-body" id="kit-soon-body">Kami sedang menggambar panduannya dan menguji kemasannya, supaya
           pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak
           yang menunggu, makin cepat kami luncurkan.</p>
@@ -867,6 +875,15 @@
   </footer>
 
   <!-- ========================================================================
+       FLOATING CART STATUS PILL — always-visible confirmation that an
+       add/remove registered, without forcing a scroll to the cart itself
+       ======================================================================== -->
+  <button type="button" id="floating-cart-pill" class="floating-cart-pill" aria-hidden="true" tabindex="-1">
+    <span class="floating-cart-count" id="floating-cart-count" aria-hidden="true">0</span>
+    <span class="floating-cart-label" id="floating-cart-label" aria-hidden="true">di keranjang</span>
+  </button>
+
+  <!-- ========================================================================
        SLIM STICKY MOBILE ORDER BAR
        ======================================================================== -->
   <div id="sticky-order-bar" class="sticky-order-bar" aria-hidden="true">
@@ -896,10 +913,14 @@
 
   <dialog id="checkout-modal" class="checkout-modal" aria-labelledby="checkout-title" aria-modal="true">
     <div class="checkout-panel">
-      <button type="button" id="checkout-close" class="image-modal-close" aria-label="Tutup / Close">×</button>
+      <div class="checkout-panel-header">
+        <p class="checkout-step-indicator" id="checkout-step-indicator"></p>
+        <button type="button" id="checkout-close" class="image-modal-close" aria-label="Tutup / Close">×</button>
+      </div>
+      <div class="checkout-panel-scroll">
       <section id="checkout-review">
         <p class="eyebrow" id="checkout-eyebrow">Tinjau pesanan</p>
-        <h2 id="checkout-title">Periksa detail pesanan Anda</h2>
+        <h2 id="checkout-title" tabindex="-1">Periksa detail pesanan Anda</h2>
         <p class="checkout-reference"><span id="checkout-reference-label">Referensi pesanan</span>: <strong
             id="checkout-reference"></strong></p>
         <ul id="checkout-items" class="checkout-items"></ul>
@@ -908,108 +929,114 @@
             <dt id="checkout-subtotal-label">Subtotal produk</dt>
             <dd id="checkout-subtotal"></dd>
           </div>
-          <div id="checkout-discount-row">
-            <dt id="checkout-discount-label">Potongan</dt>
-            <dd id="checkout-discount"></dd>
+          <div id="checkout-wrap-fee-row" hidden>
+            <dt id="checkout-wrap-fee-label">Biaya bungkus custom</dt>
+            <dd id="checkout-wrap-fee"></dd>
+          </div>
+          <div id="checkout-card-fee-row">
+            <dt id="checkout-card-fee-label">Kartu ucapan</dt>
+            <dd id="checkout-card-fee"></dd>
           </div>
           <div class="checkout-total">
             <dt id="checkout-total-label">Estimasi total produk</dt>
             <dd id="checkout-total"></dd>
           </div>
+          <div class="checkout-delivery-row">
+            <dt id="checkout-delivery-row-label">Ongkos kirim</dt>
+            <dd id="checkout-delivery-row-value">Dihitung terpisah</dd>
+          </div>
         </dl>
         <p id="checkout-finish"></p>
         <p id="checkout-notice" class="checkout-notice"></p>
         <p id="checkout-error" class="checkout-error" role="alert"></p>
-        <div class="checkout-actions">
-          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
-          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
-        </div>
       </section>
       <section id="checkout-form-step" hidden>
         <p class="eyebrow" id="checkout-form-eyebrow">Formulir pesanan</p>
-        <h2 id="checkout-form-title">Lengkapi detail pesanan</h2>
+        <h2 id="checkout-form-title" tabindex="-1">Lengkapi detail pesanan</h2>
         <p id="checkout-form-summary"></p>
         <form id="checkout-form" class="checkout-form" novalidate>
           <fieldset>
             <legend id="buyer-legend">Data pemesan</legend>
-            <label><span id="buyer-name-label">Nama pemesan</span><input name="buyer_name" autocomplete="name"
+            <label><span id="buyer-name-label"><span id="buyer-name-label-text">Nama pemesan </span><span class="required-mark" id="buyer-name-required">(wajib)</span></span><input name="buyer_name" autocomplete="name" maxlength="120"
                 required></label>
-            <label><span id="buyer-phone-label">Nomor WhatsApp pemesan</span><input name="buyer_whatsapp" type="tel"
-                autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" required></label>
+            <label><span id="buyer-phone-label"><span id="buyer-phone-label-text">Nomor WhatsApp pemesan </span><span class="required-mark" id="buyer-phone-required">(wajib)</span></span><input name="buyer_whatsapp" type="tel"
+                autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}" aria-describedby="buyer-help" required></label>
             <p class="form-help" id="buyer-help">Kami memakai nomor ini untuk konfirmasi pesanan, ongkir, dan
-              pembayaran.</p>
-            <label><span>Email <small id="optional-email">(opsional)</small></span><input name="buyer_email"
-                type="email" autocomplete="email"></label>
+              pembayaran. Contoh: 081234567890</p>
           </fieldset>
           <fieldset>
-            <legend id="recipient-legend">Penerima</legend>
-            <label><span id="order-for-label">Pesanan ini untuk siapa?</span><select name="order_for" required>
-                <option value="self">Untuk saya sendiri</option>
-                <option value="gift">Untuk orang lain atau hadiah</option>
+            <legend id="location-legend">Lokasi & pengiriman</legend>
+            <label><span id="location-type-label"><span id="location-type-label-text">Lokasi Anda </span><span class="required-mark" id="location-type-required">(wajib)</span></span><select name="location_type" required>
+                <option value="bali">Di Bali</option>
+                <option value="luar_bali">Luar Bali</option>
               </select></label>
-            <div id="gift-fields" hidden>
-              <label><span id="recipient-name-label">Nama penerima</span><input name="recipient_name"
-                  autocomplete="name"></label>
-              <label><span id="recipient-phone-label">Nomor WhatsApp penerima</span><input name="recipient_whatsapp"
-                  type="tel" autocomplete="tel" inputmode="tel" pattern="[+0-9 ()-]{8,20}"></label>
-              <label><span id="recipient-permission-label">Bolehkah kami menghubungi penerima?</span><select
-                  name="recipient_contact_permission">
+            <div id="bali-fields">
+              <label><span id="regency-label"><span id="regency-label-text">Kabupaten/kota </span><span class="required-mark" id="regency-required">(wajib)</span></span><select name="regency">
                   <option value="">Pilih satu</option>
-                  <option value="yes">Ya, boleh</option>
-                  <option value="buyer_first">Hubungi saya terlebih dahulu</option>
-                  <option value="surprise">Jangan hubungi penerima; ini kejutan</option>
                 </select></label>
-              <p class="form-help" id="recipient-help">Detail penerima hanya digunakan untuk koordinasi pengiriman.</p>
+              <label><span id="delivery-method-label">Metode pengiriman</span><select name="delivery_method" aria-describedby="pickup-help">
+                  <option value="grab_gojek">Grab/Gojek (saya pesan sendiri)</option>
+                  <option value="self_pickup">Ambil sendiri di studio</option>
+                </select></label>
+              <p class="form-help" id="pickup-help" hidden>Alamat pengambilan akan dikonfirmasi dan dikirimkan melalui
+                WhatsApp.</p>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend id="delivery-legend">Pengiriman</legend>
-            <label><span id="address-label">Alamat lengkap pengiriman</span><textarea name="address" rows="3"
-                autocomplete="street-address" required></textarea></label>
-            <div class="form-row"><label><span id="city-label">Kota atau kabupaten</span><input name="city"
-                  autocomplete="address-level2" required></label><label><span id="postal-label">Kode pos</span><input
-                  name="postal_code" autocomplete="postal-code" inputmode="numeric" required></label></div>
-            <label><span id="directions-label">Patokan atau petunjuk lokasi (opsional)</span><input
-                name="location_directions"></label>
-            <div class="form-row"><label><span id="date-label">Tanggal yang diinginkan</span><input
-                  name="preferred_date" type="date" required></label><label><span id="window-label">Waktu
-                  (opsional)</span><select name="preferred_window">
-                  <option value="">Fleksibel</option>
-                  <option value="morning">Pagi</option>
-                  <option value="afternoon">Siang</option>
-                  <option value="evening">Sore</option>
-                </select></label></div>
-            <p class="form-help" id="delivery-help">Tanggal dan waktu merupakan preferensi dan akan dikonfirmasi melalui
+            <div id="outside-bali-fields" hidden>
+              <label><span id="address-label"><span id="address-label-text">Alamat lengkap pengiriman </span><span class="required-mark" id="address-required">(wajib)</span></span><textarea name="address" rows="3" maxlength="300"
+                  autocomplete="street-address" aria-describedby="outside-bali-help"></textarea></label>
+              <div class="form-row"><label><span id="city-label"><span id="city-label-text">Kota atau kabupaten </span><span class="required-mark" id="city-required">(wajib)</span></span><input name="city"
+                    autocomplete="address-level2" maxlength="100"></label><label><span id="postal-label"><span id="postal-label-text">Kode pos </span><span class="required-mark" id="postal-required">(wajib)</span></span><input
+                    name="postal_code" autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"></label></div>
+              <p class="form-help" id="outside-bali-help">Pengiriman akan dikirim sesuai dengan alamat yang ditulis,
+                mohon diperhatikan dengan benar.</p>
+            </div>
+            <label><span id="date-label"><span id="date-label-text">Tanggal yang diinginkan </span><span class="required-mark" id="date-required">(wajib)</span></span><div class="date-field" id="date-field"><input
+                    name="preferred_date" id="preferred-date-input" type="text" inputmode="none" autocomplete="off" pattern="\d{4}-\d{2}-\d{2}"
+                    aria-describedby="delivery-help" aria-haspopup="dialog" aria-expanded="false" required><span class="date-field-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"></rect><path d="M7 2.5v4M17 2.5v4M3.5 9.5h17"></path></svg></span></div></label>
+            <p class="form-help" id="delivery-help">Tanggal merupakan preferensi dan akan dikonfirmasi melalui
               WhatsApp.</p>
           </fieldset>
-          <fieldset>
-            <legend id="details-legend">Detail hadiah dan catatan</legend>
-            <label><span id="sender-label">Nama pengirim pada kartu (opsional)</span><input
-                name="card_sender_name"></label>
-            <label class="check-label"><input name="anonymous_gift" type="checkbox"><span id="anonymous-label">Kirim
-                secara anonim</span></label>
-            <label><span id="notes-label">Catatan tambahan (opsional)</span><textarea name="additional_notes"
-                rows="3"></textarea></label>
-            <p class="form-help" id="price-note">Permintaan yang memengaruhi harga akan dikonfirmasi sebelum pembayaran.
-            </p>
-          </fieldset>
+          <p id="checkout-privacy-notice" class="form-help checkout-privacy-notice"></p>
+          <div id="turnstile-widget" class="cf-turnstile"></div>
           <label class="check-label acknowledgement"><input name="acknowledgement" type="checkbox" required><span
               id="ack-label">Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman
               akan diperiksa melalui WhatsApp.</span></label>
           <p id="form-error" class="checkout-error" role="alert"></p>
-          <button id="save-order" type="submit" class="btn-checkout-primary">Simpan pesanan</button>
         </form>
       </section>
       <section id="checkout-success" hidden>
-        <p class="eyebrow">Pesanan dicatat</p>
-        <h2 id="checkout-success-title">Pesanan Anda sudah dicatat.</h2>
+        <p class="eyebrow" id="checkout-success-eyebrow">Pesanan dicatat</p>
+        <h2 id="checkout-success-title" tabindex="-1">Pesanan Anda sudah dicatat.</h2>
         <p id="checkout-success-copy"></p>
         <p class="checkout-reference"><span id="success-reference-label">Referensi pesanan</span>: <strong
             id="success-reference"></strong></p>
-        <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
-        <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>
+        <p id="success-order-label" class="success-order-label">Pesanan Anda</p>
+        <ul id="success-items" class="checkout-items"></ul>
+        <p class="success-order-total"><span id="success-total-label">Estimasi total produk</span>: <strong
+            id="success-total"></strong></p>
+        <div class="checkout-success-actions">
+          <a id="checkout-whatsapp" class="btn-checkout-primary" target="_blank" rel="noopener">Lanjut ke WhatsApp →</a>
+          <button type="button" id="copy-reference" class="btn-checkout-secondary">Salin referensi pesanan</button>
+        </div>
         <p id="copy-status" role="status"></p>
+        <p id="copy-fallback-text" class="copy-fallback-text" role="status" hidden tabindex="-1"></p>
+        <button type="button" id="checkout-start-new" class="btn-checkout-tertiary">Mulai pesanan baru</button>
       </section>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-review-footer">
+        <strong class="checkout-footer-total" id="checkout-review-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-edit" class="btn-checkout-secondary">Ubah pesanan</button>
+          <button type="button" id="checkout-continue" class="btn-checkout-primary">Lanjutkan pemesanan</button>
+        </div>
+      </div>
+      <div class="checkout-dialog-footer" id="checkout-form-footer" hidden>
+        <strong class="checkout-footer-total" id="checkout-form-footer-total"></strong>
+        <div class="checkout-actions-buttons">
+          <button type="button" id="checkout-back-to-review" class="btn-checkout-secondary">← Kembali ke tinjauan</button>
+          <button id="save-order" type="submit" form="checkout-form" class="btn-checkout-primary">Simpan pesanan</button>
+        </div>
+      </div>
     </div>
   </dialog>
 

@@ -1723,15 +1723,18 @@ function buildTicketLines_(items, catalog) {
       '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
       '<span>Ongkir ' + (ship === null || ship === undefined || ship === '' ? 'belum diisi' : esc(rupiah(ship))) + '</span></div>';
 
-    var ongkirHint = o.locationType === 'bali'
-      ? ('Biasanya Rp 0 — ' + (o.method === 'self_pickup' ? 'diambil sendiri di studio.' : 'Grab/Gojek dibayar langsung ke driver.') + ' Ubah kalau ada biaya tambahan.')
-      : ('Kurir ke ' + esc(o.city) + '. Final Total di sheet mengisi sendiri begitu ongkir ada.');
-    html += '<div class="ongkir"><label for="ongkir-' + esc(o.ref) + '">Ongkir</label>' +
-      '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
-      'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
-      (shippingPending ? ' disabled' : '') + '>' +
-      '<span class="hint">' + ongkirHint + '</span></div>';
-    if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
+    if (o.locationType === 'bali') {
+      html += '<div class="ongkir"><span class="hint">Ongkir Rp 0 — ' +
+        (o.method === 'self_pickup' ? 'diambil sendiri di studio.' : 'Grab/Gojek dibayar langsung ke driver.') +
+        '</span></div>';
+    } else {
+      html += '<div class="ongkir"><label for="ongkir-' + esc(o.ref) + '">Ongkir</label>' +
+        '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
+        'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
+        (shippingPending ? ' disabled' : '') + '>' +
+        '<span class="hint">Kurir ke ' + esc(o.city) + '. Final Total di sheet mengisi sendiri begitu ongkir ada.</span></div>';
+      if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
+    }
 
     html += '<div class="paystate">' + PAYMENTS.filter(function (p) { return p.key !== 'Cancelled'; }).map(function (p, i, arr) {
       var cur = arr.findIndex(function (x) { return x.key === pay; });

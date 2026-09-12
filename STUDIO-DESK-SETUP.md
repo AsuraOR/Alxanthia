@@ -1922,15 +1922,6 @@ function buildTicketLines_(items, catalog) {
      copy, on failure the previous value comes back and the control
      re-enables so a double-tap can't queue two writes.
      ===================================================================== */
-  function maybeClearTicksAfterPhase(order) {
-    var idx = PHASES.findIndex(function (p) { return p.key === order.phase; });
-    var readyIdx = PHASES.findIndex(function (p) { return p.key === 'Ready for dispatch'; });
-    if (idx > readyIdx) {
-      delete state.per[order.ref];
-      savePer();
-    }
-  }
-
   function writeField(ref, field, value, columnLabel) {
     var key = ref + '|' + field;
     if (pending[key]) return;
@@ -1949,7 +1940,6 @@ function buildTicketLines_(items, catalog) {
         if (res && res.ok) {
           var idx = state.orders.findIndex(function (x) { return x.ref === res.order.ref; });
           if (idx !== -1) state.orders[idx] = res.order;
-          maybeClearTicksAfterPhase(res.order);
           savedToast(columnLabel);
         } else {
           order[field] = previous;

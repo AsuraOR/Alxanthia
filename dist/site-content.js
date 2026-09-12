@@ -44,7 +44,7 @@ window.ALXANTHIA_DATA = {
     // not a secret). Leave blank until you create a Turnstile widget for
     // alxanthia.com; the checkout form simply skips the verification step while
     // this is empty. See CONFIGURE-SUBMISSION-ENDPOINT.md Part 3a.
-    turnstileSiteKey: "",
+    turnstileSiteKey: "0x4AAAAAAEw6umRU8UfK3ORl",
     whatsappTemplates: {
       id: {
         stem: "Halo Alxanthia! Saya ingin memesan {items} — Total {total} (belum termasuk ongkir). {wrapInfo}{cardInfo}Apakah masih tersedia?",

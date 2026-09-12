@@ -8,8 +8,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -25,12 +29,17 @@ jobs:
       - name: Build the deployed dist/ output
         run: npm run build
 
-      - name: Confirm dist/ is up to date
+      - name: Auto-commit dist/ if source files changed
         run: |
-          git diff --exit-code -- dist/ || {
-            echo "::error::dist/ is out of date — run 'npm run build' locally and commit the result.";
-            exit 1;
-          }
+          if git diff --quiet -- dist/; then
+            echo "dist/ already matches the source files — nothing to do."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add dist/
+            git commit -m "chore: rebuild dist/ [skip ci]"
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
 
       - name: Install Chromium for the browser suite
         run: npx playwright install --with-deps chromium

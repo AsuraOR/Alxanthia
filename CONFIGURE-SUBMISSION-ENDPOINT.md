@@ -44,7 +44,7 @@ A quick guide to the new/changed columns:
 - **Catalog Version** records which price list was active when the order was verified (this script's own `CATALOG_VERSION`). **Submitted Catalog Version** records what the customer's browser believed it was (`site-content.js`'s `catalogVersion`) — kept as a separate column (ALX-08) so the two can be compared: if they differ, the customer's tab was open across a price change, which is a useful diagnostic distinct from a genuine tampering attempt.
 - **Submitted Product/Message Card/Total** are exactly what the customer's browser calculated. **Verified Product/Message Card/Total** are what the Apps Script recalculated from its own price list. They usually match. Treat **Verified Total**, never Submitted Total, as the real order amount.
 - **Price Mismatch** is normally blank. The script writes `REVIEW` here if the submitted and verified totals disagree — this can mean the customer's browser tab was open across a price change, or that someone tried to tamper with the totals in their browser. Either way, double-check the row before sending a payment link.
-- **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once you fill in **Shipping Fee**. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove.
+- **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once **Shipping Fee** has a value. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove. For a Bali order with **Delivery Method** `grab_gojek`, the script fills in `0` for you (the customer pays the Grab/Gojek driver directly, so the studio never collects that fee) and **Final Total** appears immediately with no manual entry. Every other order (an out-of-Bali courier, or a Bali `self_pickup`) still leaves **Shipping Fee** blank for you to type in.
 
 A reminder about the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank. For an out-of-Bali order, it's the reverse. Always check **Location Type** first before reading the other columns.
 
@@ -290,7 +290,7 @@ function doPost(event) {
         'Verified Message Card Fee': pricing.messageCardFee,
         'Verified Total': pricing.total,
         'Price Mismatch': priceMismatch ? 'REVIEW' : '',
-        'Shipping Fee': '',
+        'Shipping Fee': defaultShippingFee(isBali, order.delivery_method),
         'Final Total': '',
         'Midtrans Payment Link': '',
         'Payment Status': 'Awaiting confirmation',
@@ -594,6 +594,18 @@ function buildRow(headers, valuesByHeader) {
     if (idx !== undefined) row[idx] = valuesByHeader[name];
   });
   return row;
+}
+
+/**
+ * Revision: a customer who picks Grab/Gojek delivery within Bali pays the
+ * driver directly — the studio never collects that fee, so it is known to
+ * be zero the moment the order is stored, not something to look up and
+ * type in later. Every other case (an out-of-Bali courier, or a Bali
+ * self-pickup mistakenly billed a delivery fee) is left blank exactly as
+ * before, for a manual entry.
+ */
+function defaultShippingFee(isBali, deliveryMethod) {
+  return (isBali && deliveryMethod === 'grab_gojek') ? 0 : '';
 }
 
 function setFinalTotalFormula(sheet, headers, row) {
@@ -1043,7 +1055,7 @@ Deploy the updated website, then, using test data only:
    - **Total Stems**, **Order Mode**, and **Item Data** look correct;
    - the location columns are filled correctly for the path you tested (Bali columns filled and address columns blank, or vice versa);
    - **Payment Status** is **Awaiting confirmation** and **Work Phase** is **Not started**;
-   - **Final Total** is blank until you fill in **Shipping Fee**, then appears automatically;
+   - **Final Total** is blank until **Shipping Fee** has a value — for a Bali `grab_gojek` order that happens immediately (the script fills in `0`); for anything else, it appears once you type a **Shipping Fee** in yourself;
    - exactly one row was added — resubmitting the same still-open checkout (e.g. clicking Save twice, or retrying after closing/reopening a slow connection) must never add a second row for the same attempt;
    - if `OWNER_NOTIFY_EMAIL` is set, an email arrived with the reference and a link to the row, and no private customer fields.
 6. Try picking a date before the minimum lead time — it must be rejected both by the page and, if you bypass the page, by the Apps Script.

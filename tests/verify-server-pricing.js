@@ -76,7 +76,8 @@ vm.runInContext(appsScriptSrc, sandbox);
 
 const {
   computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter,
-  normalizeIndonesianPhone, validateHeaderSchema, buildOrderSummary, regenerateOrderReference, REQUIRED_HEADERS
+  normalizeIndonesianPhone, validateHeaderSchema, buildOrderSummary, regenerateOrderReference, REQUIRED_HEADERS,
+  defaultShippingFee
 } = sandbox;
 assert(typeof computeVerifiedTotals === 'function', 'computeVerifiedTotals must be exposed');
 assert(typeof resolveOrderMode === 'function', 'resolveOrderMode must be exposed');
@@ -293,6 +294,13 @@ assert.ok(!takenRefs.has(freshRef), 'the regenerated reference must not be one t
 assert.strictEqual(regenerateOrderReference('ALX-260915-ABCD', () => true), null, 'exhausting every retry must return null so the caller fails loudly instead of storing an ambiguous reference');
 console.log('✔ Suite S9 Passed: a reference collision is resolved to a fresh, unique, correctly-formatted reference\n');
 
+// ---------------------------------------------------------------------------
+console.log('--- SUITE S10: Grab/Gojek shipping fee defaults to 0 (Revision) ---');
+assert.strictEqual(defaultShippingFee(true, 'grab_gojek'), 0, 'a Bali order with Grab/Gojek delivery must default Shipping Fee to 0, since the customer pays the driver directly');
+assert.strictEqual(defaultShippingFee(true, 'self_pickup'), '', 'a Bali self-pickup order must still leave Shipping Fee blank for manual entry');
+assert.strictEqual(defaultShippingFee(false, 'grab_gojek'), '', 'an out-of-Bali order must leave Shipping Fee blank regardless of the (unused) delivery_method value');
+console.log('✔ Suite S10 Passed: only a Bali Grab/Gojek order gets its shipping fee auto-filled to 0\n');
+
 console.log('======================================================================');
-console.log('✔ ALL 9 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 10 SERVER PRICING/VALIDATION SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -1,7 +1,9 @@
 # Studio Desk — a maker's interface on top of the Orders sheet
 
-**Status:** proposal, revised. Nothing is built yet; the clickable prototype in
-`mockups/studio-desk.html` exists so the layout can be judged before any code is written.
+**Status:** proposal, revised and approved. The clickable prototype is
+`mockups/studio-desk.html`; the implementation specification is
+[`STUDIO-DESK-BUILD-GUIDE.md`](STUDIO-DESK-BUILD-GUIDE.md), whose Part 9 lists every step the owner
+has to click by hand.
 
 ## The problem
 
@@ -130,6 +132,20 @@ Below that: the wrap with its real swatch, and the message card set in serif ita
 sender, and a copy button, because that text gets transcribed by hand. Then the five work phases —
 `Belum mulai → Dirangkai dan dikemas → Siap dikirim → Dikirim → Selesai` — as a stepper with one
 **Lanjut** button and a **Kembali** for mis-taps, and a notes box that writes to `Internal Notes`.
+
+## Where the words come from
+
+The Desk holds no product catalogue of its own. At runtime it fetches `site-content.js` from the
+live site, reads `window.ALXANTHIA_DATA`, and takes from it the flower names, stem sizes, mini-pot
+names and heights, leaf-addition names, package stem counts, wrap names and swatches, and
+`minimumLeadDays`. Rename a flower on the website and the Desk renames it too — no third copy of the
+catalogue to keep in sync, and a **Muat ulang katalog** button for when the change should show
+immediately rather than within the six-hour cache.
+
+It deliberately takes **no prices** from there. Money comes from the sheet — `Verified Total` and
+`Shipping Fee`, already computed and verified server-side — so the Desk cannot disagree with what was
+charged, and the existing rule about mirroring a price change into the Apps Script `CATALOG` is
+unaffected.
 
 ## How the sheet stays in step
 

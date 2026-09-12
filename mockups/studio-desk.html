@@ -686,7 +686,9 @@
     <b>Prototipe tampilan.</b> Enam pesanan contoh, bukan data pembeli sungguhan; nomor rekening di
     teks pembayaran juga contoh. Semua angka dihitung ulang dari kolom <b>Item Data</b> dengan rumus
     harga yang sama seperti Apps Script, jadi total di sini selalu cocok dengan sheet. Di versi asli
-    setiap perubahan langsung ditulis ke baris Orders — di prototipe ini hanya tersimpan di browser.
+    setiap perubahan langsung ditulis ke baris Orders — di prototipe ini hanya tersimpan di browser —
+    dan nama bunga, ukuran tangkai, warna kertas serta isi paket dibaca langsung dari
+    <b>site-content.js</b>, jadi begitu kamu ubah di website, tampilan di sini ikut berubah sendiri.
   </p>
 </div>
 
@@ -694,10 +696,14 @@
   'use strict';
 
   /* =====================================================================
-     Catalogue — same numbers and keys as site-content.js and the Apps
-     Script CATALOG. The build list and the totals are DERIVED from Item
-     Data the way the real interface would, so the prototype cannot show a
-     bouquet that pricing disagrees with.
+     Catalogue. In the REAL Desk this table is not written by hand at all:
+     the server fetches site-content.js at runtime and reads the names,
+     stem sizes, wrap colours and package sizes straight out of
+     window.ALXANTHIA_DATA, so renaming a flower on the website renames it
+     here too. The prototype has no server, so it carries a frozen copy —
+     the same keys and numbers as site-content.js and the Apps Script
+     CATALOG. Totals are derived from Item Data the way the real interface
+     does, so the prototype cannot show a bouquet pricing disagrees with.
      ===================================================================== */
   var CATALOG = {
     wrapFeeUnitStems: 3,

@@ -785,6 +785,9 @@ If you ever change a price, add a product, or edit the Bali kabupaten/kota list 
 // ALX-10: the exact Turnstile widget action app.js renders with — pinned
 // here too so a token issued for some other action/site can't be replayed.
 const TURNSTILE_ACTION = 'order_submission';
+// Mirrors the Apps Script's own MAX_BODY_BYTES (Part 1) — this Worker
+// enforces the same cap before the request ever reaches Apps Script.
+const MAX_BODY_BYTES = 30000;
 
 export default {
   async fetch(request, env) {

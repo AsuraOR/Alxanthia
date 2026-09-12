@@ -1705,7 +1705,8 @@ function buildTicketLines_(items, catalog) {
     if (pay === 'Paid') {
       return '<div class="block"><h3>Pembayaran</h3><div class="paid-line">' +
         '<span class="ok">Lunas</span><span class="amt">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
-        '<button type="button" class="btn ghost small" data-pay="Checking transfer"' + (paymentPending ? ' disabled' : '') + '>Ubah</button></div>' +
+        '<button type="button" class="btn ghost small" data-pay="Checking transfer"' + (paymentPending ? ' disabled' : '') + '>Ubah</button>' +
+        '<button type="button" class="btn ghost small" data-sendpaid="1">Kirim pesan</button></div>' +
         (payErr ? '<p class="why err">' + esc(payErr) + '</p>' : '') +
         '</div>';
     }
@@ -1743,7 +1744,7 @@ function buildTicketLines_(items, catalog) {
     }).join('') + '</div>';
 
     html += '<div class="actions">' +
-      '<button type="button" class="btn ghost" data-copybank="1"' + (amount === null ? ' disabled' : '') + '>Salin teks rekening</button>' +
+      '<button type="button" class="btn ghost" data-sendpayment="1"' + (amount === null ? ' disabled' : '') + '>Kirim pesan</button>' +
       (pay === 'Unpaid'
         ? '<button type="button" class="btn ghost" data-pay="Checking transfer"' + (paymentPending ? ' disabled' : '') + '>Tandai perlu dicek</button>'
         : '<button type="button" class="btn ghost" data-pay="Unpaid"' + (paymentPending ? ' disabled' : '') + '>Belum ada transfer</button>') +
@@ -1868,6 +1869,7 @@ function buildTicketLines_(items, catalog) {
         (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
               : '<span class="why">Pesanan selesai.</span>') +
         (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
+        (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
         (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' : '') +
         '</div>';
     }
@@ -2099,19 +2101,20 @@ function buildTicketLines_(items, catalog) {
       return;
     }
 
-    var copyBank = e.target.closest('[data-copybank]');
-    if (copyBank) {
-      var amount = billed(o);
-      if (amount === null) return;
-      var bank = state.catalog.bank || {};
-      copyText(
-        'Halo ' + firstName(o.buyer) + ', terima kasih untuk pesanannya.\n' +
-        'Nomor pesanan: ' + o.ref + '\n' +
-        'Total: ' + rupiah(amount) + '\n' +
-        'Transfer ke ' + bank.bank + ' ' + bank.number + ' a.n. ' + bank.holder + '\n' +
-        'Kalau sudah, balas chat ini ya — nanti kami cek dan langsung dikerjakan untuk ' + fmtDate(o.date) + '.'
-      );
-      copyBank.textContent = 'Tersalin';
+    if (e.target.closest('[data-sendpayment]')) {
+      if (billed(o) === null) return;
+      openWhatsApp(o, paymentRequestMessage(o));
+      return;
+    }
+
+    if (e.target.closest('[data-sendpaid]')) {
+      openWhatsApp(o, paymentConfirmedMessage(o));
+      return;
+    }
+
+    if (e.target.closest('[data-sendphase]')) {
+      var msg = phaseMessage(o);
+      if (msg) openWhatsApp(o, msg);
       return;
     }
   });
@@ -2139,6 +2142,55 @@ function buildTicketLines_(items, catalog) {
 
   function copyText(text) {
     if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+  }
+
+  /* Opens the buyer's WhatsApp chat with the message already typed in,
+     ready to send — never sent automatically, she still taps send herself.
+     A new top-level window, not the Apps Script iframe (wa.me refuses to
+     render framed). */
+  function openWhatsApp(o, message) {
+    var digits = String(o.wa || '').replace(/[^\d]/g, '');
+    var url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function paymentRequestMessage(o) {
+    var amount = billed(o);
+    var bank = state.catalog.bank || {};
+    return 'Halo ' + firstName(o.buyer) + ', terima kasih untuk pesanannya.\n' +
+      'Nomor pesanan: ' + o.ref + '\n' +
+      'Total: ' + rupiah(amount) + '\n' +
+      'Transfer ke ' + bank.bank + ' ' + bank.number + ' a.n. ' + bank.holder + '\n' +
+      'Kalau sudah, balas chat ini ya — nanti kami cek dan langsung dikerjakan untuk ' + fmtDate(o.date) + '.';
+  }
+
+  function paymentConfirmedMessage(o) {
+    return 'Halo ' + firstName(o.buyer) + ', pembayaran untuk pesanan ' + o.ref + ' sudah kami terima. ' +
+      'Terima kasih! Pesananmu akan segera kami mulai buatkan.';
+  }
+
+  /* One message per work phase, shown once she's already advanced into it —
+     "Kirim pesan" sits next to Kembali for every phase past Belum mulai. */
+  function phaseMessage(o) {
+    var name = firstName(o.buyer);
+    if (o.phase === 'Assembly and packing') {
+      return 'Halo ' + name + ', pesananmu (' + o.ref + ') sedang kami rangkai dan kemas. Kami kabari lagi begitu siap ya.';
+    }
+    if (o.phase === 'Ready for dispatch') {
+      if (o.locationType === 'bali') {
+        return o.method === 'self_pickup'
+          ? 'Halo ' + name + ', pesananmu (' + o.ref + ') sudah siap diambil di studio kapan saja.'
+          : 'Halo ' + name + ', pesananmu (' + o.ref + ') sudah siap. Kamu bisa pesan Gojek/Grab kapan saja untuk mengambilnya.';
+      }
+      return 'Halo ' + name + ', pesananmu (' + o.ref + ') sudah siap dan akan segera kami kirim.';
+    }
+    if (o.phase === 'Shipped') {
+      return 'Halo ' + name + ', pesananmu (' + o.ref + ') sudah dikirim dan sedang dalam perjalanan menujumu.';
+    }
+    if (o.phase === 'Delivered') {
+      return 'Halo ' + name + ', terima kasih ya! Semoga pesananmu (' + o.ref + ') sudah sampai dengan baik.';
+    }
+    return null;
   }
 
   boot();

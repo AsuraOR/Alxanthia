@@ -1693,6 +1693,17 @@ function buildTicketLines_(items, catalog) {
     }).join('');
   }
 
+  /* Sits above Pembayaran — a one-tap "order received, we're verifying it"
+     message, meant to go out before the payment link so the buyer isn't
+     left wondering right after they confirm on WhatsApp. Stateless like the
+     other "Kirim pesan" buttons: nothing is recorded in the sheet. */
+  function receivedBlock(o) {
+    return '<div class="block"><h3>Konfirmasi pesanan masuk</h3>' +
+      '<div class="actions"><button type="button" class="btn ghost" data-sendreceived="1">Kirim pesan</button>' +
+      '<span class="why">Pesanan sudah kami terima, sedang dicek — kirim link pembayaran menyusul.</span></div>' +
+      '</div>';
+  }
+
   function paymentBlock(o) {
     var pay = o.payment;
     var ship = o.shipping;
@@ -1795,6 +1806,7 @@ function buildTicketLines_(items, catalog) {
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
+    html += receivedBlock(o);
     html += paymentBlock(o);
 
     /* Verification gate — only while the work has not started. */
@@ -2101,6 +2113,11 @@ function buildTicketLines_(items, catalog) {
       return;
     }
 
+    if (e.target.closest('[data-sendreceived]')) {
+      openWhatsApp(o, orderReceivedMessage(o));
+      return;
+    }
+
     if (e.target.closest('[data-sendpayment]')) {
       if (billed(o) === null) return;
       openWhatsApp(o, paymentRequestMessage(o));
@@ -2152,6 +2169,11 @@ function buildTicketLines_(items, catalog) {
     var digits = String(o.wa || '').replace(/[^\d]/g, '');
     var url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
     window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function orderReceivedMessage(o) {
+    return 'Halo ' + firstName(o.buyer) + ', pesananmu (' + o.ref + ') sudah kami terima. ' +
+      'Kami cek dulu ketersediaan dan detailnya — begitu selesai, kami kirimkan link pembayarannya ya. Terima kasih!';
   }
 
   function paymentRequestMessage(o) {

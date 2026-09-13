@@ -14,8 +14,9 @@ Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   
 
 The Studio Desk is a second, separate Apps Script project — a phone-friendly page for the maker
 that reads the same `Orders` worksheet the order-writer script (set up in
-`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly four columns:
-**Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**. It never touches pricing,
+`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly five columns:
+**Order Confirmation Sent**, **Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**.
+It never touches pricing,
 never recalculates a total, and is a completely separate Apps Script project from the order writer —
 a mistake in the Desk's code can never stop a customer's order from being saved.
 
@@ -36,13 +37,15 @@ Properties, set in Part 5 below.
 
 ---
 
-## Part 2 — Update the two dropdown lists in the sheet
+## Part 2 — Add confirmation tracking and update the two dropdown lists
 
-The words the Desk uses for work stage and payment are changing to match what
-`CONFIGURE-SUBMISSION-ENDPOINT.md` now documents. Old rows keep their old words until you fix them,
-and the Desk cannot show a stage it does not recognise.
+The Desk needs one dedicated column to remember that the incoming-order message was prepared. This
+keeps unconfirmed orders pinned at the top and preserves the result across refreshes and devices.
 
-1. In the sheet, click the **Work Phase** column header to select the column.
+1. Add a new column anywhere in the `Orders` sheet and name its header exactly
+   **Order Confirmation Sent**. Leave existing cells blank; blank means not confirmed. Do not reuse
+   **Acknowledged**—that column records the customer's checkout consent and has a different meaning.
+2. In the sheet, click the **Work Phase** column header to select the column.
 2. **Data → Data validation**, click the existing rule, and replace the list with exactly these six
    lines:
 
@@ -55,7 +58,7 @@ and the Desk cannot show a stage it does not recognise.
    Cancelled
    ```
 
-3. Click the **Payment Status** column header and do the same with exactly these four:
+4. Click the **Payment Status** column header and do the same with exactly these four:
 
    ```text
    Unpaid
@@ -64,7 +67,7 @@ and the Desk cannot show a stage it does not recognise.
    Cancelled
    ```
 
-4. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
+5. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
    value to its nearest new one:
 
    | Old value | Change it to |
@@ -127,10 +130,11 @@ var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
 var CATALOG_TTL_SECONDS = 21600; // 6 hours, the CacheService maximum
 
-// Page-side field name -> sheet column header. The only four columns the
+// Page-side field name -> sheet column header. The only five columns the
 // Desk is ever allowed to write, enforced here rather than trusted from the
 // page.
 var WRITABLE_FIELDS = {
+  confirmed: 'Order Confirmation Sent',
   payment: 'Payment Status',
   shipping: 'Shipping Fee',
   phase: 'Work Phase',
@@ -256,6 +260,7 @@ function rowToOrder_(rowValues, headers, rowNumber) {
     verified: Number(get('Verified Total')) || 0,
     shipping: shipping,
     mismatch: String(get('Price Mismatch') || '') !== '',
+    confirmed: String(get('Order Confirmation Sent') || '').toLowerCase() === 'yes',
     payment: String(get('Payment Status') || ''),
     phase: String(get('Work Phase') || ''),
     notes: String(get('Internal Notes') || '')
@@ -329,6 +334,12 @@ function updateOrder(payload) {
 }
 
 function validateFieldValue_(field, value) {
+  if (field === 'confirmed') {
+    if (value !== true && value !== false) {
+      return { ok: false, message: 'Status konfirmasi pesanan tidak dikenali.' };
+    }
+    return { ok: true, value: value ? 'Yes' : 'No' };
+  }
   if (field === 'payment') {
     if (PAYMENT_VALUES.indexOf(value) === -1) {
       return { ok: false, message: 'Status pembayaran tidak dikenali.' };
@@ -1638,6 +1649,10 @@ function buildTicketLines_(items, catalog) {
       if (state.lane === 'pay') return waitingPay(o);
       return laneOf(o) === state.lane;
     }).sort(function (a, b) {
+      /* Unconfirmed orders always stay above the normal queue. Once the
+         incoming-order message is opened, optimistic state immediately
+         returns that order to the position chosen by the active sort. */
+      if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
       if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
     });
@@ -1795,6 +1810,20 @@ function buildTicketLines_(items, catalog) {
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
+    /* The acknowledgement prompt exists only until it has been used. The
+       write is optimistic, so it disappears and the card returns to its
+       normal sorted position immediately; a failed server write restores it. */
+    if (!o.confirmed) {
+      var confirmationPending = isPending(o.ref, 'confirmed');
+      var confirmationErr = fieldErrors[o.ref + '|confirmed'];
+      html += '<div class="block"><h3>Konfirmasi pesanan masuk</h3>' +
+        '<div class="actions"><button type="button" class="btn ghost" data-confirmorder="1"' +
+        (confirmationPending ? ' disabled' : '') + '>Kirim pesan</button>' +
+        '<span class="why">Pesanan sudah kami terima, sedang dicek — kirim link pembayaran menyusul.</span></div>' +
+        (confirmationErr ? '<p class="why err">' + esc(confirmationErr) + '</p>' : '') +
+        '</div>';
+    }
+
     html += paymentBlock(o);
 
     /* Verification gate — only while the work has not started. */
@@ -1880,7 +1909,7 @@ function buildTicketLines_(items, catalog) {
       (notesPending ? 'disabled ' : '') +
       'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea></div>' +
       '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
-      '<span>Desk menulis: Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
+      '<span>Desk menulis: Order Confirmation Sent · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
       '<span>Kolom lain hanya dibaca</span></div>';
 
     elTicket.innerHTML = html;
@@ -2052,6 +2081,12 @@ function buildTicketLines_(items, catalog) {
 
     if (e.target.closest('[data-back]')) { document.body.classList.remove('detail'); return; }
 
+    if (e.target.closest('[data-confirmorder]')) {
+      openWhatsApp(o, orderReceivedMessage(o));
+      writeField(o.ref, 'confirmed', true, 'Order Confirmation Sent');
+      return;
+    }
+
     var tick = e.target.closest('[data-tick]');
     if (tick) {
       p.ticks = p.ticks || {};
@@ -2152,6 +2187,11 @@ function buildTicketLines_(items, catalog) {
     var digits = String(o.wa || '').replace(/[^\d]/g, '');
     var url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
     window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function orderReceivedMessage(o) {
+    return 'Halo ' + firstName(o.buyer) + ', pesananmu (' + o.ref + ') sudah kami terima dan sedang kami cek. ' +
+      'Kami akan segera mengirimkan total dan detail pembayaran.';
   }
 
   function paymentRequestMessage(o) {

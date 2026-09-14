@@ -816,6 +816,11 @@ const TURNSTILE_ACTION = 'order_submission';
 // Mirrors the Apps Script's own MAX_BODY_BYTES (Part 1) — this Worker
 // enforces the same cap before the request ever reaches Apps Script.
 const MAX_BODY_BYTES = 30000;
+// Keep both attempts inside app.js's 20-second end-to-end timeout. A retry is
+// safe because Apps Script deduplicates the same idempotency key if the first
+// request was stored but its response was lost.
+const GOOGLE_ATTEMPT_TIMEOUT_MS = 8000;
+const GOOGLE_MAX_ATTEMPTS = 2;
 
 export default {
   async fetch(request, env) {
@@ -904,12 +909,10 @@ export default {
 
     let googleResult;
     try {
-      const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order })
-      });
-      googleResult = await googleResponse.json();
+      googleResult = await postToGoogle(env.GOOGLE_SCRIPT_URL, {
+        webhook_secret: env.WEBHOOK_SECRET,
+        order
+      }, order.order_reference, origin);
     } catch (upstreamError) {
       log(order.order_reference, 'UPSTREAM_UNREACHABLE', origin);
       return reply({ ok: false, error: 'Order could not be stored.' }, 502, headers);
@@ -930,6 +933,40 @@ export default {
     return reply({ ok: false, error: publicMessage, order_reference: googleResult.order_reference }, status, headers);
   }
 };
+
+async function postToGoogle(url, payload, reference, origin) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= GOOGLE_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GOOGLE_ATTEMPT_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error('Non-success response from order storage.');
+
+      const result = await response.json();
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        throw new Error('Invalid response from order storage.');
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < GOOGLE_MAX_ATTEMPTS) {
+        log(reference, 'UPSTREAM_RETRY', origin);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastError || new Error('Order storage unavailable.');
+}
 
 function hostnameOf(originUrl) {
   try { return new URL(originUrl).hostname; } catch (e) { return ''; }

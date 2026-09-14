@@ -25,9 +25,12 @@ console.log('===================================================================
 // ---------------------------------------------------------------------------
 const guidePath = path.join(__dirname, '..', 'STUDIO-DESK-SETUP.md');
 const guideSrc = fs.readFileSync(guidePath, 'utf8');
-const jsBlocks = [...guideSrc.matchAll(/```javascript\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+const jsBlocks = [...guideSrc.matchAll(/```javascript\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
 const serverSrc = jsBlocks.find((block) => block.includes('function doGet'));
 assert(serverSrc, 'Could not locate the Apps Script code block in STUDIO-DESK-SETUP.md');
+const htmlBlocks = [...guideSrc.matchAll(/```html\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
+const deskHtml = htmlBlocks.find((block) => block.includes('function paymentBlock'));
+assert(deskHtml, 'Could not locate the Studio Desk HTML block in STUDIO-DESK-SETUP.md');
 
 // ---------------------------------------------------------------------------
 // 2. A fake Orders sheet — an in-memory grid plus a write log, standing in
@@ -317,6 +320,39 @@ console.log('--- SUITE 10b: an unpaid balance blocks dispatch server-side ---');
   assert.strictEqual(res.code, 'PAYMENT_DUE');
   assert.strictEqual(sheet._writes.length, 0);
   console.log('✔ Suite 10b Passed\n');
+}
+
+console.log('--- SUITE 10c: the payment panel hides only after full settlement ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(
+    paymentBlockSrc.includes("if (pay === 'Paid') return '';"),
+    'Paid orders must render no payment panel'
+  );
+  assert.ok(
+    !paymentBlockSrc.includes("pay === 'Deposit paid') return ''") &&
+      !paymentBlockSrc.includes("pay === 'Checking balance') return ''"),
+    'the panel must remain visible after the first DP and while its balance is checked'
+  );
+  console.log('✔ Suite 10c Passed\n');
+}
+
+console.log('--- SUITE 10d: order search matches buyer names and order codes ---');
+{
+  const match = deskHtml.match(/  function matchesSearch\(order, query\) \{[\s\S]*?\n  \}/);
+  assert.ok(match, 'the Desk must include its order-search predicate');
+  const searchSandbox = {};
+  vm.createContext(searchSandbox);
+  vm.runInContext(match[0] + '\nthis.matchesSearch = matchesSearch;', searchSandbox);
+  const order = { buyer: 'Ni Putu Ayu Lestari', ref: 'ALX-260912-K4T9' };
+  assert.strictEqual(searchSandbox.matchesSearch(order, 'ayu'), true);
+  assert.strictEqual(searchSandbox.matchesSearch(order, 'k4t9'), true);
+  assert.strictEqual(searchSandbox.matchesSearch(order, '  ALX-260912  '), true);
+  assert.strictEqual(searchSandbox.matchesSearch(order, 'made'), false);
+  assert.strictEqual(searchSandbox.matchesSearch(order, ''), true);
+  console.log('✔ Suite 10d Passed\n');
 }
 
 // ---------------------------------------------------------------------------

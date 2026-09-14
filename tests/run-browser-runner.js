@@ -1,21 +1,61 @@
 /**
  * Runs tests/browser-runner.html in a real, installed Chromium via Playwright
  * (DEV-24). No hard-coded OS-specific browser path — works on Windows, macOS,
- * Linux, and CI as long as `npm install` (or `npx playwright install`) has
- * fetched a Chromium build for Playwright to find.
+ * Linux, and CI. It prefers Playwright's bundled Chromium, then falls back to
+ * a locally installed Chrome/Edge when browser downloads are unavailable.
  *
  * Usage: start a static server for the repo root first (e.g. `npm start`),
  * then run `node tests/run-browser-runner.js`.
  */
 const { chromium } = require('@playwright/test');
+const fs = require('fs');
 
 const PORT = process.env.PORT || 8080;
 const URL = `http://localhost:${PORT}/tests/browser-runner.html`;
 
-// Some CI/sandbox environments pin an older pre-installed Chromium build than
-// the @playwright/test version in package.json expects — fall back to that
-// pinned executable instead of trying to download a new one.
+// Some CI/sandbox environments pin a pre-installed Chromium build. An explicit
+// path always wins; otherwise the runner discovers a normal system browser if
+// Playwright's own downloaded executable is absent.
 const PINNED_CHROMIUM = process.env.PLAYWRIGHT_CHROMIUM_PATH || '';
+
+function systemChromiumCandidates() {
+  if (process.platform === 'win32') {
+    return [
+      process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe`,
+      process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe`,
+      process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+      process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      process.env['PROGRAMFILES(X86)'] && `${process.env['PROGRAMFILES(X86)']}\\Microsoft\\Edge\\Application\\msedge.exe`
+    ].filter(Boolean);
+  }
+  if (process.platform === 'darwin') {
+    return [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+    ];
+  }
+  return [
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/microsoft-edge',
+    '/usr/bin/microsoft-edge-stable'
+  ];
+}
+
+function resolveChromiumExecutable() {
+  if (PINNED_CHROMIUM) {
+    if (!fs.existsSync(PINNED_CHROMIUM)) {
+      throw new Error(`PLAYWRIGHT_CHROMIUM_PATH does not exist: ${PINNED_CHROMIUM}`);
+    }
+    return PINNED_CHROMIUM;
+  }
+
+  const bundled = chromium.executablePath();
+  if (bundled && fs.existsSync(bundled)) return '';
+  return systemChromiumCandidates().find((candidate) => fs.existsSync(candidate)) || '';
+}
 
 /**
  * Phase 2 (DEV-25): drives the real checkout dialog end to end in a real
@@ -418,9 +458,17 @@ async function runCheckoutDialogChecks(browser) {
 
 async function main() {
   const launchOptions = {};
-  const fs = require('fs');
-  if (PINNED_CHROMIUM && fs.existsSync(PINNED_CHROMIUM)) {
-    launchOptions.executablePath = PINNED_CHROMIUM;
+  const executablePath = resolveChromiumExecutable();
+  if (executablePath) {
+    launchOptions.executablePath = executablePath;
+    if (!PINNED_CHROMIUM) {
+      console.log(`Playwright Chromium is unavailable; using installed browser: ${executablePath}`);
+    }
+  } else if (!fs.existsSync(chromium.executablePath())) {
+    throw new Error(
+      'No Chromium browser found. Install Chrome/Edge, run `npx playwright install chromium`, ' +
+      'or set PLAYWRIGHT_CHROMIUM_PATH.'
+    );
   }
   const browser = await chromium.launch(launchOptions);
   try {

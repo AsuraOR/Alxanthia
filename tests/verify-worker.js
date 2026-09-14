@@ -28,7 +28,7 @@ console.log('===================================================================
 
 const guidePath = path.join(__dirname, '..', 'CONFIGURE-SUBMISSION-ENDPOINT.md');
 const guideSrc = fs.readFileSync(guidePath, 'utf8');
-const jsBlocks = [...guideSrc.matchAll(/```javascript\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+const jsBlocks = [...guideSrc.matchAll(/```javascript\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
 const workerSrcRaw = jsBlocks.find((block) => block.includes('export default {'));
 assert(workerSrcRaw, 'Could not locate the Cloudflare Worker code block in CONFIGURE-SUBMISSION-ENDPOINT.md');
 // `export default` is ES module syntax; vm.runInContext evaluates as a plain

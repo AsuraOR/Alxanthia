@@ -29,7 +29,7 @@ console.log('===================================================================
 // ---------------------------------------------------------------------------
 const guidePath = path.join(__dirname, '..', 'CONFIGURE-SUBMISSION-ENDPOINT.md');
 const guideSrc = fs.readFileSync(guidePath, 'utf8');
-const jsBlocks = [...guideSrc.matchAll(/```javascript\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+const jsBlocks = [...guideSrc.matchAll(/```javascript\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
 const appsScriptSrc = jsBlocks.find((block) => block.includes('function doPost'));
 assert(appsScriptSrc, 'Could not locate the Apps Script code block in CONFIGURE-SUBMISSION-ENDPOINT.md');
 

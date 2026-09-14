@@ -811,7 +811,26 @@ function buildTicketLines_(items, catalog) {
     .panes { grid-template-columns: 360px minmax(0, 1fr); }
   }
 
-  /* ---------- sort ---------- */
+  /* ---------- search and sort ---------- */
+  .search { margin-bottom: 10px; }
+  .search label {
+    display: block;
+    margin-bottom: 6px;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .search input {
+    width: 100%;
+    font: 500 14px/1.2 var(--sans);
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    border-radius: 7px;
+    padding: 10px 12px;
+  }
+  .search input::placeholder { color: var(--muted); }
   .sort {
     display: flex;
     align-items: center;
@@ -1285,7 +1304,7 @@ function buildTicketLines_(items, catalog) {
 
   @media (max-width: 899px) {
     .ticket .back { display: block; }
-    body.detail .queue, body.detail .pulse, body.detail .chips, body.detail .sort { display: none; }
+    body.detail .queue, body.detail .pulse, body.detail .chips, body.detail .search, body.detail .sort { display: none; }
     body:not(.detail) .ticket { display: none; }
   }
 
@@ -1340,6 +1359,10 @@ function buildTicketLines_(items, catalog) {
 
     <main class="panes">
       <div>
+        <div class="search">
+          <label for="orderSearch">Cari pesanan</label>
+          <input id="orderSearch" type="search" placeholder="Nama atau kode pesanan" autocomplete="off" aria-controls="queue">
+        </div>
         <div class="sort">
           <span class="k">Urutkan</span>
           <div class="seg" id="sort" role="group" aria-label="Urutan daftar">
@@ -1394,6 +1417,7 @@ function buildTicketLines_(items, catalog) {
   var state = {
     lane: 'all',
     sort: 'due',
+    search: '',
     selected: null,
     orders: null,
     catalog: null,
@@ -1549,6 +1573,13 @@ function buildTicketLines_(items, catalog) {
     return order.payment !== 'Paid' && order.payment !== 'Cancelled' && order.phase !== 'Delivered';
   }
 
+  function matchesSearch(order, query) {
+    var needle = String(query || '').trim().toLowerCase();
+    if (!needle) return true;
+    return String(order.buyer || '').toLowerCase().indexOf(needle) !== -1 ||
+      String(order.ref || '').toLowerCase().indexOf(needle) !== -1;
+  }
+
   function laneOf(order) { return order.phase; }
 
   /* Finished orders are archived out of the working queue the moment
@@ -1622,6 +1653,7 @@ function buildTicketLines_(items, catalog) {
   var elChips = document.getElementById('chips');
   var elPulse = document.getElementById('pulse');
   var elSort = document.getElementById('sort');
+  var elSearch = document.getElementById('orderSearch');
 
   function render() {
     document.getElementById('today').textContent = fmtDate(todayStr()) + ' · Asia/Makassar';
@@ -1696,16 +1728,17 @@ function buildTicketLines_(items, catalog) {
   function renderQueue() {
     var catalog = state.catalog;
     var list = state.orders.filter(function (o) {
-      if (state.lane === 'all') return isActive(o);
-      if (state.lane === 'pay') return waitingPay(o);
-      return laneOf(o) === state.lane;
+      var inLane = state.lane === 'all' ? isActive(o) :
+        (state.lane === 'pay' ? waitingPay(o) : laneOf(o) === state.lane);
+      return inLane && matchesSearch(o, state.search);
     }).sort(function (a, b) {
       if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
     });
 
     if (!list.length) {
-      elQueue.innerHTML = '<li class="queue-empty">Tidak ada pesanan di kelompok ini.</li>';
+      elQueue.innerHTML = '<li class="queue-empty">' +
+        (state.search ? 'Tidak ada pesanan yang cocok.' : 'Tidak ada pesanan di kelompok ini.') + '</li>';
       return;
     }
 
@@ -1759,6 +1792,8 @@ function buildTicketLines_(items, catalog) {
 
   function paymentBlock(o) {
     var pay = o.payment;
+    if (pay === 'Paid') return '';
+
     var ship = o.shipping;
     var amount = billed(o);
     var deposit = depositAmount(o);
@@ -1798,10 +1833,7 @@ function buildTicketLines_(items, catalog) {
         '<span>Sisa pelunasan ' + esc(rupiah(balance)) + '</span></div>';
     }
 
-    if (pay === 'Paid') {
-      html += '<div class="paid-line"><span class="ok">Lunas</span><span class="amt">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
-        '<button type="button" class="btn ghost small" data-sendpaid="1">Kirim pesan</button></div>';
-    } else if (pay === 'Cancelled') {
+    if (pay === 'Cancelled') {
       html += '<div class="paid-line"><span class="cancelled">Dibatalkan</span>' +
         (isDeposit ? '<span class="why">Jika DP sudah diterima, proses pengembalian dicatat manual.</span>' : '') + '</div>';
     } else if (isDeposit) {
@@ -2112,6 +2144,11 @@ function buildTicketLines_(items, catalog) {
     renderQueue();
   });
 
+  elSearch.addEventListener('input', function () {
+    state.search = elSearch.value;
+    renderQueue();
+  });
+
   elQueue.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-ref]');
     if (!b) return;
@@ -2361,6 +2398,7 @@ to … → Allow** path. If her email is not yet in `DESK_ALLOWED_EMAILS`, the p
 Place one test order on the website, then on the Desk confirm:
 
 - The new order appears in the queue with the right buyer, date and flowers.
+- Searching with part of the buyer's name or order code shows the matching order.
 - **Salin teks rekening** produces a message with the right total and your account number.
 - Marking it *perlu dicek* and then *lunas* changes `Payment Status` in the sheet within a second.
 - Typing an ongkir on an out-of-Bali order fills in `Final Total` in the sheet by itself.

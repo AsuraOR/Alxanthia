@@ -1,697 +1,3 @@
-# Set up the Alxanthia Studio Desk
-
-This guide is written for the store owner. You do not need to know how to program: follow each step in order and copy the supplied code exactly.
-
-## What you are setting up
-
-```text
-Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   (existing, do not touch)
-                                                                ↕
-                                          Apps Script "Studio Desk" (new, standalone)
-                                                                ↕
-                                                  site-content.js on alxanthia.com (labels only)
-```
-
-The Studio Desk is a second, separate Apps Script project — a phone-friendly page for the maker
-that reads the same `Orders` worksheet the order-writer script (set up in
-`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly five columns:
-**Payment Plan**, **Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**. It never touches pricing,
-never recalculates a total, and is a completely separate Apps Script project from the order writer —
-a mistake in the Desk's code can never stop a customer's order from being saved.
-
-Finished flowers now arrive in the Desk as two distinct variants. Each stem item contains a Boolean
-`wrapped` value: `true` means **dengan kertas pembungkus** and includes the Rp5.000 per-flower fee
-already verified by the Order Writer; `false` means **tanpa kertas pembungkus**. A paper **colour** is
-shown only when the order contains a predefined or custom bouquet. The Desk still never calculates
-either fee itself—it only displays the verified order data.
-
-Never paste your Google account password, or any secret from `CONFIGURE-SUBMISSION-ENDPOINT.md`
-(the webhook secret, Turnstile keys), into anything in this guide. The only secrets the Desk itself
-uses — the allow-listed emails and the bank account details — live in this new script's own Script
-Properties, set in Part 5 below.
-
----
-
-## Part 1 — Get the spreadsheet ID
-
-1. Open your **Alxanthia Orders** spreadsheet (the same one `CONFIGURE-SUBMISSION-ENDPOINT.md` set up).
-2. Look at the address bar. The link looks like:
-   `https://docs.google.com/spreadsheets/d/`**`1a2B3c4D5e6F7g8H9i0J`**`/edit#gid=0`
-3. The bold middle part is the **spreadsheet ID**. Copy it into a note — you will paste it into a
-   Script Property in Part 5.
-
----
-
-## Part 2 — Add the payment plan and update the dropdown lists
-
-The words the Desk uses for work stage and payment are changing to match what
-`CONFIGURE-SUBMISSION-ENDPOINT.md` now documents. Old rows keep their old words until you fix them,
-and the Desk cannot show a stage it does not recognise.
-
-1. Add a column named **Payment Plan** immediately before **Payment Status**. Fill existing order rows
-   with `Full`; new orders receive that default automatically. Do not add a dropdown to this column—the
-   Desk writes either `Full` or `Deposit 50%`.
-2. In the sheet, click the **Work Phase** column header to select the column.
-3. **Data → Data validation**, click the existing rule, and replace the list with exactly these six
-   lines:
-
-   ```text
-   Not started
-   Assembly and packing
-   Ready for dispatch
-   Shipped
-   Delivered
-   Cancelled
-   ```
-
-4. Click the **Payment Status** column header and do the same with exactly these seven:
-
-   ```text
-   Unpaid
-   Checking transfer
-   Checking deposit
-   Deposit paid
-   Checking balance
-   Paid
-   Cancelled
-   ```
-
-5. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
-   value to its nearest new one:
-
-   | Old value | Change it to |
-   | --- | --- |
-   | Materials prepared, Flowers being made, Bouquet assembly, Quality check, Packed | Assembly and packing |
-   | Awaiting payment | *(payment column)* Unpaid |
-   | Awaiting confirmation | *(payment column)* Checking transfer |
-   | Expired, Refunded | *(payment column)* Cancelled |
-
-   Anything already reading `Not started`, `Ready for dispatch`, `Shipped`, `Delivered`, `Paid` or
-   `Cancelled` stays as it is.
-
----
-
-## Part 3 — Share the spreadsheet with her
-
-The Desk runs as *her*, so Google itself decides whether she is allowed in. That is the safest
-arrangement: nobody can use the Desk who cannot already open the sheet.
-
-1. Click **Share** in the top right of the spreadsheet.
-2. Add her Google account email, set it to **Editor**, and send.
-3. Confirm the sheet is still **not** "Anyone with the link" — it must stay restricted to named
-   people.
-
-Because she now has sheet access, re-check the protected columns: **Data → Protect sheets and
-ranges** should still restrict `Verified Product Subtotal`, `Verified Message Card Fee`,
-`Verified Total` and `Final Total` to you only. The Desk never writes those, but this stops an
-accidental edit if she ever opens the sheet directly.
-
----
-
-## Part 4 — Create the Studio Desk script
-
-1. Go to <https://script.google.com> and click **New project** (top left). This must be a brand-new,
-   **standalone** project — do not use the "Alxanthia Order Writer" project from
-   `CONFIGURE-SUBMISSION-ENDPOINT.md`, and do not open Apps Script from inside the spreadsheet's
-   **Extensions** menu (that would bind it to the spreadsheet, which a spreadsheet can only have one
-   of, and the order writer already is it).
-2. Rename it **Alxanthia Studio Desk** (click the title).
-3. Delete the sample `myFunction` code.
-4. Paste in the following code in full, then save (the disk icon).
-
-```javascript
-/**
- * Alxanthia Studio Desk — Google Apps Script.
- * Paste this whole file into a NEW, standalone project created at
- * script.google.com — NOT the "Alxanthia Order Writer" project bound to the
- * Orders spreadsheet — exactly as instructed in STUDIO-DESK-SETUP.md.
- */
-
-// ============================================================================
-// Configuration
-// ============================================================================
-var SHEET_NAME = 'Orders';
-var TIMEZONE = 'Asia/Makassar'; // must match CONFIGURE-SUBMISSION-ENDPOINT.md
-var MAX_ROWS = 500;
-var KEEP_DELIVERED_DAYS = 14;
-
-var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
-var CATALOG_CACHE_KEY = 'desk_catalog_v1';
-var CATALOG_TTL_SECONDS = 21600; // 6 hours, the CacheService maximum
-
-// Page-side field name -> sheet column header. The only five columns the
-// Desk is ever allowed to write, enforced here rather than trusted from the
-// page.
-var WRITABLE_FIELDS = {
-  paymentPlan: 'Payment Plan',
-  payment: 'Payment Status',
-  shipping: 'Shipping Fee',
-  phase: 'Work Phase',
-  notes: 'Internal Notes'
-};
-
-var PAYMENT_PLAN_VALUES = ['Full', 'Deposit 50%'];
-var PAYMENT_VALUES = ['Unpaid', 'Checking transfer', 'Checking deposit', 'Deposit paid', 'Checking balance', 'Paid', 'Cancelled'];
-var PHASE_VALUES = ['Not started', 'Assembly and packing', 'Ready for dispatch', 'Shipped', 'Delivered', 'Cancelled'];
-
-// ============================================================================
-// Web app entry point
-// ============================================================================
-function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index').evaluate()
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
-    .setTitle('Alxanthia Studio Desk — Meja Kerja Perajin');
-}
-
-// ============================================================================
-// Access control — the spreadsheet stays unshared; a caller must be listed
-// here even though the deployment itself is open to "Anyone with a Google
-// account". Fails closed: an unset or empty property lets nobody in.
-// ============================================================================
-function checkAccess_() {
-  var raw = PropertiesService.getScriptProperties().getProperty('DESK_ALLOWED_EMAILS') || '';
-  var allowed = raw.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
-  var email = String(Session.getActiveUser().getEmail() || '').toLowerCase();
-  if (!email || allowed.indexOf(email) === -1) {
-    throw new Error('Akun ini tidak punya akses ke Studio Desk. Hubungi pemilik studio.');
-  }
-}
-
-// ============================================================================
-// listOrders()
-// ============================================================================
-function listOrders() {
-  checkAccess_();
-  var sheet = openSheet_();
-  var headers = readHeaders_(sheet);
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-
-  var startRow = Math.max(2, lastRow - MAX_ROWS + 1);
-  var numRows = lastRow - startRow + 1;
-  var values = sheet.getRange(startRow, 1, numRows, headers.length).getValues();
-
-  var orders = [];
-  for (var i = 0; i < values.length; i += 1) {
-    var order = rowToOrder_(values[i], headers, startRow + i);
-    if (order && includeOrder_(order)) orders.push(order);
-  }
-  return orders;
-}
-
-function includeOrder_(order) {
-  if (order.phase === 'Cancelled') return false;
-  if (order.phase === 'Delivered') {
-    var daysPast = daysBetween_(order.date, todayStr_());
-    if (daysPast > KEEP_DELIVERED_DAYS) return false;
-  }
-  return true;
-}
-
-function todayStr_() {
-  return Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-}
-
-function daysBetween_(earlierDateStr, laterDateStr) {
-  var a = new Date(String(earlierDateStr) + 'T00:00:00');
-  var b = new Date(String(laterDateStr) + 'T00:00:00');
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-
-function rowToOrder_(rowValues, headers, rowNumber) {
-  function get(name) {
-    var idx = headers.map[name];
-    return idx === undefined ? '' : rowValues[idx];
-  }
-
-  var ref = get('Order Reference');
-  if (!ref) return null;
-
-  var locationType = String(get('Location Type') || '');
-  var isBali = locationType === 'bali';
-
-  var items;
-  try {
-    var parsed = JSON.parse(String(get('Item Data') || '[]'));
-    items = Array.isArray(parsed) ? parsed : [];
-  } catch (parseError) {
-    items = [];
-  }
-
-  var hasCard = String(get('Message Card') || '') === 'Yes';
-  var card = hasCard ? {
-    to: String(get('Recipient Name') || ''),
-    from: String(get('Card Sender Name') || ''),
-    text: String(get('Gift Message') || '')
-  } : null;
-
-  var shippingRaw = get('Shipping Fee');
-  var shipping = (shippingRaw === '' || shippingRaw === null || shippingRaw === undefined)
-    ? null
-    : Number(shippingRaw);
-
-  return {
-    ref: String(ref),
-    row: rowNumber,
-    submitted: formatDateTimeCell_(get('Submitted At')),
-    buyer: String(get('Buyer Name') || ''),
-    wa: String(get('Buyer WhatsApp') || ''),
-    locationType: locationType,
-    regency: isBali ? String(get('Regency') || '') : '',
-    method: isBali ? String(get('Delivery Method') || '') : '',
-    address: isBali ? '' : String(get('Address') || ''),
-    city: isBali ? '' : String(get('City') || ''),
-    postal: isBali ? '' : String(get('Postal Code') || ''),
-    date: formatDateCell_(get('Preferred Date')),
-    items: items,
-    itemsRaw: String(get('Order Summary') || ''),
-    wrap: String(get('Wrap') || ''),
-    card: card,
-    verified: Number(get('Verified Total')) || 0,
-    shipping: shipping,
-    mismatch: String(get('Price Mismatch') || '') !== '',
-    paymentPlan: String(get('Payment Plan') || 'Full'),
-    payment: String(get('Payment Status') || 'Unpaid'),
-    phase: String(get('Work Phase') || 'Not started'),
-    notes: String(get('Internal Notes') || '')
-  };
-}
-
-function formatDateCell_(value) {
-  if (value instanceof Date) return Utilities.formatDate(value, TIMEZONE, 'yyyy-MM-dd');
-  return String(value || '');
-}
-
-function formatDateTimeCell_(value) {
-  if (value instanceof Date) return Utilities.formatDate(value, TIMEZONE, 'yyyy-MM-dd HH:mm');
-  return String(value || '');
-}
-
-// ============================================================================
-// updateOrder(payload)
-// ============================================================================
-function updateOrder(payload) {
-  checkAccess_();
-  payload = payload || {};
-  var ref = String(payload.ref || '');
-  var field = payload.field;
-
-  if (!Object.prototype.hasOwnProperty.call(WRITABLE_FIELDS, field)) {
-    return { ok: false, code: 'BAD_FIELD', message: 'Kolom ini tidak bisa diubah dari Studio Desk.' };
-  }
-
-  var validated = validateFieldValue_(field, payload.value);
-  if (!validated.ok) {
-    return { ok: false, code: 'BAD_VALUE', message: validated.message };
-  }
-
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
-  }
-  try {
-    var sheet = openSheet_();
-    var headers = readHeaders_(sheet);
-    var refCol = headers.map['Order Reference'];
-    var columnName = WRITABLE_FIELDS[field];
-    var colIdx = headers.map[columnName];
-    if (refCol === undefined || colIdx === undefined) {
-      return { ok: false, code: 'NOT_FOUND', message: 'Kolom yang dibutuhkan tidak ditemukan di sheet Orders.' };
-    }
-
-    var row = findRowByReference_(sheet, refCol, ref, payload.row);
-    if (!row) {
-      return { ok: false, code: 'NOT_FOUND', message: 'Pesanan dengan referensi ini tidak ditemukan lagi.' };
-    }
-
-    var currentRef = sheet.getRange(row, refCol + 1).getValue();
-    if (String(currentRef) !== ref) {
-      return { ok: false, code: 'STALE_ROW', message: 'Baris pesanan berubah. Muat ulang daftar pesanan lalu coba lagi.' };
-    }
-
-    if (field === 'paymentPlan') {
-      var planPaymentCol = headers.map['Payment Status'];
-      var planPayment = planPaymentCol === undefined ? '' : sheet.getRange(row, planPaymentCol + 1).getValue();
-      if (String(planPayment || 'Unpaid') !== 'Unpaid') {
-        return { ok: false, code: 'PAYMENT_STARTED', message: 'Cara pembayaran tidak bisa diubah setelah transfer mulai diproses.' };
-      }
-    }
-
-    // A deposit may start production, but an order must be fully paid before
-    // it can leave the studio. Enforce this on the server, not only in the UI.
-    if (field === 'phase' && (validated.value === 'Shipped' || validated.value === 'Delivered')) {
-      var paymentCol = headers.map['Payment Status'];
-      var currentPayment = paymentCol === undefined ? '' : sheet.getRange(row, paymentCol + 1).getValue();
-      if (String(currentPayment) !== 'Paid') {
-        return { ok: false, code: 'PAYMENT_DUE', message: 'Pelunasan harus diterima sebelum pesanan dikirim.' };
-      }
-    }
-
-    sheet.getRange(row, colIdx + 1).setValue(validated.value);
-
-    var rowValues = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
-    return { ok: true, order: rowToOrder_(rowValues, headers, row) };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function validateFieldValue_(field, value) {
-  if (field === 'paymentPlan') {
-    if (PAYMENT_PLAN_VALUES.indexOf(value) === -1) {
-      return { ok: false, message: 'Cara pembayaran tidak dikenali.' };
-    }
-    return { ok: true, value: value };
-  }
-  if (field === 'payment') {
-    if (PAYMENT_VALUES.indexOf(value) === -1) {
-      return { ok: false, message: 'Status pembayaran tidak dikenali.' };
-    }
-    return { ok: true, value: value };
-  }
-  if (field === 'phase') {
-    if (PHASE_VALUES.indexOf(value) === -1) {
-      return { ok: false, message: 'Tahap kerja tidak dikenali.' };
-    }
-    return { ok: true, value: value };
-  }
-  if (field === 'shipping') {
-    if (value === '' || value === null || value === undefined) {
-      return { ok: true, value: '' };
-    }
-    if (typeof value !== 'number' && typeof value !== 'string') {
-      return { ok: false, message: 'Ongkir harus berupa angka 0 atau lebih.' };
-    }
-    var num = Number(value);
-    if (!isFinite(num) || num < 0) {
-      return { ok: false, message: 'Ongkir harus berupa angka 0 atau lebih.' };
-    }
-    return { ok: true, value: num };
-  }
-  if (field === 'notes') {
-    if (typeof value !== 'string') {
-      return { ok: false, message: 'Catatan harus berupa teks.' };
-    }
-    return { ok: true, value: safeText_(value.slice(0, 1000)) };
-  }
-  return { ok: false, message: 'Kolom tidak dikenali.' };
-}
-
-// Mirrors the order writer's safeText() in CONFIGURE-SUBMISSION-ENDPOINT.md so
-// a note starting with =, +, - or @ cannot become a formula.
-function safeText_(value) {
-  var text = String(value === undefined || value === null ? '' : value);
-  return /^[=+-@]/.test(text) ? "'" + text : text;
-}
-
-function findRowByReference_(sheet, refCol, ref, hintRow) {
-  var lastRow = sheet.getLastRow();
-  if (hintRow && hintRow >= 2 && hintRow <= lastRow) {
-    var hintValue = sheet.getRange(hintRow, refCol + 1).getValue();
-    if (String(hintValue) === ref) return hintRow;
-  }
-  if (lastRow < 2) return null;
-  var refs = sheet.getRange(2, refCol + 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < refs.length; i += 1) {
-    if (String(refs[i][0]) === ref) return i + 2;
-  }
-  return null;
-}
-
-// ============================================================================
-// createOrder(payload) — Direct order creation from Studio Desk
-// ============================================================================
-function createOrder(payload) {
-  checkAccess_();
-  payload = payload || {};
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
-  }
-  try {
-    var sheet = openSheet_();
-    var headers = readHeaders_(sheet);
-    var now = new Date();
-    var datePart = Utilities.formatDate(now, TIMEZONE, 'yyMMdd');
-    var randCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-    var ref = payload.ref || ('ALX-' + datePart + '-' + randCode);
-
-    var isBali = payload.locationType === 'bali';
-    var card = payload.card || null;
-    var items = Array.isArray(payload.items) ? payload.items : [];
-
-    var rowValues = new Array(headers.length).fill('');
-    function setCol(colName, val) {
-      var idx = headers.map[colName];
-      if (idx !== undefined) rowValues[idx] = val;
-    }
-
-    setCol('Order Reference', ref);
-    setCol('Submitted At', now);
-    setCol('Language', 'id');
-    setCol('Currency', 'IDR');
-    setCol('Source', 'studio_desk');
-    setCol('Acknowledged', 'Yes');
-    setCol('Buyer Name', safeText_(payload.buyer || ''));
-    setCol('Buyer WhatsApp', safeText_(payload.wa || ''));
-    setCol('Location Type', isBali ? 'bali' : 'luar_bali');
-    setCol('Regency', isBali ? safeText_(payload.regency || '') : '');
-    setCol('Delivery Method', isBali ? safeText_(payload.method || '') : '');
-    setCol('Address', isBali ? '' : safeText_(payload.address || ''));
-    setCol('City', isBali ? '' : safeText_(payload.city || ''));
-    setCol('Postal Code', isBali ? '' : safeText_(payload.postal || ''));
-    setCol('Preferred Date', payload.date || todayStr_());
-    setCol('Order Mode', 'desk');
-    setCol('Order Summary', safeText_(payload.itemsRaw || ''));
-    setCol('Item Data', JSON.stringify(items));
-    setCol('Wrap', safeText_(payload.wrap || ''));
-    setCol('Message Card', card ? 'Yes' : 'No');
-    setCol('Gift Message', card ? safeText_(card.text || '') : '');
-    setCol('Recipient Name', card ? safeText_(card.to || '') : '');
-    setCol('Card Sender Name', card ? safeText_(card.from || '') : '');
-    setCol('Verified Total', Number(payload.verified) || 0);
-    setCol('Price Mismatch', '');
-    setCol('Shipping Fee', payload.shipping !== undefined && payload.shipping !== null && payload.shipping !== '' ? Number(payload.shipping) : (isBali ? 0 : ''));
-    setCol('Payment Plan', payload.paymentPlan || 'Full');
-    setCol('Payment Status', payload.payment || 'Unpaid');
-    setCol('Work Phase', payload.phase || 'Not started');
-    setCol('Internal Notes', safeText_(payload.notes || ''));
-
-    sheet.appendRow(rowValues);
-    var newRow = sheet.getLastRow();
-    return { ok: true, order: rowToOrder_(rowValues, headers, newRow) };
-  } catch (err) {
-    return { ok: false, message: err.message || String(err) };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ============================================================================
-// getDeskSettings() / saveDeskSettings(settings)
-// ============================================================================
-function getDeskSettings() {
-  checkAccess_();
-  var props = PropertiesService.getScriptProperties();
-  var raw = props.getProperty('DESK_CUSTOM_SETTINGS');
-  var custom = {};
-  if (raw) {
-    try { custom = JSON.parse(raw); } catch (e) {}
-  }
-  return {
-    bank: props.getProperty('BANK_NAME') || '',
-    accNumber: props.getProperty('BANK_NUMBER') || '',
-    accHolder: props.getProperty('BANK_HOLDER') || '',
-    signature: custom.signature || '',
-    templates: custom.templates || null
-  };
-}
-
-function saveDeskSettings(settings) {
-  checkAccess_();
-  settings = settings || {};
-  var props = PropertiesService.getScriptProperties();
-  props.setProperty('DESK_CUSTOM_SETTINGS', JSON.stringify({
-    signature: settings.signature || '',
-    templates: settings.templates || {}
-  }));
-  return { ok: true };
-}
-
-// ============================================================================
-// Sheet helpers
-// ============================================================================
-function openSheet_() {
-  var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-  if (!id) throw new Error('SPREADSHEET_ID belum diatur di Script Properties.');
-  var spreadsheet = SpreadsheetApp.openById(id);
-  var sheet = spreadsheet.getSheetByName(SHEET_NAME);
-  if (!sheet) throw new Error('Worksheet "Orders" tidak ditemukan di spreadsheet ini.');
-  return sheet;
-}
-
-function readHeaders_(sheet) {
-  var lastCol = sheet.getLastColumn();
-  var values = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  var map = {};
-  values.forEach(function (name, idx) {
-    if (!name) return;
-    map[String(name).trim()] = idx;
-  });
-  return { map: map, length: lastCol };
-}
-
-// ============================================================================
-// getCatalog() / refreshCatalog()
-// ============================================================================
-function getCatalog() {
-  checkAccess_();
-  var cache = CacheService.getScriptCache();
-  var hit = cache.get(CATALOG_CACHE_KEY);
-  var labels = hit ? JSON.parse(hit) : fetchAndCacheCatalog_();
-  labels.bank = bankInfo_();
-  return labels;
-}
-
-function refreshCatalog() {
-  checkAccess_();
-  CacheService.getScriptCache().remove(CATALOG_CACHE_KEY);
-  var labels = fetchAndCacheCatalog_();
-  labels.bank = bankInfo_();
-  return labels;
-}
-
-function fetchAndCacheCatalog_() {
-  var cache = CacheService.getScriptCache();
-  var props = PropertiesService.getScriptProperties();
-  try {
-    var res = UrlFetchApp.fetch(SITE_CONTENT_URL, { muteHttpExceptions: true, followRedirects: true });
-    if (res.getResponseCode() === 200) {
-      var data = (new Function('window', res.getContentText() + '\nreturn window.ALXANTHIA_DATA;'))({});
-      var labels = pickLabels_(data);
-      labels.fetchedAt = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm');
-      cache.put(CATALOG_CACHE_KEY, JSON.stringify(labels), CATALOG_TTL_SECONDS);
-      props.setProperty('DESK_CATALOG_BACKUP', JSON.stringify(labels));
-      return labels;
-    }
-  } catch (fetchError) {
-    // fall through to the last good copy
-  }
-
-  var backup = props.getProperty('DESK_CATALOG_BACKUP');
-  if (backup) {
-    var parsedBackup = JSON.parse(backup);
-    parsedBackup.stale = true;
-    return parsedBackup;
-  }
-  return { stale: true, flowers: {}, pots: {}, additions: {}, packages: [], wraps: {}, minimumLeadDays: 2 };
-}
-
-function pickLabels_(data) {
-  data = data || {};
-
-  var flowers = {};
-  Object.keys(data.flowers || {}).forEach(function (key) {
-    var entry = data.flowers[key] || {};
-    var id = entry.id || {};
-    var specParts = [id.size, id.detail].filter(function (part) { return !!part; });
-    flowers[key] = { name: id.name || humanizeKey_(key), spec: specParts.join(' · ') };
-  });
-
-  var pots = {};
-  (data.miniPots || []).forEach(function (pot) {
-    var id = pot.id || {};
-    pots[pot.key] = { name: id.name || humanizeKey_(pot.key), spec: 'tinggi ' + pot.heightCm + ' cm' };
-  });
-
-  var additions = {};
-  (data.customAdditions || []).forEach(function (addition) {
-    var id = addition.id || {};
-    additions[addition.key] = { name: id.name || humanizeKey_(addition.key) };
-  });
-
-  var packages = (data.packages || []).map(function (pkg) {
-    return { stems: pkg.stems };
-  });
-
-  var wrapNames = ((data.translations || {}).id || {}).wrapNames || {};
-  var wraps = {};
-  (data.wraps || []).forEach(function (wrap) {
-    wraps[wrap.key] = { name: wrapNames[wrap.key] || humanizeKey_(wrap.key), swatch: wrap.swatch };
-  });
-
-  return {
-    flowers: flowers,
-    pots: pots,
-    additions: additions,
-    packages: packages,
-    wraps: wraps,
-    minimumLeadDays: Number(data.minimumLeadDays) || 2
-  };
-}
-
-function bankInfo_() {
-  var props = PropertiesService.getScriptProperties();
-  return {
-    bank: props.getProperty('BANK_NAME') || '',
-    number: props.getProperty('BANK_NUMBER') || '',
-    holder: props.getProperty('BANK_HOLDER') || ''
-  };
-}
-
-function humanizeKey_(key) {
-  return String(key || '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-}
-
-function resolveLabel_(map, key) {
-  var entry = map && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
-  return entry || { name: humanizeKey_(key), spec: '' };
-}
-
-function buildTicketLines_(items, catalog) {
-  return (items || []).map(function (item, i) {
-    if (item.type === 'stem') {
-      var flower = resolveLabel_(catalog.flowers, item.id);
-      var stemLines = flower.spec ? [{ v: flower.spec }] : [];
-      stemLines.push({ k: 'bungkus', v: item.wrapped === true ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus' });
-      return { key: 'i' + i, qty: item.qty, name: flower.name, lines: stemLines };
-    }
-    if (item.type === 'pot') {
-      var pot = resolveLabel_(catalog.pots, item.id);
-      return { key: 'i' + i, qty: item.qty, name: pot.name, lines: pot.spec ? [{ v: pot.spec }] : [] };
-    }
-    if (item.type === 'package') {
-      var pkg = (catalog.packages || [])[Number(item.id)];
-      var stems = pkg ? pkg.stems : '?';
-      return { key: 'i' + i, qty: item.qty, name: 'Paket ' + stems + ' tangkai', lines: [{ v: 'pilihan bunga studio' }] };
-    }
-    if (item.type === 'custom') {
-      var each = [];
-      var total = [];
-      Object.keys(item.stems || {}).forEach(function (k) {
-        var f = resolveLabel_(catalog.flowers, k);
-        each.push(item.stems[k] + '× ' + f.name);
-        total.push(item.stems[k] * item.qty + '× ' + f.name);
-      });
-      Object.keys(item.additions || {}).forEach(function (k) {
-        if (!item.additions[k]) return;
-        var a = resolveLabel_(catalog.additions, k);
-        each.push(item.additions[k] + '× ' + a.name);
-        total.push(item.additions[k] * item.qty + '× ' + a.name);
-      });
-      var lines = [{ k: 'per rangkaian', v: each.join(' · ') }];
-      if (item.qty > 1) lines.push({ k: 'total', v: total.join(' · ') });
-      return { key: 'i' + i, qty: item.qty, name: 'Rangkaian custom', lines: lines };
-    }
-    return { key: 'i' + i, qty: item.qty || 1, name: 'Item tidak dikenal', lines: [] };
-  });
-}
-```
-
-5. Click the **+** next to *Files*, choose **HTML**, name it exactly `Index` (no `.html`), delete
-   what is there, and paste in the page below in full, then save.
-
-```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -3275,50 +2581,6 @@ function buildTicketLines_(items, catalog) {
        ========================================================================= -->
   <script>
     'use strict';
-    /* --- Google Apps Script Environment Detection & Remote Persistence --- */
-    function isAppsScript() {
-      return typeof google !== 'undefined' && google.script && typeof google.script.run !== 'undefined';
-    }
-
-    function updateOrderField(ref, field, value, successMsg) {
-      const order = state.orders.find(o => o.ref === ref);
-      if (!order) return;
-      const oldValue = order[field];
-      order[field] = value;
-      saveState();
-      renderAll();
-
-      if (isAppsScript()) {
-        google.script.run
-          .withSuccessHandler(function(res) {
-            if (!res || !res.ok) {
-              order[field] = oldValue;
-              saveState();
-              renderAll();
-              showToast((res && res.message) || 'Gagal menyimpan ke Google Sheets.', true);
-            } else {
-              showToast(successMsg || 'Tersimpan di Google Sheets ✓');
-              if (res.order) {
-                const idx = state.orders.findIndex(o => o.ref === ref);
-                if (idx !== -1) {
-                  state.orders[idx] = Object.assign({}, order, res.order);
-                  renderAll();
-                }
-              }
-            }
-          })
-          .withFailureHandler(function(err) {
-            order[field] = oldValue;
-            saveState();
-            renderAll();
-            showToast('Koneksi sheet gagal: ' + (err.message || err), true);
-          })
-          .updateOrder({ ref: order.ref, row: order.row, field: field, value: value });
-      } else {
-        showToast(successMsg || 'Tersimpan ✓');
-      }
-    }
-
 
     /* --- Studio Catalog Data --- */
     const CATALOG = {
@@ -3327,25 +2589,25 @@ function buildTicketLines_(items, catalog) {
       messageCardPrice: 5000,
       minimumLeadDays: 2,
       flowers: {
-        Sunflower: { price: 55000, name: 'Bunga Matahari', spec: '45 cm · kepala 12 cm', img: 'https://alxanthia.com/img/sunflower-720.webp', fallbackImg: 'https://alxanthia.com/img/sunflower-720.webp' },
-        Rose:      { price: 60000, name: 'Mawar',          spec: '40 cm · kepala melingkar', img: 'https://alxanthia.com/img/rose-720.webp', fallbackImg: 'https://alxanthia.com/img/rose-720.webp' },
-        Tulip:     { price: 50000, name: 'Tulip',          spec: '38 cm · 6 kelopak', img: 'https://alxanthia.com/img/tulip-720.webp', fallbackImg: 'https://alxanthia.com/img/tulip-720.webp' },
-        Gerbera:   { price: 55000, name: 'Gerbera',        spec: '40 cm · koral dua nada', img: 'https://alxanthia.com/img/gerbera-720.webp', fallbackImg: 'https://alxanthia.com/img/gerbera-720.webp' }
+        Sunflower: { price: 55000, name: 'Bunga Matahari', spec: '45 cm · kepala 12 cm', img: '../img/sunflower-720.webp', fallbackImg: 'img/sunflower-720.webp' },
+        Rose:      { price: 60000, name: 'Mawar',          spec: '40 cm · kepala melingkar', img: '../img/rose-720.webp', fallbackImg: 'img/rose-720.webp' },
+        Tulip:     { price: 50000, name: 'Tulip',          spec: '38 cm · 6 kelopak', img: '../img/tulip-720.webp', fallbackImg: 'img/tulip-720.webp' },
+        Gerbera:   { price: 55000, name: 'Gerbera',        spec: '40 cm · koral dua nada', img: '../img/gerbera-720.webp', fallbackImg: 'img/gerbera-720.webp' }
       },
       pots: {
-        sunflower:            { price: 125000, name: 'Mini Pot Bunga Matahari', spec: 'tinggi 14 cm', img: 'https://alxanthia.com/img/mini-pot-sunflower.webp', fallbackImg: 'https://alxanthia.com/img/mini-pot-sunflower.webp' },
-        'lily-of-the-valley': { price: 125000, name: 'Mini Pot Lily of the Valley', spec: 'tinggi 11 cm', img: 'https://alxanthia.com/img/mini-pot-lily-of-the-valley.webp', fallbackImg: 'https://alxanthia.com/img/mini-pot-lily-of-the-valley.webp' },
-        daisy:                { price: 125000, name: 'Mini Pot Daisy', spec: 'tinggi 13 cm', img: 'https://alxanthia.com/img/mini-pot-daisy.webp', fallbackImg: 'https://alxanthia.com/img/mini-pot-daisy.webp' }
+        sunflower:            { price: 125000, name: 'Mini Pot Bunga Matahari', spec: 'tinggi 14 cm', img: '../img/mini-pot-sunflower.webp', fallbackImg: 'img/mini-pot-sunflower.webp' },
+        'lily-of-the-valley': { price: 125000, name: 'Mini Pot Lily of the Valley', spec: 'tinggi 11 cm', img: '../img/mini-pot-lily-of-the-valley.webp', fallbackImg: 'img/mini-pot-lily-of-the-valley.webp' },
+        daisy:                { price: 125000, name: 'Mini Pot Daisy', spec: 'tinggi 13 cm', img: '../img/mini-pot-daisy.webp', fallbackImg: 'img/mini-pot-daisy.webp' }
       },
       additions: {
-        rounded: { price: 12000, name: 'Daun Bulat', spec: 'tangkai daun bulat', img: 'https://alxanthia.com/img/addition-rounded-leaves.webp', fallbackImg: 'https://alxanthia.com/img/addition-rounded-leaves.webp' },
-        fern:    { price: 12000, name: 'Daun Pakis', spec: 'tangkai daun pakis', img: 'https://alxanthia.com/img/addition-fern-leaves.webp', fallbackImg: 'https://alxanthia.com/img/addition-fern-leaves.webp' }
+        rounded: { price: 12000, name: 'Daun Bulat', spec: 'tangkai daun bulat', img: '../img/addition-rounded-leaves.webp', fallbackImg: 'img/addition-rounded-leaves.webp' },
+        fern:    { price: 12000, name: 'Daun Pakis', spec: 'tangkai daun pakis', img: '../img/addition-fern-leaves.webp', fallbackImg: 'img/addition-fern-leaves.webp' }
       },
       packages: [
-        { price: 195000, stems: 3, img: 'https://alxanthia.com/img/bouquet-3-720.webp', fallbackImg: 'https://alxanthia.com/img/bouquet-3-720.webp' },
-        { price: 295000, stems: 5, img: 'https://alxanthia.com/img/bouquet-5-720.webp', fallbackImg: 'https://alxanthia.com/img/bouquet-5-720.webp' },
-        { price: 465000, stems: 9, img: 'https://alxanthia.com/img/bouquet-9-720.webp', fallbackImg: 'https://alxanthia.com/img/bouquet-9-720.webp' },
-        { price: 745000, stems: 15, img: 'https://alxanthia.com/img/bouquet-15-720.webp', fallbackImg: 'https://alxanthia.com/img/bouquet-15-720.webp' }
+        { price: 195000, stems: 3, img: '../img/bouquet-3-720.webp', fallbackImg: 'img/bouquet-3-720.webp' },
+        { price: 295000, stems: 5, img: '../img/bouquet-5-720.webp', fallbackImg: 'img/bouquet-5-720.webp' },
+        { price: 465000, stems: 9, img: '../img/bouquet-9-720.webp', fallbackImg: 'img/bouquet-9-720.webp' },
+        { price: 745000, stems: 15, img: '../img/bouquet-15-720.webp', fallbackImg: 'img/bouquet-15-720.webp' }
       ],
       wraps: {
         kraft: { swatch: '#B79A6E', name: 'Kraft', note: 'Kertas cokelat natural tebal' },
@@ -3474,98 +2736,43 @@ function buildTicketLines_(items, catalog) {
     };
 
     function loadState() {
-      // 1. Client preferences
       try {
-        const savedTheme = localStorage.getItem('alx_desk_theme');
-        if (savedTheme) applyTheme(savedTheme);
-        const savedTicks = localStorage.getItem('alx_desk_ticks');
-        if (savedTicks) state.orderItemTicks = JSON.parse(savedTicks);
-        const savedPrepTicks = localStorage.getItem('alx_desk_prep_ticks');
-        if (savedPrepTicks) state.prepCheckedItems = JSON.parse(savedPrepTicks);
-        const savedSettings = localStorage.getItem('alx_desk_settings');
-        if (savedSettings) state.settings = Object.assign({}, DEFAULT_SETTINGS, JSON.parse(savedSettings));
-      } catch (e) {}
-
-      // 2. Data source: Live Apps Script or Local Mockup Fallback
-      if (isAppsScript()) {
-        state.loading = true;
-        renderQueue();
-
-        google.script.run
-          .withSuccessHandler(function(orders) {
-            state.loading = false;
-            state.orders = Array.isArray(orders) ? orders : [];
-            if (state.orders.length > 0) {
-              if (!state.selectedRef || !state.orders.some(o => o.ref === state.selectedRef)) {
-                state.selectedRef = state.orders[0].ref;
-              }
-            }
-            renderAll();
-          })
-          .withFailureHandler(function(err) {
-            state.loading = false;
-            showToast('Gagal memuat pesanan: ' + (err.message || err), true);
-            renderAll();
-          })
-          .listOrders();
-
-        google.script.run
-          .withSuccessHandler(function(cat) {
-            if (cat && cat.bank) {
-              if (cat.bank.bank) state.settings.bank = cat.bank.bank;
-              if (cat.bank.number) state.settings.accNumber = cat.bank.number;
-              if (cat.bank.holder) state.settings.accHolder = cat.bank.holder;
-            }
-            renderTicket();
-          })
-          .getCatalog();
-
-        if (google.script.run.getDeskSettings) {
-          google.script.run
-            .withSuccessHandler(function(serverSettings) {
-              if (serverSettings) {
-                if (serverSettings.signature) state.settings.signature = serverSettings.signature;
-                if (serverSettings.templates) {
-                  state.settings.templates = Object.assign({}, DEFAULT_SETTINGS.templates, serverSettings.templates);
-                }
-              }
-            })
-            .getDeskSettings();
-        }
-      } else {
-        try {
-          const raw = localStorage.getItem('alx_desk_remake_v1');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.orders && parsed.orders.length) state.orders = parsed.orders;
-            if (parsed.selectedRef) state.selectedRef = parsed.selectedRef;
-            if (parsed.settings) state.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings);
-          } else {
-            state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
-            state.selectedRef = state.orders[0].ref;
-            saveState();
-          }
-        } catch (e) {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && Array.isArray(saved.orders) && saved.orders.length > 0) {
+          state.orders = saved.orders;
+          state.orderItemTicks = saved.orderItemTicks || {};
+          state.theme = saved.theme || 'light';
+        } else {
           state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
-          state.selectedRef = state.orders[0].ref;
         }
-        renderAll();
+
+        const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        if (savedSettings && savedSettings.templates) {
+          state.settings = savedSettings;
+        }
+
+        const savedPrepChecks = JSON.parse(localStorage.getItem(PREP_CHECK_KEY));
+        if (savedPrepChecks) {
+          state.prepChecklist = savedPrepChecks;
+        }
+      } catch (e) {
+        state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
       }
+      if (!state.selectedRef && state.orders.length > 0) {
+        state.selectedRef = state.orders[0].ref;
+      }
+      applyTheme(state.theme);
     }
 
     function saveState() {
       try {
-        localStorage.setItem('alx_desk_theme', state.theme);
-        localStorage.setItem('alx_desk_ticks', JSON.stringify(state.orderItemTicks));
-        localStorage.setItem('alx_desk_prep_ticks', JSON.stringify(state.prepCheckedItems));
-        localStorage.setItem('alx_desk_settings', JSON.stringify(state.settings));
-        if (!isAppsScript()) {
-          localStorage.setItem('alx_desk_remake_v1', JSON.stringify({
-            orders: state.orders,
-            selectedRef: state.selectedRef,
-            settings: state.settings
-          }));
-        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          orders: state.orders,
+          orderItemTicks: state.orderItemTicks,
+          theme: state.theme
+        }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+        localStorage.setItem(PREP_CHECK_KEY, JSON.stringify(state.prepChecklist));
       } catch (e) {}
     }
 
@@ -3707,8 +2914,8 @@ function buildTicketLines_(items, catalog) {
           qty: item.qty,
           name: 'Rangkaian Buket Custom',
           spec: 'Komposisi bunga & daun khusus pesanan ini',
-          img: 'https://alxanthia.com/img/bouquet-5-720.webp',
-          fallbackImg: 'https://alxanthia.com/img/bouquet-5-720.webp',
+          img: '../img/bouquet-5-720.webp',
+          fallbackImg: 'img/bouquet-5-720.webp',
           breakdown: `Komposisi per rangkaian: ${stemParts.join(' · ')}`
         };
       });
@@ -3883,7 +3090,12 @@ function buildTicketLines_(items, catalog) {
         if (state.lane === 'Delivered' && o.phase !== 'Delivered') return false;
 
         // Search query filter
-        if (!matchesSearch(o, state.search)) return false;
+        if (query) {
+          const matchBuyer = (o.buyer || '').toLowerCase().includes(query);
+          const matchRef = (o.ref || '').toLowerCase().includes(query);
+          const matchWa = (o.wa || '').includes(query);
+          if (!matchBuyer && !matchRef && !matchWa) return false;
+        }
         return true;
       });
 
@@ -3980,26 +3192,198 @@ function buildTicketLines_(items, catalog) {
       };
     }
 
-    
-  function matchesSearch(order, query) {
-    var q = String(query || '').trim().toLowerCase();
-    if (!q) return true;
-    var buyer = String((order && order.buyer) || '').toLowerCase();
-    var ref = String((order && order.ref) || '').toLowerCase();
-    return buyer.indexOf(q) !== -1 || ref.indexOf(q) !== -1;
-  }
+    function renderTicket() {
+      const ticketEl = document.getElementById('ticket-pane');
+      const order = state.orders.find(o => o.ref === state.selectedRef);
 
+      if (!order) {
+        ticketEl.innerHTML = `
+          <div style="padding: 60px 20px; text-align: center; color: var(--text-muted);">
+            <p style="font-size: 16px; font-weight: 600;">Pilih pesanan di sebelah kiri</p>
+            <p style="font-size: 13px; opacity: 0.7;">Lembar kerja pembuat akan ditampilkan di sini.</p>
+          </div>
+        `;
+        return;
+      }
 
-  function paymentBlock(o) {
-    var pay = o.payment;
-    if (pay === 'Paid') return '';
+      const totals = computeTotals(order);
+      const d = daysUntil(order.date);
+      let headerCls = '';
+      if (order.phase !== 'Delivered') {
+        if (d < 0) headerCls = 'is-late';
+        else if (d === 0) headerCls = 'is-today';
+      }
 
-    const totals = computeTotals(o);
-    const isDepositPlan = o.paymentPlan === 'Deposit 50%';
-    const isDepositReceived = o.payment === 'Deposit paid' || o.payment === 'Checking balance';
+      const wrapInfo = CATALOG.wraps[order.wrap] || { swatch: '#ccc', name: order.wrap, note: '' };
+      const recipes = getItemRecipeList(order);
+      const orderTicks = state.orderItemTicks[order.ref] || {};
+      const completedCount = recipes.filter(r => orderTicks[r.key]).length;
+      const progressPct = recipes.length > 0 ? Math.round((completedCount / recipes.length) * 100) : 0;
 
-    return `
-        ${paymentBlock(order)}
+      const phaseIdx = PHASES.findIndex(p => p.key === order.phase);
+      const nextPhase = PHASES[phaseIdx + 1];
+
+      const cleanWa = (order.wa || '').replace(/[^0-9]/g, '');
+      const isDepositPlan = order.paymentPlan === 'Deposit 50%';
+      const isDepositReceived = order.payment === 'Deposit paid' || order.payment === 'Checking balance';
+      const isFullyPaid = order.payment === 'Paid';
+
+      ticketEl.innerHTML = `
+        <button type="button" class="ticket-mobile-back" id="btn-mobile-back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Kembali ke Antrean Pesanan
+        </button>
+
+        <!-- Ticket Header -->
+        <div class="ticket-header ${headerCls}">
+          <div class="buyer-info">
+            <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); margin-bottom: 2px;">
+              ${order.ref} · Masuk ${order.submitted}
+            </div>
+            <h2>${order.buyer}</h2>
+            <div class="buyer-links">
+              <a class="wa-link" href="https://wa.me/${cleanWa}" target="_blank" rel="noopener">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                Chat WhatsApp (${order.wa})
+              </a>
+              <span style="color: var(--text-muted);">
+                ${order.locationType === 'bali' 
+                  ? `🛵 Bali (${order.regency}) · ${order.method === 'self_pickup' ? 'Ambil Sendiri' : 'Grab/Gojek'}`
+                  : `📦 Ekspedisi ke ${order.city || 'Luar Bali'}`}
+              </span>
+            </div>
+          </div>
+
+          <div class="ticket-badges">
+            <div class="due-headline">${order.date}</div>
+            <div class="due-relative">${formatRelativeDate(order.date)}</div>
+          </div>
+        </div>
+
+        <div class="ticket-body">
+          <!-- 1. PEMBAYARAN & SISTEM DP -->
+        <div class="ticket-block">
+          <div class="block-title">
+            <span>Pembayaran & Skema DP</span>
+            <span style="font-family: var(--font-mono); font-size: 11px;">Status: <b>${order.payment}</b></span>
+          </div>
+
+          <div class="payment-box ${!isFullyPaid ? 'needs-attention' : ''}">
+            <!-- Skema Switcher -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
+                Pilih Skema Pembayaran:
+              </span>
+              <div class="plan-switch-group">
+                <button type="button" class="btn-plan ${!isDepositPlan ? 'active' : ''}" id="btn-plan-full">Bayar Penuh (100%)</button>
+                <button type="button" class="btn-plan ${isDepositPlan ? 'active' : ''}" id="btn-plan-dp">DP 50% (Uang Muka)</button>
+              </div>
+            </div>
+
+            <!-- Total display -->
+            <div class="payment-main-row">
+              <div class="amount-display">
+                <span class="amount-val">${formatRupiah(totals.finalTotal)}</span>
+                <span class="amount-lbl">Total keseluruhan pesanan</span>
+              </div>
+            </div>
+
+            <div class="payment-breakdown">
+              <span>Produk: <b>${formatRupiah(totals.product)}</b></span>
+              ${totals.card > 0 ? `<span>· Kartu: <b>${formatRupiah(totals.card)}</b></span>` : ''}
+              <span>· Ongkir: <b>${totals.shipping > 0 ? formatRupiah(totals.shipping) : 'Rp 0'}</b></span>
+            </div>
+
+            <!-- DP 50% Banner Card (jika DP aktif) -->
+            ${isDepositPlan ? `
+              <div class="dp-banner-card">
+                <div class="dp-banner-cell">
+                  <span class="dp-banner-label">Wajib DP 50% (Awal)</span>
+                  <span class="dp-banner-val" style="color: #8E520A;">${formatRupiah(totals.depositAmount)}</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">
+                    ${isDepositReceived || isFullyPaid ? '✓ DP Sudah Diterima' : '⏳ Belum Dibayar'}
+                  </span>
+                </div>
+                <div class="dp-banner-cell">
+                  <span class="dp-banner-label">Sisa Pelunasan (50%)</span>
+                  <span class="dp-banner-val">${formatRupiah(totals.balanceAmount)}</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">
+                    ${isFullyPaid ? '✓ Lunas Sepenuhnya' : (order.phase === 'Ready for dispatch' ? '⚠️ Wajib Lunas Sekarang' : 'Dibayar saat bunga siap kirim')}
+                  </span>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Input Ongkir -->
+            <div class="ongkir-input-row">
+              ${order.locationType === 'bali' ? `
+                <span class="ongkir-hint">
+                  ✓ <b>Ongkir Rp 0</b> — Pesanan area Bali. ${order.method === 'self_pickup' ? 'Pelanggan mengambil sendiri di studio.' : 'Ongkir Grab/Gojek dibayarkan pembeli langsung ke driver saat barang tiba.'}
+                </span>
+              ` : `
+                <label for="inp-ship-fee">Biaya Ongkir (Rp):</label>
+                <input type="number" id="inp-ship-fee" value="${order.shipping || ''}" placeholder="0" step="1000">
+                <span class="ongkir-hint">
+                  Kirim ke ${order.city || 'Luar Bali'}. Masukkan tarif ekspedisi; DP dan sisa pelunasan otomatis terhitung.
+                </span>
+              `}
+            </div>
+
+            <!-- Action Buttons for Payment / DP -->
+            <div class="payment-actions-row">
+              ${isDepositPlan ? `
+                ${!isDepositReceived && !isFullyPaid ? `
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-dp-paid">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Tandai DP 50% Diterima (${formatRupiah(totals.depositAmount)})
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-dp">
+                    Tandai DP Perlu Dicek
+                  </button>
+                ` : !isFullyPaid ? `
+                  <span style="font-size: 13px; font-weight: 600; color: #2A6638; background: #E8F5EB; padding: 6px 12px; border-radius: var(--radius-pill);">
+                    ✓ DP 50% Diterima — Rangkaian boleh dibuat
+                  </span>
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-full-paid" style="background: #1B532C;">
+                    Tandai Pelunasan Diterima (Lunas Total)
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-balance">
+                    Tandai Pelunasan Perlu Dicek
+                  </button>
+                ` : `
+                  <span style="font-size: 13px; font-weight: 700; color: #2A6638;">
+                    ✓ Lunas Sepenuhnya (DP & Pelunasan Beres)
+                  </span>
+                  <button type="button" class="btn-secondary" id="btn-revert-pay" style="font-size: 12px;">
+                    Ubah Status
+                  </button>
+                `}
+              ` : `
+                ${!isFullyPaid ? `
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-full-paid">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Tandai Lunas Penuh (${formatRupiah(totals.finalTotal)})
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-transfer">
+                    Tandai Perlu Dicek
+                  </button>
+                ` : `
+                  <span style="font-size: 13px; font-weight: 700; color: #2A6638;">
+                    ✓ Pembayaran Lunas
+                  </span>
+                  <button type="button" class="btn-secondary" id="btn-revert-pay" style="font-size: 12px;">
+                    Ubah Status
+                  </button>
+                `}
+              `}
+              
+              <button type="button" class="btn-secondary" id="btn-copy-bill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Salin Rincian Rekening & Tagihan
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- 2. WHATSAPP ASSISTANT (Connected to Template Settings) -->
         <div class="ticket-block">
@@ -4216,13 +3600,22 @@ function buildTicketLines_(items, catalog) {
       const btnPlanFull = document.getElementById('btn-plan-full');
       if (btnPlanFull) {
         btnPlanFull.onclick = () => {
-          updateOrderField(order.ref, 'paymentPlan', 'Full', 'Skema pembayaran: Bayar Penuh');
+          order.paymentPlan = 'Full';
+          if (order.payment === 'Checking deposit') order.payment = 'Checking transfer';
+          else if (order.payment === 'Deposit paid' || order.payment === 'Checking balance') order.payment = 'Unpaid';
+          saveState();
+          showToast('Skema pembayaran diubah: Bayar Penuh');
+          renderAll();
         };
       }
       const btnPlanDp = document.getElementById('btn-plan-dp');
       if (btnPlanDp) {
         btnPlanDp.onclick = () => {
-          updateOrderField(order.ref, 'paymentPlan', 'Deposit 50%', 'Skema pembayaran: DP 50%');
+          order.paymentPlan = 'Deposit 50%';
+          if (order.payment === 'Checking transfer') order.payment = 'Checking deposit';
+          saveState();
+          showToast('Skema pembayaran diubah: DP 50%');
+          renderAll();
         };
       }
 
@@ -4237,7 +3630,11 @@ function buildTicketLines_(items, catalog) {
             `⚠️ Periksa mutasi m-banking Anda, jangan hanya dari screenshot pembeli.`
           );
           if (confirmed) {
-            updateOrderField(order.ref, 'payment', 'Deposit paid', 'DP 50% Diterima ✓');
+            order.payment = 'Deposit paid';
+            order.paidAt = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' (DP)';
+            saveState();
+            showToast(`DP 50% (${formatRupiah(totals.depositAmount)}) Diterima ✓`);
+            renderAll();
           }
         };
       }
@@ -4246,7 +3643,10 @@ function buildTicketLines_(items, catalog) {
       const btnCheckDp = document.getElementById('btn-check-dp');
       if (btnCheckDp) {
         btnCheckDp.onclick = () => {
-          updateOrderField(order.ref, 'payment', 'Checking deposit', 'Status: DP perlu dicek di mutasi');
+          order.payment = 'Checking deposit';
+          saveState();
+          showToast('Status: DP perlu dicek di mutasi');
+          renderAll();
         };
       }
 
@@ -4262,7 +3662,11 @@ function buildTicketLines_(items, catalog) {
             `⚠️ Periksa mutasi rekening Anda.`
           );
           if (confirmed) {
-            updateOrderField(order.ref, 'payment', 'Paid', 'Pesanan Lunas Sepenuhnya ✓');
+            order.payment = 'Paid';
+            order.paidAt = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' (Lunas)';
+            saveState();
+            showToast('Pesanan ditandai Lunas Sepenuhnya ✓');
+            renderAll();
           }
         };
       }
@@ -4271,7 +3675,10 @@ function buildTicketLines_(items, catalog) {
       const btnCheckBalance = document.getElementById('btn-check-balance');
       if (btnCheckBalance) {
         btnCheckBalance.onclick = () => {
-          updateOrderField(order.ref, 'payment', 'Checking balance', 'Status: Pelunasan perlu dicek di mutasi');
+          order.payment = 'Checking balance';
+          saveState();
+          showToast('Status: Pelunasan perlu dicek di mutasi');
+          renderAll();
         };
       }
 
@@ -4279,7 +3686,10 @@ function buildTicketLines_(items, catalog) {
       const btnCheckTransfer = document.getElementById('btn-check-transfer');
       if (btnCheckTransfer) {
         btnCheckTransfer.onclick = () => {
-          updateOrderField(order.ref, 'payment', 'Checking transfer', 'Status: Transfer perlu dicek');
+          order.payment = 'Checking transfer';
+          saveState();
+          showToast('Status: Transfer perlu dicek');
+          renderAll();
         };
       }
 
@@ -4287,8 +3697,10 @@ function buildTicketLines_(items, catalog) {
       const btnRevert = document.getElementById('btn-revert-pay');
       if (btnRevert) {
         btnRevert.onclick = () => {
-          const nextPay = isDepositPlan ? 'Deposit paid' : 'Unpaid';
-          updateOrderField(order.ref, 'payment', nextPay, 'Status pembayaran diubah');
+          order.payment = isDepositPlan ? 'Deposit paid' : 'Unpaid';
+          saveState();
+          showToast('Status pembayaran diubah');
+          renderAll();
         };
       }
 
@@ -5405,27 +4817,11 @@ function buildTicketLines_(items, catalog) {
         notes: plan === 'Deposit 50%' ? 'Skema DP 50% di awal.' : ''
       };
 
-      if (isAppsScript()) {
-        google.script.run
-          .withSuccessHandler(function(res) {
-            if (res && res.ok) {
-              showToast('Pesanan ' + newRef + ' berhasil disimpan ke Spreadsheet!');
-              loadState();
-            } else {
-              showToast('Gagal membuat pesanan: ' + ((res && res.message) || 'Error'), true);
-            }
-          })
-          .withFailureHandler(function(err) {
-            showToast('Koneksi sheet gagal: ' + (err.message || err), true);
-          })
-          .createOrder(newOrder);
-      } else {
-        state.orders.unshift(newOrder);
-        state.selectedRef = newOrder.ref;
-        saveState();
-        showToast('Pesanan ' + newRef + ' (' + plan + ') berhasil dibuat!');
-        renderAll();
-      }
+      state.orders.unshift(newOrder);
+      state.selectedRef = newOrder.ref;
+      saveState();
+      showToast(`Pesanan ${newRef} (${plan}) berhasil dibuat!`);
+      renderAll();
     }
 
     /* --- Global Event Handlers & Navigation --- */
@@ -5529,124 +4925,3 @@ function buildTicketLines_(items, catalog) {
   </script>
 </body>
 </html>
-
-```
-
----
-
-## Part 5 — Add the settings
-
-In the same project, click the gear (**Project Settings**) in the left sidebar, scroll to **Script
-Properties**, and click **Add script property** for each of these:
-
-| Property | Value |
-| --- | --- |
-| `SPREADSHEET_ID` | the ID you copied in Part 1 |
-| `DESK_ALLOWED_EMAILS` | her Google email and yours, separated by a comma |
-| `BANK_NAME` | e.g. `BCA` |
-| `BANK_NUMBER` | your studio account number |
-| `BANK_HOLDER` | the account holder name |
-
-Save. Changing the bank details later means editing these values — never the code. Nobody can open
-the Desk and see any orders at all until `SPREADSHEET_ID` and `DESK_ALLOWED_EMAILS` are both set.
-
----
-
-## Part 6 — Publish it
-
-1. Top right: **Deploy → New deployment**.
-2. Click the gear next to *Select type* and choose **Web app**.
-3. Fill in:
-   - **Description**: `v1`
-   - **Execute as**: **User accessing the web app** ← this one matters; the default is wrong. The
-     Desk relies on Google itself telling it who is signed in, so it can check that email against
-     `DESK_ALLOWED_EMAILS`.
-   - **Who has access**: **Anyone with a Google account**
-4. Click **Deploy**.
-5. Google will ask for permission. You will see a warning screen saying *"Google hasn't verified this
-   app"* — that is normal for a private script you wrote yourself. Click **Advanced**, then **Go to
-   Alxanthia Studio Desk (unsafe)**, then **Allow**. It is your own script accessing your own sheet.
-6. Copy the **Web app URL** that ends in `/exec`. That is the Desk.
-
----
-
-## Part 7 — Put it on her phone
-
-Send her the `/exec` link, then walk her through adding it to her home screen so it opens like an app:
-
-- **iPhone (Safari)**: open the link → the share button at the bottom → **Add to Home Screen**.
-- **Android (Chrome)**: open the link → the ⋮ menu top right → **Add to Home screen**.
-
-The first time she opens it, Google will ask her to sign in and approve the same permission screen
-from Part 6. She will see the same "hasn't verified this app" warning and the same **Advanced → Go
-to … → Allow** path. If her email is not yet in `DESK_ALLOWED_EMAILS`, the page will load but show
-"Akun ini tidak punya akses ke Studio Desk" instead of the order queue — double-check Part 5.
-
----
-
-## Part 8 — Check it works
-
-Place one test order on the website, then on the Desk confirm:
-
-- The new order appears in the queue with the right buyer, date and flowers.
-- Searching with part of the buyer's name or order code shows the matching order.
-- **Salin teks rekening** produces a message with the right total and your account number.
-- Marking it *perlu dicek* and then *lunas* changes `Payment Status` in the sheet within a second.
-- Typing an ongkir on an out-of-Bali order fills in `Final Total` in the sheet by itself.
-- **Lanjut** changes `Work Phase` in the sheet.
-- A note typed in the Desk appears in `Internal Notes`.
-- Changing a flower's name in `site-content.js`, deploying the website, then tapping **Muat ulang
-  katalog** shows the new name on the Desk.
-- Closing the phone's browser tab and reopening the `/exec` link still shows the order (a page
-  reload always re-checks access and re-fetches the queue).
-
-Then delete the test row from the sheet.
-
----
-
-## Part 9 — Two things to remember afterwards
-
-1. **Any code change needs a redeploy.** Editing the script is not enough: **Deploy → Manage
-   deployments → edit (pencil) → Version: New version → Deploy**. The `/exec` link stays the same, so
-   nothing on her phone needs changing.
-2. **The Desk is the place to mark an order paid** — not the sheet. It is the only screen that shows
-   the exact amount to check against, and the rule is still the one from
-   `OWNER-ACTION-GUIDE.md` Step 9: confirm the money in your bank's mutasi, never from a screenshot.
-
----
-
-## Troubleshooting
-
-### The page shows "Akun ini tidak punya akses ke Studio Desk"
-
-The signed-in Google account is not (or not yet) listed in the `DESK_ALLOWED_EMAILS` Script
-Property from Part 5. Add it, exactly as her Google account's email, comma-separated from any other
-allowed address, and reload the page — no redeploy needed, Script Properties take effect immediately.
-
-### The page is stuck on "Memuat pesanan…" or shows an error screen
-
-1. Open **Deploy → Manage deployments** and confirm the deployment executes as **User accessing the
-   web app** and is shared with **Anyone with a Google account** (Part 6).
-2. Confirm `SPREADSHEET_ID` (Part 5) is the ID from the address bar, not the whole URL.
-3. Confirm the worksheet inside that spreadsheet is still named exactly `Orders`.
-4. Tap **Coba lagi** on the error screen — it retries both the catalogue and the order list.
-
-### A change she makes doesn't show up in the sheet
-
-The page shows an error toast naming what went wrong when a save fails, and puts the control back
-the way it was — it never fails silently. If the toast says the sheet is busy, wait a few seconds and
-try again (another save was in progress). If it names a different problem, re-check Parts 1 and 5.
-
-### Flower/pot/package names look outdated or generic
-
-Tap **Muat ulang katalog** in the footer — it clears the six-hour cache and re-fetches
-`site-content.js` immediately. If a quiet banner says the catalogue couldn't be reloaded, the site's
-`site-content.js` was unreachable; the Desk keeps working from its last good copy in the meantime, and
-order data and totals are unaffected either way (they come from the sheet, never the catalogue).
-
-### Money doesn't match what the customer was quoted
-
-It can't — the Desk only ever shows `Verified Total` (plus `Shipping Fee` once you type it),
-recalculated server-side by the order writer at submission time, never anything from the customer's
-browser or from the Desk itself. If a total looks wrong, check `Price Mismatch` on that row in the
-sheet directly (the Desk's gate surfaces this as "Harga ditandai REVIEW").

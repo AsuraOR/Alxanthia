@@ -1,9 +1,12 @@
 # Studio Desk — a maker's interface on top of the Orders sheet
 
-**Status:** proposal, revised and approved. The clickable prototype is
-`mockups/studio-desk.html`; the implementation specification is
-[`STUDIO-DESK-BUILD-GUIDE.md`](STUDIO-DESK-BUILD-GUIDE.md), whose Part 9 lists every step the owner
-has to click by hand.
+**Status:** implemented and expanded. The current visual reference is
+`mockups/studio-desk-remake.html`; deployable sources are in `studio-order-portal/`; and the
+implementation specification is [`STUDIO-DESK-BUILD-GUIDE.md`](STUDIO-DESK-BUILD-GUIDE.md).
+
+The production revision keeps this proposal's protected-pricing model while adding customer and
+delivery editing, workload-aware capacity, material and inventory planning, payment/photo/activity
+history, reports, JSON backup, archive/duplicate actions, and owner-allowlisted manual orders.
 
 ## The problem
 
@@ -21,15 +24,15 @@ jobs.
 
 ## The proposal in one line
 
-Keep `Orders` exactly as it is and stop reading it by hand: make it the **database only**, written by
-the Apps Script, and give the maker a separate interface that shows a dozen fields, renders
-`Item Data` as a checklist, and writes back to five columns.
+Keep `Orders` as the source of truth and stop reading it by hand: give the maker a separate
+interface that renders `Item Data` as a checklist, protects pricing, and writes only through explicit
+server-side allowlists. Operational history belongs in separate Studio Desk worksheets.
 
 ```text
 Website → Cloudflare Worker → Apps Script → Orders sheet   (database, schema unchanged)
                                                  ↕
                                           Studio Desk       (interface, new)
-                    writes Confirmation Sent, Payment Status, Shipping Fee, Work Phase, Internal Notes
+                    allowlisted order edits + separate activity/payment/inventory/photo history
 ```
 
 Every change she makes goes straight into that order's row — see
@@ -153,7 +156,7 @@ unaffected.
 
 ## How the sheet stays in step
 
-Each of the five writable fields goes to the sheet the moment she changes it, and the Desk confirms
+Each writable field goes to the sheet the moment she changes it, and the Desk confirms
 it by name ("Tersimpan ke sheet Orders · Work Phase"):
 
 | She does | Column written |
@@ -163,6 +166,8 @@ it by name ("Tersimpan ke sheet Orders · Work Phase"):
 | Types the ongkir | `Shipping Fee` |
 | Taps **Lanjut** or **Kembali** | `Work Phase` |
 | Types in the notes box | `Internal Notes` |
+| Edits buyer, deadline or delivery details | the matching customer/delivery column |
+| Adds a payment, stock count, photo link or activity | the corresponding `Studio Desk …` worksheet |
 
 Three things make that safe:
 
@@ -174,14 +179,15 @@ Three things make that safe:
   (`=IF(OR(Verified="",Shipping=""),"",Verified+Shipping)`), so the moment she types an ongkir, the
   final total fills itself in. Nothing recalculates it by hand.
 
-Everything else on the row is read-only in the Desk, and the ticket's footer says so.
+Pricing and checkout evidence remain read-only in the general update API. Owner-only manual orders
+use a separate allowlist before they may write their quoted `Verified Total`.
 
 ## What she sees, and what she doesn't
 
 | Bucket | Columns |
 | --- | --- |
 | **Shown** | `Order Reference`, `Submitted At`, `Preferred Date`, `Buyer Name`, `Buyer WhatsApp`, `Location Type` + `Regency` + `Delivery Method` + `Address` + `City` + `Postal Code` (one destination line), `Item Data` (the build list), `Wrap`, `Message Card` + `Gift Message` + `Recipient Name` + `Card Sender Name` (one card block), `Verified Total` (as the amount to collect) |
-| **Written by her** | `Order Confirmation Sent`, `Payment Status`, `Shipping Fee`, `Work Phase`, `Internal Notes` |
+| **Written through the Desk allowlist** | confirmation, payment, shipping, work phase, notes, buyer/contact, deadline and delivery/tracking fields |
 | **Shown as a light, not a number** | `Price Mismatch` — a pass/fail line in the gate |
 | **Owner only** | `Submitted Product Subtotal`, `Submitted Message Card Fee`, `Submitted Total`, `Verified Product Subtotal`, `Verified Message Card Fee`, `Final Total`, `Delivery Service`, `Tracking Link/Number` |
 | **Never shown** | `Idempotency Key`, `Payload Hash`, `Catalog Version`, `Submitted Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged` (customer consent; not confirmation status), `Order Summary` (superseded by the build list), `Total Stems`, `Order Mode`, `Midtrans Payment Link` |

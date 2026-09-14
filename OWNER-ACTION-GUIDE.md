@@ -179,12 +179,13 @@ real customer data):
 
 This is a standing rule, not a one-time setup step: **never** mark an order `Paid` in the
 Sheet based on a WhatsApp screenshot or a customer's word. Only mark it `Paid` after you've
-personally confirmed the payment in the Midtrans dashboard, or via an authenticated
-Midtrans notification.
+personally confirmed the payment in the authenticated bank account's transaction history.
 
 Payment is now confirmed by hand in the Studio Desk (`STUDIO-DESK-SETUP.md`), not in the Sheet
 directly — the Desk is the one screen that shows the exact amount to check against, but the rule
 above still stands: confirm the money in your bank's mutasi, never from a screenshot.
+Use **Catat pembayaran** for every incoming amount so deposits, balances and refunds retain their
+own timestamp and note in the `Studio Desk Payments` worksheet.
 
 ## Step 10 — Remove the staging gates together
 

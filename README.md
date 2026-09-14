@@ -2,7 +2,16 @@
 
   <img src="alxanthia-logo-96.webp" alt="Alxanthia Logo" width="88" height="88" />
 
-  # Alxanthia Studio
+# Alxanthia Studio
+
+## Studio Desk (Google Apps Script)
+
+The production order-management app is maintained as real Apps Script source in
+`studio-order-portal/Code.gs` and `studio-order-portal/Index.html`. It includes the maker queue,
+payment and production workflow, priority actions, calendar/capacity, material and stock planning,
+editing and delivery tracking, payment/activity history, reports, backup, and owner-only manual
+orders. Follow `STUDIO-DESK-SETUP.md` to install it, and run
+`node scripts/sync-studio-desk-guide.js sync` whenever the source files change.
 
   **Bunga yang mekar selamanya — dirangkai tangan oleh kami untuk Anda.**  
   *Handcrafted Finished Chenille Stem Flowers & Botanical Bouquets*

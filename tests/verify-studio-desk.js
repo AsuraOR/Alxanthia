@@ -43,7 +43,7 @@ const HEADERS = [
   'Order Mode', 'Order Summary', 'Item Data', 'Total Stems', 'Wrap', 'Message Card', 'Gift Message',
   'Recipient Name', 'Card Sender Name', 'Submitted Product Subtotal', 'Submitted Message Card Fee',
   'Submitted Total', 'Verified Product Subtotal', 'Verified Message Card Fee', 'Verified Total',
-    'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Payment Plan', 'Payment Status',
+    'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Order Confirmation Sent', 'Payment Plan', 'Payment Status',
   'Work Phase', 'Delivery Service', 'Tracking Link/Number', 'Internal Notes'
 ];
 
@@ -161,7 +161,7 @@ console.log('--- SUITE 1: listOrders() maps a fixture row to the documented shap
       'Item Data': JSON.stringify([{ type: 'stem', id: 'Sunflower', qty: 3 }]),
       'Wrap': 'sage', 'Message Card': 'No',
       'Verified Total': 497000, 'Price Mismatch': '', 'Shipping Fee': '',
-      'Payment Status': 'Paid', 'Work Phase': 'Not started', 'Internal Notes': ''
+      'Order Confirmation Sent': 'Yes', 'Payment Status': 'Paid', 'Work Phase': 'Not started', 'Internal Notes': ''
     })
   ]);
   const sandbox = makeSandbox({ sheet });
@@ -180,6 +180,7 @@ console.log('--- SUITE 1: listOrders() maps a fixture row to the documented shap
   assert.strictEqual(o.verified, 497000);
   assert.strictEqual(o.shipping, null, 'a blank Shipping Fee cell must map to null');
   assert.strictEqual(o.mismatch, false);
+  assert.strictEqual(o.confirmed, true);
   assert.strictEqual(o.payment, 'Paid');
   assert.strictEqual(o.phase, 'Not started');
   console.log('✔ Suite 1 Passed\n');
@@ -223,7 +224,7 @@ console.log('--- SUITE 4: malformed Item Data never throws ---');
 }
 
 // ---------------------------------------------------------------------------
-console.log('--- SUITE 5: updateOrder rejects a column outside the writable four ---');
+console.log('--- SUITE 5: updateOrder rejects a protected pricing column ---');
 {
   const sheet = makeSheetStub([rowFor({ 'Order Reference': 'E', 'Work Phase': 'Not started' })]);
   const sandbox = makeSandbox({ sheet });
@@ -355,6 +356,48 @@ console.log('--- SUITE 10d: order search matches buyer names and order codes ---
   console.log('✔ Suite 10d Passed\n');
 }
 
+console.log('--- SUITE 10e: customer details are validated and updated by reference ---');
+{
+  const sheet = makeSheetStub([rowFor({ 'Order Reference': 'EDIT', 'Buyer Name': 'Nama Lama', 'Buyer WhatsApp': '+628123456789', 'Preferred Date': '2026-09-14', 'Work Phase': 'Not started' })]);
+  const sandbox = makeSandbox({ sheet });
+  let res = sandbox.updateOrderDetails({ ref: 'EDIT', row: 2, fields: { buyer: 'Nama Baru', wa: '081234567890' } });
+  assert.strictEqual(res.ok, true, JSON.stringify(res));
+  assert.strictEqual(res.order.buyer, 'Nama Baru');
+  assert.strictEqual(res.order.wa, '+6281234567890');
+  res = sandbox.updateOrderDetails({ ref: 'EDIT', row: 2, fields: { verified: 1 } });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.code, 'BAD_FIELD');
+  console.log('✔ Suite 10e Passed\n');
+}
+
+console.log('--- SUITE 10f: manual order creation is owner-allowlisted and fails closed ---');
+{
+  const sheet = makeSheetStub([]);
+  const sandbox = makeSandbox({ sheet });
+  const res = sandbox.createManualOrder({ buyer: 'Ayu', wa: '081234567890', date: '2026-09-16', summary: '3× Mawar', verified: 180000 });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.code, 'FORBIDDEN');
+  assert.strictEqual(sheet._writes.length, 0);
+  console.log('✔ Suite 10f Passed\n');
+}
+
+console.log('--- SUITE 10g: workload capacity reflects bouquet size, not only order count ---');
+{
+  const sandbox = makeSandbox({ sheet: makeSheetStub([]) });
+  assert.strictEqual(sandbox.workloadUnits_([{ type: 'custom', qty: 1, stems: { Rose: 9 } }]), 3);
+  assert.strictEqual(sandbox.workloadUnits_([{ type: 'pot', id: 'daisy', qty: 2 }]), 2);
+  console.log('✔ Suite 10g Passed\n');
+}
+
+console.log('--- SUITE 10h: photo links reject unsafe URL schemes ---');
+{
+  const sandbox = makeSandbox({ sheet: makeSheetStub([]) });
+  const res = sandbox.savePhotoLink({ ref: 'PHOTO', kind: 'Referensi', url: 'javascript:alert(1)' });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.code, 'BAD_VALUE');
+  console.log('✔ Suite 10h Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -418,5 +461,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 13 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 21 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -31,7 +31,7 @@ Never paste your webhook secret, Google credentials, Cloudflare API token, Turns
 5. Click cell `A1` and paste this tab-separated header row exactly. The Apps Script in Part 2 looks up every column **by this header text**, not by column letter, so the order of columns does not matter as long as every heading below exists exactly once:
 
 ```text
-Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted Catalog Version	Submitted At	Language	Currency	Source	Acknowledged	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Gift Message	Recipient Name	Card Sender Name	Submitted Product Subtotal	Submitted Message Card Fee	Submitted Total	Verified Product Subtotal	Verified Message Card Fee	Verified Total	Price Mismatch	Shipping Fee	Final Total	Midtrans Payment Link	Payment Plan	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
+Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted Catalog Version	Submitted At	Language	Currency	Source	Acknowledged	Buyer Name	Buyer WhatsApp	Location Type	Regency	Delivery Method	Address	City	Postal Code	Preferred Date	Order Mode	Order Summary	Item Data	Total Stems	Wrap	Message Card	Gift Message	Recipient Name	Card Sender Name	Submitted Product Subtotal	Submitted Message Card Fee	Submitted Total	Verified Product Subtotal	Verified Message Card Fee	Verified Total	Price Mismatch	Shipping Fee	Final Total	Midtrans Payment Link	Order Confirmation Sent	Payment Plan	Payment Status	Work Phase	Delivery Service	Tracking Link/Number	Internal Notes
 ```
 
 6. If the headings stay in one cell, select it and choose **Data → Split text to columns → Tab**.
@@ -47,6 +47,7 @@ A quick guide to the new/changed columns:
 - **Wrap** stores the selected paper colour only when the order contains a predefined or custom bouquet. It stays blank for individual flowers and mini pots. For an individual finished flower, its `wrapped` value inside **Item Data** records whether the customer chose **With wrap** (`true`, adding Rp5.000 per flower) or **Without wrap** (`false`).
 - **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once **Shipping Fee** has a value. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove. For any Bali order (**Delivery Method** `grab_gojek` or `self_pickup`), the script fills in `0` for you — Grab/Gojek is paid straight to the driver and self-pickup has no delivery at all, so the studio never collects either — and **Final Total** appears immediately with no manual entry. Only an out-of-Bali order (a real, studio-arranged courier) still leaves **Shipping Fee** blank for you to type in.
 - **Payment Plan** defaults to `Full`; Studio Desk can change it to `Deposit 50%` for any order. A verified DP allows production to start, but the order cannot be marked shipped until fully paid.
+- **Order Confirmation Sent** defaults to `No`; Studio Desk changes it to `Yes` after the incoming-order WhatsApp message is opened.
 - **Midtrans Payment Link** is unused now that payment is by manual bank transfer, confirmed by hand in the Studio Desk (`STUDIO-DESK-SETUP.md`). It stays in the header row — the script already writes it empty — so the column layout does not change; re-enabling a payment gateway later is a separate change if you ever want the column back.
 
 A reminder about the location columns: **Location Type** is `bali` or `luar_bali`. For a Bali order, **Regency** (kabupaten/kota) and **Delivery Method** (`grab_gojek` or `self_pickup`) are filled and **Address/City/Postal Code** stay blank. For an out-of-Bali order, it's the reverse. Always check **Location Type** first before reading the other columns.
@@ -160,7 +161,7 @@ var REQUIRED_HEADERS = [
   'Order Mode', 'Order Summary', 'Item Data', 'Total Stems', 'Wrap', 'Message Card', 'Gift Message',
   'Recipient Name', 'Card Sender Name', 'Submitted Product Subtotal', 'Submitted Message Card Fee',
   'Submitted Total', 'Verified Product Subtotal', 'Verified Message Card Fee', 'Verified Total',
-  'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Payment Plan', 'Payment Status',
+  'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Order Confirmation Sent', 'Payment Plan', 'Payment Status',
   'Work Phase', 'Delivery Service', 'Tracking Link/Number', 'Internal Notes'
 ];
 
@@ -300,6 +301,7 @@ function doPost(event) {
         'Shipping Fee': defaultShippingFee(isBali, order.delivery_method),
         'Final Total': '',
         'Midtrans Payment Link': '',
+        'Order Confirmation Sent': 'No',
         'Payment Plan': 'Full',
         'Payment Status': 'Unpaid',
         'Work Phase': 'Not started',

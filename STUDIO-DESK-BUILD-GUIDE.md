@@ -10,18 +10,20 @@ It is written for **two readers**:
 - **The store owner, who is not a programmer** — [Part 9](#part-9--what-the-owner-does-by-hand). Every
   click that cannot be done from code. Nothing in Parts 1–8 needs to be understood to follow Part 9.
 
-Design rationale lives in [`STUDIO-DESK-PROPOSAL.md`](STUDIO-DESK-PROPOSAL.md). The visual and
-interaction reference is [`mockups/studio-desk.html`](mockups/studio-desk.html) — a working
-prototype with sample data. **Do not redesign it.** Reuse its markup, CSS and interaction logic
-almost verbatim; the work is replacing its sample data and local storage with real sheet reads and
-writes.
+Design rationale lives in [`STUDIO-DESK-PROPOSAL.md`](STUDIO-DESK-PROPOSAL.md). The current visual
+reference is [`mockups/studio-desk-remake.html`](mockups/studio-desk-remake.html). The production
+source lives in `studio-order-portal/Code.gs` and `studio-order-portal/Index.html`; run
+`node scripts/sync-studio-desk-guide.js sync` after editing either source so the owner-facing guide
+remains paste-ready.
 
 ---
 
 ## Part 1 — What you are building
 
 A **standalone Google Apps Script web app** that reads the `Orders` worksheet, shows one work ticket
-per order, and writes back exactly five columns.
+per order, and supports production, payment, delivery, customer-detail and owner-only manual-order
+workflows. It creates separate activity, payment and inventory worksheets instead of overloading the
+customer order row with operational history.
 
 ```text
 Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   (existing, do not touch)
@@ -41,6 +43,9 @@ Desk code must never be able to stop order intake. The Desk opens the spreadshee
 | File | What it is |
 | --- | --- |
 | `STUDIO-DESK-SETUP.md` | **New.** Owner-facing setup guide in the exact style of `CONFIGURE-SUBMISSION-ENDPOINT.md`, containing the complete server code in one ```` ```javascript ```` block and the complete page in one ```` ```html ```` block, for pasting into Apps Script. Part 9 of this document is the raw material for its manual steps — expand it, don't shorten it. |
+| `studio-order-portal/Code.gs` | Canonical Apps Script server source. |
+| `studio-order-portal/Index.html` | Canonical Apps Script page source. |
+| `scripts/sync-studio-desk-guide.js` | Extracts initial source or synchronizes both source files back into this guide. |
 | `tests/verify-studio-desk.js` | **New.** Extracts the ```` ```javascript ```` block from that guide and exercises it in a sandbox, exactly the way `tests/verify-server-pricing.js` does for the order writer. |
 | `package.json` | Add the new suite to the `test` script. |
 | `CONFIGURE-SUBMISSION-ENDPOINT.md` | Two dropdown vocabularies and one default string change — see [Part 7](#part-7--changes-to-existing-files). |
@@ -58,10 +63,10 @@ These are not preferences. Breaking one is a bug.
 1. **Money comes from the sheet, words come from `site-content.js`.** The Desk never recalculates a
    price. It reads `Verified Total` and `Shipping Fee` and adds them. Product *names, stem sizes,
    wrap colours and package sizes* come from `site-content.js` at runtime — see [Part 4](#part-4--the-live-catalogue).
-2. **Exactly five columns are writable**, and the list is enforced on the server, never trusted from
-   the page: `Order Confirmation Sent`, `Payment Status`, `Shipping Fee`, `Work Phase`,
-   `Internal Notes`. A request to write anything else is rejected, not ignored. `Acknowledged`
-   remains the customer's checkout consent and must never be repurposed for this.
+2. **Every editable field is allowlisted on the server**, never trusted from the page. Pricing
+   columns are never accepted by the general update API. Manual-order pricing is a separate action,
+   fails closed unless the active account is in `DESK_MANUAL_ORDER_EMAILS`, and is intended only for
+   an owner who has access to the protected pricing column. `Acknowledged` remains checkout consent.
 3. **Columns are found by header text, never by letter or index.** Reuse the order writer's
    approach (`readHeaders`/`headers.map` in `CONFIGURE-SUBMISSION-ENDPOINT.md`). Someone reordering
    the sheet must not break the Desk.
@@ -138,8 +143,9 @@ updateOrder({ ref: 'ALX-260912-K4T9', row: 128, field: 'phase', value: 'Assembly
   → { ok: false, code: 'STALE_ROW' | 'BAD_FIELD' | 'BAD_VALUE' | 'NOT_FOUND' | 'LOCKED', message: 'Indonesian sentence' }
 ```
 
-`field` is one of `confirmed`, `payment`, `shipping`, `phase`, `notes` — page-side names,
-mapped server-side to the five column headers. Validation before any write:
+`field` is a page-side name mapped through `WRITABLE_FIELDS`. It includes confirmation, payment,
+shipping, phase, notes, buyer/contact, deadline and delivery/tracking fields. Pricing fields are not
+present in that map. Validation before any write includes:
 
 - `confirmed` — a Boolean, stored as `Yes` or `No` in `Order Confirmation Sent`
 - `payment` ∈ `Unpaid`, `Checking transfer`, `Paid`, `Cancelled`
@@ -233,8 +239,21 @@ bumped. The Desk sidesteps that entirely by taking money from the sheet.
 
 ## Part 5 — The page
 
-Start from `mockups/studio-desk.html`. Keep its CSS wholesale, keep its markup structure, keep its
-render functions. The changes:
+Use `mockups/studio-desk-remake.html` as the visual reference and the canonical files under
+`studio-order-portal/` as the deployable implementation. The production page keeps the remake's
+warm botanical palette, priority summary, mobile queue/detail behavior and compact command bar.
+
+The production additions are:
+
+- dynamic Bali dates and Indonesian date/status labels;
+- a prioritized next-action panel and sticky next-stage action;
+- workload-unit calendar and three-day material requirements;
+- inventory shortage tracking, payment ledger, photo links and immutable activity history;
+- edit, archive, duplicate and owner-only manual-order flows;
+- delivery service/tracking fields, reports and downloadable JSON backup;
+- escaped customer content, labelled dialogs/fields and keyboard-accessible controls.
+
+Original server-integration requirements retained from the first build:
 
 1. **Delete** the `ORDERS` sample array, the `CATALOG` literal, the `totals()` function and all
    `localStorage` order state. Orders and catalogue arrive from the server; money arrives with the
@@ -410,8 +429,9 @@ arrangement: nobody can use the Desk who cannot already open the sheet.
 
 Because she now has sheet access, re-check the protected columns: **Data → Protect sheets and
 ranges** should still restrict `Verified Product Subtotal`, `Verified Message Card Fee`,
-`Verified Total` and `Final Total` to you only. The Desk never writes those, but this stops an
-accidental edit if she ever opens the sheet directly.
+`Verified Total` and `Final Total` to you only. General Desk updates never write pricing. Only an
+owner listed in `DESK_MANUAL_ORDER_EMAILS` may use manual-order creation, and that owner must also
+have permission to edit the protected `Verified Total` column.
 
 ### 9.4 Create the Studio Desk script
 

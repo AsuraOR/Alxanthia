@@ -39,6 +39,7 @@ class MockResponse {
   constructor(body, init = {}) {
     this._body = body;
     this.status = init.status || 200;
+    this.ok = this.status >= 200 && this.status < 300;
     this.headers = init.headers || {};
   }
   async json() { return JSON.parse(this._body); }
@@ -70,6 +71,9 @@ function makeSandbox({ fetchImpl }) {
     Response: MockResponse,
     FormData: MockFormData,
     URL,
+    AbortController,
+    setTimeout,
+    clearTimeout,
     fetch: fetchImpl
   };
   vm.createContext(sandbox);
@@ -176,14 +180,38 @@ console.log('--- SUITE W8: a rejected Turnstile token is refused (403) ---');
 console.log('✔ Suite W8 Passed: a failed Turnstile check is refused\n');
 
 // ---------------------------------------------------------------------------
-console.log('--- SUITE W9: an unreachable Apps Script maps to 502, not a thrown exception ---');
+console.log('--- SUITE W9a: a transient Apps Script failure is retried once with the same request ---');
 {
-  const fetchImpl = async () => { throw new Error('simulated network failure'); };
+  let calls = 0;
+  const bodies = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls += 1;
+    bodies.push(options.body);
+    if (calls === 1) throw new Error('simulated transient network failure');
+    return googleSuccessFetch();
+  };
+  const sandbox = makeSandbox({ fetchImpl });
+  const res = await sandbox.__worker.fetch(makeRequest({ body: JSON.stringify({ order_reference: 'ALX-1' }) }), BASE_ENV);
+  assert.strictEqual(res.status, 200, `expected 200, got ${res.status}`);
+  assert.strictEqual(calls, 2, `expected exactly 2 upstream attempts, got ${calls}`);
+  assert.strictEqual(bodies[0], bodies[1], 'retry must reuse the identical idempotent payload');
+}
+console.log('✔ Suite W9a Passed: one transient failure is retried and succeeds\n');
+
+// ---------------------------------------------------------------------------
+console.log('--- SUITE W9b: two unreachable attempts map to 502, not a thrown exception ---');
+{
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    throw new Error('simulated network failure');
+  };
   const sandbox = makeSandbox({ fetchImpl });
   const res = await sandbox.__worker.fetch(makeRequest({ body: JSON.stringify({ order_reference: 'ALX-1' }) }), BASE_ENV);
   assert.strictEqual(res.status, 502, `expected 502, got ${res.status}`);
+  assert.strictEqual(calls, 2, `expected exactly 2 upstream attempts, got ${calls}`);
 }
-console.log('✔ Suite W9 Passed: an unreachable upstream is reported as 502, never an unhandled throw\n');
+console.log('✔ Suite W9b Passed: two failed attempts are reported as 502, never an unhandled throw\n');
 
 // ---------------------------------------------------------------------------
 console.log('--- SUITE W10: the RATE_LIMITER binding, when present and exhausted, returns 429 ---');
@@ -196,7 +224,7 @@ console.log('--- SUITE W10: the RATE_LIMITER binding, when present and exhausted
 console.log('✔ Suite W10 Passed: an exhausted rate limit returns 429\n');
 
 console.log('======================================================================');
-console.log('✔ ALL 10 CLOUDFLARE WORKER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 11 CLOUDFLARE WORKER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');
 
 })().catch((err) => {

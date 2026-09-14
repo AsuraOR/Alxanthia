@@ -41,9 +41,10 @@ Order Reference	Idempotency Key	Payload Hash	Catalog Version	Submitted Catalog V
 A quick guide to the new/changed columns:
 
 - **Idempotency Key** and **Payload Hash** are written by the script for deduplication — you will not type into them.
-- **Catalog Version** records which price list was active when the order was verified (this script's own `CATALOG_VERSION`). **Submitted Catalog Version** records what the customer's browser believed it was (`site-content.js`'s `catalogVersion`) — kept as a separate column (ALX-08) so the two can be compared: if they differ, the customer's tab was open across a price change, which is a useful diagnostic distinct from a genuine tampering attempt.
+- **Catalog Version** records which price list was active when the order was verified (this script's own `CATALOG_VERSION`). **Submitted Catalog Version** records what the customer's browser believed it was (`app.js`'s `CATALOG_VERSION`) — kept as a separate column (ALX-08) so the two can be compared: if they differ, the customer's tab was open across a price change, which is a useful diagnostic distinct from a genuine tampering attempt.
 - **Submitted Product/Message Card/Total** are exactly what the customer's browser calculated. **Verified Product/Message Card/Total** are what the Apps Script recalculated from its own price list. They usually match. Treat **Verified Total**, never Submitted Total, as the real order amount.
 - **Price Mismatch** is normally blank. The script writes `REVIEW` here if the submitted and verified totals disagree — this can mean the customer's browser tab was open across a price change, or that someone tried to tamper with the totals in their browser. Either way, double-check the row before sending a payment link.
+- **Wrap** stores the selected paper colour only when the order contains a predefined or custom bouquet. It stays blank for individual flowers and mini pots. For an individual finished flower, its `wrapped` value inside **Item Data** records whether the customer chose **With wrap** (`true`, adding Rp5.000 per flower) or **Without wrap** (`false`).
 - **Final Total** is a live formula (`Verified Total + Shipping Fee`), written automatically by the script once **Shipping Fee** has a value. Do **not** type a formula into this column yourself and do **not** copy any formula down the sheet — see [Migrating an existing deployment](#migrating-an-existing-deployment) if you have an old copied-down formula to remove. For any Bali order (**Delivery Method** `grab_gojek` or `self_pickup`), the script fills in `0` for you — Grab/Gojek is paid straight to the driver and self-pickup has no delivery at all, so the studio never collects either — and **Final Total** appears immediately with no manual entry. Only an out-of-Bali order (a real, studio-arranged courier) still leaves **Shipping Fee** blank for you to type in.
 - **Midtrans Payment Link** is unused now that payment is by manual bank transfer, confirmed by hand in the Studio Desk (`STUDIO-DESK-SETUP.md`). It stays in the header row — the script already writes it empty — so the column layout does not change; re-enabling a payment gateway later is a separate change if you ever want the column back.
 
@@ -106,13 +107,14 @@ Open **Share** in the top right and confirm the spreadsheet is **not** shared as
 // and update the matching value in site-content.js at the same time.
 // ============================================================================
 var SHEET_NAME = 'Orders';
-var CATALOG_VERSION = 1;
+var CATALOG_VERSION = 2;
 var MINIMUM_LEAD_DAYS = 2; // must match site-content.js `minimumLeadDays` (OWNER-01)
 var TIMEZONE = 'Asia/Makassar'; // GMT+08:00, for Bali (OWNER-07)
 
 var CATALOG = {
   wrapFeeUnitStems: 3,       // must match site-content.js `wrapFeeUnitStems`
   wrapFeePerUnit: 35000,     // must match site-content.js `wrapFeePerUnit`
+  singleStemWrapPrice: 5000, // must match app.js `SINGLE_STEM_WRAP_PRICE`
   messageCardPrice: 5000,    // must match site-content.js `messageCardPrice`
   minStems: 3,               // must match site-content.js `minStems`
   // Keys must match site-content.js `flowers` keys exactly (case-sensitive).
@@ -245,6 +247,7 @@ function doPost(event) {
 
       const pricing = computeVerifiedTotals(order.item_data, order.message_card_enabled === true, CATALOG);
       const orderMode = resolveOrderMode(order.item_data);
+      const hasBouquetWrap = usesBouquetWrap(order.item_data);
       const priceMismatch = Math.round(pricing.total) !== Math.round(Number(order.estimated_product_total) || -1);
       const isBali = order.location_type === 'bali';
       // ALX-08: built from validated item_data and this script's own CATALOG —
@@ -276,7 +279,9 @@ function doPost(event) {
         'Order Summary': safeText(orderSummary),
         'Item Data': JSON.stringify(order.item_data || []),
         'Total Stems': pricing.totalStems,
-        'Wrap': order.wrap,
+        // Paper colour belongs only to predefined/custom bouquets. Individual
+        // flowers carry their own boolean `wrapped` choice in Item Data.
+        'Wrap': hasBouquetWrap ? order.wrap : '',
         'Message Card': order.message_card_enabled ? 'Yes' : 'No',
         'Gift Message': order.message_card_enabled ? safeText(order.gift_message) : '',
         'Recipient Name': order.message_card_enabled ? safeText(order.recipient_name) : '',
@@ -394,6 +399,7 @@ function validateItemData(itemData) {
 
     if (item.type === 'stem') {
       if (!hasOwn(CATALOG.flowerStemPrice, item.id)) return fail('Unknown flower.');
+      if (item.wrapped !== undefined && typeof item.wrapped !== 'boolean') return fail('Invalid single-stem wrapping option.');
     } else if (item.type === 'pot') {
       if (!hasOwn(CATALOG.miniPotPrice, item.id)) return fail('Unknown mini pot.');
     } else if (item.type === 'package') {
@@ -464,6 +470,12 @@ function resolveOrderMode(itemData) {
   return types[0] || 'custom';
 }
 
+function usesBouquetWrap(itemData) {
+  return (itemData || []).some(function (item) {
+    return item && (item.type === 'package' || item.type === 'custom');
+  });
+}
+
 function computeVerifiedTotals(itemData, messageCardEnabled, catalog) {
   const items = Array.isArray(itemData) ? itemData : [];
   let productSubtotal = 0;
@@ -472,7 +484,8 @@ function computeVerifiedTotals(itemData, messageCardEnabled, catalog) {
   items.forEach(function (item) {
     const qty = Math.floor(Number(item.qty));
     if (item.type === 'stem') {
-      productSubtotal += catalog.flowerStemPrice[item.id] * qty;
+      const unitPrice = catalog.flowerStemPrice[item.id] + (item.wrapped === true ? catalog.singleStemWrapPrice : 0);
+      productSubtotal += unitPrice * qty;
       totalStems += qty;
     } else if (item.type === 'pot') {
       productSubtotal += catalog.miniPotPrice[item.id] * qty;
@@ -667,7 +680,7 @@ function regenerateOrderReference(base, isTaken) {
  */
 function buildOrderSummary(itemData, catalog) {
   return (itemData || []).map(function (item) {
-    if (item.type === 'stem') return item.qty + '× ' + item.id;
+    if (item.type === 'stem') return item.qty + '× ' + item.id + (item.wrapped === true ? ' (with wrap)' : ' (without wrap)');
     if (item.type === 'pot') return item.qty + '× ' + humanizeKey(item.id) + ' mini pot';
     if (item.type === 'package') {
       const idx = Number(item.id);
@@ -780,7 +793,7 @@ function jsonResponse(value) {
 6. Click **Deploy**, select your Google account, and approve the requested spreadsheet access.
 7. Copy the Web App URL ending in `/exec`. Keep it private for the next part.
 
-If you ever change a price, add a product, or edit the Bali kabupaten/kota list in `site-content.js`, update the matching value in the `CATALOG`/`BALI_REGENCIES` constants at the top of this script too, bump `CATALOG_VERSION` (and the matching `catalogVersion` in `site-content.js`), then redeploy (**Deploy → Manage deployments → edit the pencil icon → New version**) — otherwise the script will reprice orders using stale numbers or reject valid new options.
+If you ever change a price, add a product, or edit the Bali kabupaten/kota list, update the matching value in the server `CATALOG`/`BALI_REGENCIES` constants too, bump `CATALOG_VERSION` in both this script and `app.js`, then redeploy (**Deploy → Manage deployments → edit the pencil icon → New version**) — otherwise the script will reprice orders using stale numbers or reject valid new options.
 
 ---
 
@@ -886,7 +899,12 @@ export default {
 
     let googleResult;
     try {
-      googleResult = await submitToGoogleScript(env, order);
+      const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order })
+      });
+      googleResult = await googleResponse.json();
     } catch (upstreamError) {
       log(order.order_reference, 'UPSTREAM_UNREACHABLE', origin);
       return reply({ ok: false, error: 'Order could not be stored.' }, 502, headers);
@@ -910,30 +928,6 @@ export default {
 
 function hostnameOf(originUrl) {
   try { return new URL(originUrl).hostname; } catch (e) { return ''; }
-}
-
-// A cold Apps Script instance can take long enough to wake up that the
-// connection drops before it replies at all — the customer sees a failed
-// checkout, then it works a moment later on their own retry. One automatic
-// retry here does the same thing without making them do it: it's safe
-// because Apps Script's doPost dedupes by idempotency_key (DEV-04), so a
-// retry of the same payload returns the original success instead of
-// storing a second row.
-async function submitToGoogleScript(env, order) {
-  const body = JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order });
-  const attempts = 2;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body
-      });
-      return await googleResponse.json();
-    } catch (err) {
-      if (attempt === attempts) throw err;
-    }
-  }
 }
 
 const STATUS_BY_CODE = {
@@ -1063,10 +1057,10 @@ If you prefer, send the public Worker URL to the developer maintaining the websi
 
 Deploy the updated website, then, using test data only:
 
-1. Submit a single finished stem.
+1. Submit one finished stem **without wrap**, then another **with wrap**. Confirm the second total is exactly Rp5.000 higher per flower, **Item Data** records `"wrapped": false`/`true`, and the sheet's **Wrap** column stays blank for both.
 2. Submit a mini pot on its own — confirm it is accepted (this used to be rejected before DEV-01) and that **Order Mode** reads `pot`.
-3. Submit a cart mixing a stem, a mini pot, and a package in one order — confirm **Order Mode** reads `mixed`, not `custom`.
-4. Submit a custom bouquet with an addition and a paid message card.
+3. Submit a cart mixing a stem, a mini pot, and a package in one order — confirm **Order Mode** reads `mixed`, not `custom`, and **Wrap** contains the bouquet paper colour.
+4. Submit a custom bouquet with an addition and a paid message card. Confirm its paper colour appears in **Wrap**.
 5. For each, confirm:
    - the **Verified Total** matches what the page showed you, and **Price Mismatch** is blank;
    - **Total Stems**, **Order Mode**, and **Item Data** look correct;
@@ -1107,7 +1101,7 @@ Check that the regency the customer picked is spelled exactly the same in `site-
 
 ### A valid-looking order is rejected right after a price change
 
-Check that `CATALOG_VERSION` and every price in the Apps Script's `CATALOG` match `site-content.js` exactly, and that you redeployed a **New version** of the Apps Script (not just saved it) after editing.
+Check that `CATALOG_VERSION` matches `app.js`, that `singleStemWrapPrice` matches `SINGLE_STEM_WRAP_PRICE`, that the remaining catalogue prices match `site-content.js`, and that you redeployed a **New version** of the Apps Script (not just saved it) after editing.
 
 ## Migrating an existing deployment
 

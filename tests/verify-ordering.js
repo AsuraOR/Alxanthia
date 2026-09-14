@@ -601,7 +601,7 @@ assert.strictEqual(app.getState().orderMode, 'stem');
 assert.strictEqual(app.getState().selectedFlower, 'Tulip');
 
 assert.strictEqual(cartLineEls().length, 1, 'Selecting a stem from empty must yield exactly one cart line');
-assert.strictEqual(cartLineTitle(0), 'Tulip');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Tanpa kertas pembungkus');
 assert.strictEqual(summaryPrice.textContent, 'Rp 50.000');
 
 // WhatsApp button must now be active
@@ -617,8 +617,8 @@ assert(decodedWa.includes('belum termasuk ongkir'), 'WhatsApp text must specify 
 // P1-01 / P1-02: exercise production message assembly for every mode and language.
 const originalMessageData = JSON.parse(JSON.stringify(app.getData()));
 const messageCases = [
-  ['id', 'stem', 'Halo Alxanthia! Saya ingin memesan 1 × Mawar — tangkai jadi — Total Rp 60.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 60.000'],
-  ['en', 'stem', 'Hello Alxanthia! I would like to order 1 × Rose — finished stem — Total Rp 60.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 60.000'],
+  ['id', 'stem', 'Halo Alxanthia! Saya ingin memesan 1 × Mawar — tangkai jadi · Tanpa kertas pembungkus — Total Rp 60.000 (belum termasuk ongkir). Apakah masih tersedia?', 'Rp 60.000'],
+  ['en', 'stem', 'Hello Alxanthia! I would like to order 1 × Rose — finished stem · Without wrapping paper — Total Rp 60.000 (excludes delivery fee). Is it available?', 'Rp 60.000'],
   ['id', 'package', 'Halo Alxanthia! Saya ingin memesan Buket Mini (3 tangkai) — Rp 195.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 195.000'],
   ['en', 'package', 'Hello Alxanthia! I would like to order The Posy (3 stems) — Rp 195.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 195.000'],
   ['id', 'custom', 'Halo Alxanthia! Saya ingin memesan Buket Custom (3 tangkai, estimasi Rp 205.000, belum termasuk ongkir):\n• 2 × Bunga Matahari\n• 1 × Mawar\nPembungkus: Kraft. Apakah bisa dibuatkan?', 'Rp 205.000'],
@@ -641,7 +641,7 @@ for (const [lang, mode, expected, total] of messageCases) {
   assert(!/[{}]/.test(readWaMessage()), `${lang}/${mode}: empty note must leave no braces`);
   if (mode === 'stem') {
     assert(!/\(\s*—/.test(readWaMessage()), `${lang}: stem suffix must not be parenthesized`);
-    assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar' : 'Rose');
+    assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar — Tanpa kertas pembungkus' : 'Rose — Without wrapping paper');
   }
   // With the message-card checkbox off, note text must never leak into the message.
   app.setOrderNote('Untuk {Alam}');
@@ -700,13 +700,39 @@ console.log('\n--- SUITE 4: Cart-Line Quantity Stepper ---');
 const tulipLineId = app.getCart()[0].id;
 app.bumpLineQty(tulipLineId, 2); // 1 + 2 = 3 stems
 assert.strictEqual(cartLineEls().length, 1, 'Bumping qty must mutate the existing line, not add a new one');
-assert.strictEqual(cartLineTitle(0), 'Tulip');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Tanpa kertas pembungkus');
 assert.strictEqual(cartLineQty(0), '3');
 assert.strictEqual(summaryPrice.textContent, 'Rp 150.000');
 
 const decodedWaQty = decodeURIComponent(waBtn.getAttribute('href'));
-assert(decodedWaQty.includes('3 × Tulip — tangkai jadi — Total Rp 150.000'));
+assert(decodedWaQty.includes('3 × Tulip — tangkai jadi · Tanpa kertas pembungkus — Total Rp 150.000'));
 console.log('✔ Suite 4 Passed: 3x Tulip calculated exactly to Rp 150.000 in summary and message');
+
+// Finished flowers are two distinct variants. Wrapping is Rp5.000 per stem,
+// and wrapped/unwrapped selections must never merge into one ambiguous line.
+app.resetToInitial();
+app.selectStem('Tulip', false, true);
+assert.strictEqual(app.getCart()[0].wrapped, true);
+assert.strictEqual(summaryPrice.textContent, 'Rp 55.000');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Dengan kertas pembungkus');
+assert(decodeURIComponent(waBtn.getAttribute('href')).includes('Dengan kertas pembungkus'));
+assert(!decodeURIComponent(waBtn.getAttribute('href')).includes('Pembungkus: Kraft'), 'A wrapped individual flower must not ask for a bouquet paper colour');
+assert.strictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must stay hidden for individual flowers');
+app.selectStem('Tulip', false, false);
+assert.strictEqual(app.getCart().length, 2, 'Wrapped and unwrapped versions of the same flower must remain separate cart lines');
+assert.strictEqual(summaryPrice.textContent, 'Rp 105.000');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(app.normalizedCheckoutState().itemData)), [
+  { type: 'stem', id: 'Tulip', wrapped: true, qty: 1 },
+  { type: 'stem', id: 'Tulip', wrapped: false, qty: 1 }
+]);
+
+app.resetToInitial();
+app.selectPackage(0, false);
+assert.notStrictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must appear for a predefined bouquet');
+app.resetToInitial();
+app.bumpCustom('Rose', 3);
+app.useCustom();
+assert.notStrictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must appear for a custom bouquet');
 
 // ---------------------------------------------------------------------------
 // Suite 5: Florist Bouquet Packages (Tiers 0, 1, 2, 3)
@@ -1244,7 +1270,7 @@ app.selectPackage(0, false); // Buket Mini: 3 stems, Rp 195.000
 app.bumpCustom('Rose', 3);
 app.useCustom(); // Buket custom (3 tangkai): Rp 180.000 flowers + Rp 35.000 wrap = Rp 215.000
 const mixedMsg = decodeURIComponent(waBtn.getAttribute('href'));
-assert(mixedMsg.includes('2 × Bunga Matahari — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem line');
+assert(mixedMsg.includes('2 × Bunga Matahari — Tanpa kertas pembungkus — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem variant');
 assert(mixedMsg.includes('1 × Buket Mini — Rp 195.000'), 'Mixed-cart WhatsApp message must enumerate the package line');
 assert(mixedMsg.includes('Buket custom (3 tangkai) — Rp 215.000'), 'Mixed-cart WhatsApp message must enumerate the custom line, including its own wrap fee');
 const mixedCartTotal = app.computeCartTotals(app.getCart());
@@ -1309,7 +1335,7 @@ assert.strictEqual(includesList.children.length, 0);
 
 const pickerFlowers = mockDocument.getElementById('order-picker-flowers');
 const pickerPackages = mockDocument.getElementById('order-picker-packages');
-assert.strictEqual(pickerFlowers.children.length, 4, 'Picker must render one tile per flower');
+assert.strictEqual(pickerFlowers.children.length, 8, 'Picker must render wrapped and unwrapped tiles for every flower');
 assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
 
 // Clicking a picker tile adds a line and scrolls to #order, same as every

@@ -826,7 +826,8 @@ body.lock-scroll-off {
 .btn-order-stem {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 10px;
   min-height: 44px;
   padding: 13px 16px;
   background: var(--text-dark);
@@ -840,6 +841,25 @@ body.lock-scroll-off {
   cursor: pointer;
   transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
               transform var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.btn-order-stem-price {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.btn-order-stem-secondary {
+  background: transparent;
+  color: var(--text-dark);
+  border: 1px solid var(--text-dark);
+}
+
+.btn-order-stem-secondary:hover {
+  background: rgba(63, 85, 69, 0.08);
+  color: var(--text-dark);
+  border-color: var(--accent-green);
 }
 
 .btn-order-stem:hover {
@@ -3345,8 +3365,12 @@ details.is-closing > .faq-answer-wrapper {
     font-size: var(--fs-label);
     letter-spacing: 0.04em;
     width: 100%;
-    justify-content: center;
-    text-align: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .btn-order-stem-price {
+    font-size: 0.92em;
   }
 
   /* 2x2 Mobile Bouquet Card Refinements */

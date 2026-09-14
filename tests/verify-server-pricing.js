@@ -77,12 +77,13 @@ vm.runInContext(appsScriptSrc, sandbox);
 const {
   computeVerifiedTotals, resolveOrderMode, validateOrder, CATALOG, isValidLeadTimeDate, columnToLetter,
   normalizeIndonesianPhone, validateHeaderSchema, buildOrderSummary, regenerateOrderReference, REQUIRED_HEADERS,
-  defaultShippingFee
+  defaultShippingFee, usesBouquetWrap
 } = sandbox;
 assert(typeof computeVerifiedTotals === 'function', 'computeVerifiedTotals must be exposed');
 assert(typeof resolveOrderMode === 'function', 'resolveOrderMode must be exposed');
 assert(typeof validateOrder === 'function', 'validateOrder must be exposed');
 assert(typeof normalizeIndonesianPhone === 'function', 'normalizeIndonesianPhone must be exposed');
+assert(typeof usesBouquetWrap === 'function', 'usesBouquetWrap must be exposed');
 
 // ---------------------------------------------------------------------------
 // 3. Also load the real app.js client pricing (computeCartTotals) so the two
@@ -114,6 +115,7 @@ Object.keys(CATALOG.flowerStemPrice).forEach((key) => {
 });
 assert.strictEqual(CATALOG.wrapFeeUnitStems, clientData.wrapFeeUnitStems);
 assert.strictEqual(CATALOG.wrapFeePerUnit, clientData.wrapFeePerUnit);
+assert.strictEqual(CATALOG.singleStemWrapPrice, 5000);
 assert.strictEqual(CATALOG.messageCardPrice, clientData.messageCardPrice);
 assert.strictEqual(CATALOG.minStems, clientData.minStems);
 console.log('✔ Suite S1 Passed: server CATALOG mirrors site-content.js exactly\n');
@@ -129,12 +131,21 @@ assert.strictEqual(
   'mixed',
   'A cart mixing stem + pot + package must resolve to "mixed", not "custom" (DEV-01)'
 );
+assert.strictEqual(usesBouquetWrap([{ type: 'stem', id: 'Sunflower', wrapped: true, qty: 2 }]), false, 'Individual wrapping never enables the bouquet colour field');
+assert.strictEqual(usesBouquetWrap([{ type: 'package', id: '0', qty: 1 }]), true, 'Predefined bouquets use the selected paper colour');
+assert.strictEqual(usesBouquetWrap([{ type: 'custom', qty: 1, stems: { Rose: 3 } }]), true, 'Custom bouquets use the selected paper colour');
 console.log('✔ Suite S2 Passed: pot-only carts resolve correctly and mixed carts are distinguished from custom bouquets\n');
 
 // ---------------------------------------------------------------------------
 console.log('--- SUITE S3: Server repricing mirrors the client for every item type (DEV-02) ---');
 const stemLine = [{ type: 'stem', id: 'Sunflower', qty: 2 }];
 assert.strictEqual(computeVerifiedTotals(stemLine, false, CATALOG).productSubtotal, 2 * clientData.flowers.Sunflower.stemPrice);
+const wrappedStemLine = [{ type: 'stem', id: 'Sunflower', wrapped: true, qty: 2 }];
+assert.strictEqual(
+  computeVerifiedTotals(wrappedStemLine, false, CATALOG).productSubtotal,
+  2 * (clientData.flowers.Sunflower.stemPrice + 5000),
+  'Server must add the single-stem wrapping fee once per wrapped flower'
+);
 
 const potLine = [{ type: 'pot', id: 'daisy', qty: 3 }];
 assert.strictEqual(computeVerifiedTotals(potLine, false, CATALOG).productSubtotal, 3 * clientData.miniPots.find((p) => p.key === 'daisy').price);
@@ -189,6 +200,8 @@ assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'package', id:
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 0 }] })).ok, false, 'A zero quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 1.5 }] })).ok, false, 'A non-integer quantity must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', qty: 9999 }] })).ok, false, 'An absurd quantity must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', wrapped: 'yes', qty: 1 }] })).ok, false, 'A non-boolean single-stem wrapping flag must be rejected');
+assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'stem', id: 'Rose', wrapped: true, qty: 1 }], estimated_product_total: clientData.flowers.Rose.stemPrice + 5000 })).ok, true, 'A correctly priced wrapped stem must be accepted');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 1 } }] })).ok, false, 'A custom bouquet below the minimum stem count must be rejected');
 assert.strictEqual(validateOrder(validOrder({ item_data: [{ type: 'custom', qty: 1, stems: { Rose: 3 }, additions: { glitter: 1 } } ] })).ok, false, 'An unknown addition id must be rejected');
 // ALX-06: a huge nested count must be rejected even though MAX_TOTAL_QTY only

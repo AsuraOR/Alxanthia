@@ -30,6 +30,8 @@
   const MAX_CUSTOM_TOTAL_STEMS = 60;
   const MAX_CUSTOM_ADDITION_PER_KEY = 60;
   const MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
+  const SINGLE_STEM_WRAP_PRICE = 5000;
+  const CATALOG_VERSION = 2;
 
   // State
   let currentLang = 'id';
@@ -37,7 +39,7 @@
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let customAdditions = { rounded: 0, fern: 0 }; // quantity per addition, not a boolean toggle
-  let cart = []; // line items: { id, type: 'stem'|'pot'|'package'|'custom', ...type-specific fields, qty }
+  let cart = []; // stem lines also carry `wrapped` so both variants can coexist
   let nextLineId = 1;
   let selectedWrap = 'kraft';
   let orderNote = '';
@@ -77,6 +79,16 @@
    */
   function formatRp(n) {
     return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+  }
+
+  function stemWrapLabel(wrapped, lang = currentLang) {
+    if (lang === 'en') return wrapped ? 'With wrapping paper' : 'Without wrapping paper';
+    return wrapped ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus';
+  }
+
+  function stemOrderButtonLabel(wrapped, lang = currentLang) {
+    if (lang === 'en') return wrapped ? 'With wrap' : 'Without wrap';
+    return wrapped ? 'Dengan bungkus' : 'Tanpa bungkus';
   }
 
   /**
@@ -128,7 +140,7 @@
         if (!(qty > 0)) return;
 
         if (line.type === 'stem' && siteData.flowers[line.flowerKey]) {
-          restoredLines.push({ type: 'stem', flowerKey: line.flowerKey, qty, _id: line.id });
+          restoredLines.push({ type: 'stem', flowerKey: line.flowerKey, wrapped: line.wrapped === true, qty, _id: line.id });
         } else if (line.type === 'pot' && (siteData.miniPots || []).some(p => p.key === line.potKey)) {
           restoredLines.push({ type: 'pot', potKey: line.potKey, qty, _id: line.id });
         } else if (line.type === 'package' && Number.isInteger(line.pkgIndex) && line.pkgIndex >= 0 && line.pkgIndex < (siteData.packages || []).length) {
@@ -403,7 +415,8 @@
 
       if (line.type === 'stem') {
         const flower = siteData.flowers[line.flowerKey];
-        const price = flower ? (flower.stemPrice || 55000) : 55000;
+        const basePrice = flower ? (flower.stemPrice || 55000) : 55000;
+        const price = basePrice + (line.wrapped === true ? SINGLE_STEM_WRAP_PRICE : 0);
         stems = line.qty;
         subtotal = price * line.qty;
       } else if (line.type === 'pot') {
@@ -458,7 +471,8 @@
     const t = siteData.translations[lang] || siteData.translations.id;
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
-      return `${line.qty} × ${(flower && (flower[lang] || flower.en).name) || line.flowerKey}`;
+      const wrapLabel = stemWrapLabel(line.wrapped === true, lang);
+      return `${line.qty} × ${(flower && (flower[lang] || flower.en).name) || line.flowerKey} — ${wrapLabel}`;
     }
     if (line.type === 'pot') {
       const pot = (siteData.miniPots || []).find(item => item.key === line.potKey);
@@ -487,7 +501,7 @@
     const totals = computeCartTotals(cart);
     const types = [...new Set(cart.map(line => line.type))];
     const itemData = cart.map(line => {
-      if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
+      if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, wrapped: line.wrapped === true, qty: line.qty };
       if (line.type === 'pot') return { type: 'pot', id: line.potKey, qty: line.qty };
       if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty };
       return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, stems: siteData.flowerOrder.reduce((out, key) => {
@@ -596,7 +610,7 @@
     return {
       order_reference: reference,
       idempotency_key: idempotencyKey,
-      catalog_version: siteData.catalogVersion ?? 1,
+      catalog_version: CATALOG_VERSION,
       cf_turnstile_token: turnstileToken,
       submitted_language: state.language,
       order_mode: state.orderMode,
@@ -716,7 +730,7 @@
     let existing;
     if (lineSpec.type !== 'custom') {
       existing = cart.find(l => l.type === lineSpec.type && (
-        lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey :
+        lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey && (l.wrapped === true) === (lineSpec.wrapped === true) :
         lineSpec.type === 'pot' ? l.potKey === lineSpec.potKey :
         l.pkgIndex === lineSpec.pkgIndex
       ));
@@ -821,12 +835,12 @@
   /**
    * Order action: Choose a single finished stem
    */
-  function selectStemOrder(flowerKey, scroll = true) {
+  function selectStemOrder(flowerKey, scroll = true, wrapped = false) {
     const wasCartEmpty = cart.length === 0;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
-    addLine({ type: 'stem', flowerKey: selectedFlower, qty: 1 });
+    addLine({ type: 'stem', flowerKey: selectedFlower, wrapped: wrapped === true, qty: 1 });
     if (scroll) {
       if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
@@ -1291,6 +1305,7 @@
       if (!flower) return;
       const trans = flower[currentLang] || flower.en;
       const priceStr = formatRp(flower.stemPrice || 55000);
+      const wrappedPriceStr = formatRp((flower.stemPrice || 55000) + SINGLE_STEM_WRAP_PRICE);
       const flowerAlt = currentLang === 'en'
         ? (flower.alt || `${trans.name} handcrafted from chenille stems`)
         : `${trans.name} buatan tangan dari benang chenille`;
@@ -1326,8 +1341,11 @@
             ${singleNoteHtml}
           </div>
           <div class="flower-actions-row">
-            <button type="button" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
-              ${t.orderStemLabel}
+            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" style="--accent-hover:${flower.accent}">
+              <span>${stemOrderButtonLabel(false)}</span><span class="btn-order-stem-price">${priceStr}</span>
+            </button>
+            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" style="--accent-hover:${flower.accent}">
+              <span>${stemOrderButtonLabel(true)}</span><span class="btn-order-stem-price">${wrappedPriceStr}</span>
             </button>
           </div>
         </div>
@@ -1350,13 +1368,13 @@
       }
 
       // Button: Order this stem
-      const orderBtn = card.querySelector('.btn-order-stem');
-      if (orderBtn) {
+      const orderButtons = card.querySelectorAll('.btn-order-stem');
+      orderButtons.forEach(orderBtn => {
         orderBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          selectStemOrder(key, true);
+          selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true');
         });
-      }
+      });
 
       grid.appendChild(card);
     });
@@ -1823,7 +1841,8 @@
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
       const trans = flower ? (flower[currentLang] || flower.en) : { name: line.flowerKey };
-      return { title: trans.name, photoSrc: flower ? flower.photo : '', photoAlt: trans.name };
+      const wrapLabel = stemWrapLabel(line.wrapped === true);
+      return { title: `${trans.name} — ${wrapLabel}`, photoSrc: flower ? flower.photo : '', photoAlt: trans.name };
     }
     if (line.type === 'pot') {
       const pot = (siteData.miniPots || []).find(item => item.key === line.potKey);
@@ -2059,14 +2078,18 @@
         const flower = siteData.flowers[key];
         if (!flower) return;
         const trans = flower[currentLang] || flower.en;
-        const priceStr = formatRp(flower.stemPrice || 55000);
-        flowersEl.appendChild(renderPickerTile({
-          photoSrc: flower.photo,
-          title: trans.name,
-          priceStr,
-          ariaLabel: `${t.orderStemLabel} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectStemOrder(key, true)
-        }));
+        [false, true].forEach(wrapped => {
+          const price = (flower.stemPrice || 55000) + (wrapped ? SINGLE_STEM_WRAP_PRICE : 0);
+          const priceStr = formatRp(price);
+          const variantLabel = stemOrderButtonLabel(wrapped);
+          flowersEl.appendChild(renderPickerTile({
+            photoSrc: flower.photo,
+            title: `${trans.name} — ${variantLabel}`,
+            priceStr,
+            ariaLabel: `${trans.name}, ${variantLabel}, ${priceStr}`,
+            onSelect: () => selectStemOrder(key, true, wrapped)
+          }));
+        });
       });
     }
 
@@ -2162,7 +2185,9 @@
     setText('#order-eyebrow', t.orderEyebrow);
     setText('#order-title', t.orderTitle);
     setText('#finish-label', t.finishLabel);
-    setText('#wrap-intro', t.wrapIntro);
+    setText('#wrap-intro', currentLang === 'en'
+      ? 'Choose the paper colour for your bouquet.'
+      : 'Pilih warna kertas untuk buket.');
     setText('#card-label', t.cardLabel);
     setText('#card-note-hint', t.cardNote);
     setText('#selection-label', t.selectionLabel);
@@ -2322,6 +2347,10 @@
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
+    const cartUsesWrap = cart.some(line => line.type === 'package' || line.type === 'custom');
+    const wrapIntroEl = document.getElementById('wrap-intro');
+    if (wrapIntroEl) wrapIntroEl.style.display = cartUsesWrap ? '' : 'none';
+    if (wrapChipsEl) wrapChipsEl.style.display = cartUsesWrap ? '' : 'none';
 
     const checkoutButton = document.getElementById('btn-checkout');
     if (checkoutButton) {
@@ -2385,7 +2414,7 @@
           if (cartTotals.wrapFee > 0) {
             allIncludes.push(`${t.wrapFeeLabel}: ${formatRp(cartTotals.wrapFee)}`);
           }
-          allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
+          if (cartUsesWrap) allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
           if (messageCardEnabled) {
             const feeText = cartTotals.messageCardFee > 0 ? ` (+${formatRp(cartTotals.messageCardFee)})` : '';
             allIncludes.push(orderNote.trim()
@@ -2534,7 +2563,7 @@
       btnWhatsapp.removeAttribute('aria-disabled');
 
       const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
-      const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
+      const wrapTxt = cartUsesWrap ? `${t.wrapLinePrefix}: ${wrapName}. ` : '';
       const cardTxt = messageCardEnabled && orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
       let waMsg = '';
@@ -2596,7 +2625,8 @@
           // stem
           const flower = siteData.flowers[line.flowerKey];
           const flTrans = flower[currentLang] || flower.en;
-          const items = `${line.qty} × ${flTrans.name} ${t.stemSuffix}`;
+          const wrapVariantLabel = stemWrapLabel(line.wrapped === true);
+          const items = `${line.qty} × ${flTrans.name} ${t.stemSuffix} · ${wrapVariantLabel}`;
           const vars = {
             items, total: formatRp(cartTotals.total), stems: line.qty,
             itemList: `• ${items}`, wrapInfo: wrapTxt, cardInfo: cardTxt
@@ -2604,9 +2634,9 @@
           if (hasTemplate) {
             waMsg = fillTemplate(template, vars);
           } else if (currentLang === 'en') {
-            waMsg = `Hello Alxanthia! I would like to order ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+            waMsg = `Hello Alxanthia! I would like to order ${items} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
           } else {
-            waMsg = `Halo Alxanthia! Saya ingin memesan ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+            waMsg = `Halo Alxanthia! Saya ingin memesan ${items} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
           }
         }
       } else {

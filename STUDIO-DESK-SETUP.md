@@ -14,11 +14,16 @@ Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   
 
 The Studio Desk is a second, separate Apps Script project — a phone-friendly page for the maker
 that reads the same `Orders` worksheet the order-writer script (set up in
-`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly five columns:
-**Order Confirmation Sent**, **Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**.
-It never touches pricing,
+`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly four columns:
+**Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**. It never touches pricing,
 never recalculates a total, and is a completely separate Apps Script project from the order writer —
 a mistake in the Desk's code can never stop a customer's order from being saved.
+
+Finished flowers now arrive in the Desk as two distinct variants. Each stem item contains a Boolean
+`wrapped` value: `true` means **dengan kertas pembungkus** and includes the Rp5.000 per-flower fee
+already verified by the Order Writer; `false` means **tanpa kertas pembungkus**. A paper **colour** is
+shown only when the order contains a predefined or custom bouquet. The Desk still never calculates
+either fee itself—it only displays the verified order data.
 
 Never paste your Google account password, or any secret from `CONFIGURE-SUBMISSION-ENDPOINT.md`
 (the webhook secret, Turnstile keys), into anything in this guide. The only secrets the Desk itself
@@ -37,15 +42,13 @@ Properties, set in Part 5 below.
 
 ---
 
-## Part 2 — Add confirmation tracking and update the two dropdown lists
+## Part 2 — Update the two dropdown lists in the sheet
 
-The Desk needs one dedicated column to remember that the incoming-order message was prepared. This
-keeps unconfirmed orders pinned at the top and preserves the result across refreshes and devices.
+The words the Desk uses for work stage and payment are changing to match what
+`CONFIGURE-SUBMISSION-ENDPOINT.md` now documents. Old rows keep their old words until you fix them,
+and the Desk cannot show a stage it does not recognise.
 
-1. Add a new column anywhere in the `Orders` sheet and name its header exactly
-   **Order Confirmation Sent**. Leave existing cells blank; blank means not confirmed. Do not reuse
-   **Acknowledged**—that column records the customer's checkout consent and has a different meaning.
-2. In the sheet, click the **Work Phase** column header to select the column.
+1. In the sheet, click the **Work Phase** column header to select the column.
 2. **Data → Data validation**, click the existing rule, and replace the list with exactly these six
    lines:
 
@@ -58,7 +61,7 @@ keeps unconfirmed orders pinned at the top and preserves the result across refre
    Cancelled
    ```
 
-4. Click the **Payment Status** column header and do the same with exactly these four:
+3. Click the **Payment Status** column header and do the same with exactly these four:
 
    ```text
    Unpaid
@@ -67,7 +70,7 @@ keeps unconfirmed orders pinned at the top and preserves the result across refre
    Cancelled
    ```
 
-5. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
+4. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
    value to its nearest new one:
 
    | Old value | Change it to |
@@ -130,11 +133,10 @@ var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
 var CATALOG_TTL_SECONDS = 21600; // 6 hours, the CacheService maximum
 
-// Page-side field name -> sheet column header. The only five columns the
+// Page-side field name -> sheet column header. The only four columns the
 // Desk is ever allowed to write, enforced here rather than trusted from the
 // page.
 var WRITABLE_FIELDS = {
-  confirmed: 'Order Confirmation Sent',
   payment: 'Payment Status',
   shipping: 'Shipping Fee',
   phase: 'Work Phase',
@@ -260,7 +262,6 @@ function rowToOrder_(rowValues, headers, rowNumber) {
     verified: Number(get('Verified Total')) || 0,
     shipping: shipping,
     mismatch: String(get('Price Mismatch') || '') !== '',
-    confirmed: String(get('Order Confirmation Sent') || '').toLowerCase() === 'yes',
     payment: String(get('Payment Status') || ''),
     phase: String(get('Work Phase') || ''),
     notes: String(get('Internal Notes') || '')
@@ -334,12 +335,6 @@ function updateOrder(payload) {
 }
 
 function validateFieldValue_(field, value) {
-  if (field === 'confirmed') {
-    if (value !== true && value !== false) {
-      return { ok: false, message: 'Status konfirmasi pesanan tidak dikenali.' };
-    }
-    return { ok: true, value: value ? 'Yes' : 'No' };
-  }
   if (field === 'payment') {
     if (PAYMENT_VALUES.indexOf(value) === -1) {
       return { ok: false, message: 'Status pembayaran tidak dikenali.' };
@@ -545,7 +540,9 @@ function buildTicketLines_(items, catalog) {
   return (items || []).map(function (item, i) {
     if (item.type === 'stem') {
       var flower = resolveLabel_(catalog.flowers, item.id);
-      return { key: 'i' + i, qty: item.qty, name: flower.name, lines: flower.spec ? [{ v: flower.spec }] : [] };
+      var stemLines = flower.spec ? [{ v: flower.spec }] : [];
+      stemLines.push({ k: 'bungkus', v: item.wrapped === true ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus' });
+      return { key: 'i' + i, qty: item.qty, name: flower.name, lines: stemLines };
     }
     if (item.type === 'pot') {
       var pot = resolveLabel_(catalog.pots, item.id);
@@ -1325,7 +1322,7 @@ function buildTicketLines_(items, catalog) {
 
   <p class="foot">
     <span><b>Studio Desk.</b> Setiap perubahan di sini langsung tersimpan ke sheet Orders. Nama bunga,
-    ukuran tangkai, warna kertas dan isi paket dibaca langsung dari <b>site-content.js</b>.</span>
+    ukuran tangkai, warna kertas buket dan isi paket dibaca langsung dari <b>site-content.js</b>.</span>
     <button type="button" class="btn ghost small" id="reloadCatalogBtn">Muat ulang katalog</button>
     <span id="catalogMeta"></span>
   </p>
@@ -1457,7 +1454,9 @@ function buildTicketLines_(items, catalog) {
     return (order.items || []).map(function (item, i) {
       if (item.type === 'stem') {
         var flower = resolveLabel(catalog.flowers, item.id);
-        return { key: 'i' + i, qty: item.qty, name: flower.name, lines: flower.spec ? [{ v: flower.spec }] : [] };
+        var stemLines = flower.spec ? [{ v: flower.spec }] : [];
+        stemLines.push({ k: 'bungkus', v: item.wrapped === true ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus' });
+        return { key: 'i' + i, qty: item.qty, name: flower.name, lines: stemLines };
       }
       if (item.type === 'pot') {
         var pot = resolveLabel(catalog.pots, item.id);
@@ -1492,6 +1491,12 @@ function buildTicketLines_(items, catalog) {
   function billed(o) {
     if (o.shipping === null || o.shipping === undefined || o.shipping === '') return null;
     return o.verified + Number(o.shipping);
+  }
+
+  function usesBouquetWrap(items) {
+    return (items || []).some(function (item) {
+      return item && (item.type === 'package' || item.type === 'custom');
+    });
   }
 
   function waitingPay(order) {
@@ -1649,10 +1654,6 @@ function buildTicketLines_(items, catalog) {
       if (state.lane === 'pay') return waitingPay(o);
       return laneOf(o) === state.lane;
     }).sort(function (a, b) {
-      /* Unconfirmed orders always stay above the normal queue. Once the
-         incoming-order message is opened, optimistic state immediately
-         returns that order to the position chosen by the active sort. */
-      if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
       if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
     });
@@ -1686,8 +1687,10 @@ function buildTicketLines_(items, catalog) {
       } else if (gate(o, catalog).autoOk) {
         tags.push('<span class="tag go"><span class="dot"></span>Siap dikerjakan</span>');
       }
-      var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
-      tags.push('<span class="tag"><span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span>');
+      if (usesBouquetWrap(o.items)) {
+        var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
+        tags.push('<span class="tag"><span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span>');
+      }
       if (o.card) tags.push('<span class="tag">Kartu</span>');
 
       var summary = o.items.length
@@ -1706,17 +1709,6 @@ function buildTicketLines_(items, catalog) {
           '<span class="tags">' + tags.join('') + '</span>' +
         '</span></button></li>';
     }).join('');
-  }
-
-  /* Sits above Pembayaran — a one-tap "order received, we're verifying it"
-     message, meant to go out before the payment link so the buyer isn't
-     left wondering right after they confirm on WhatsApp. Stateless like the
-     other "Kirim pesan" buttons: nothing is recorded in the sheet. */
-  function receivedBlock(o) {
-    return '<div class="block"><h3>Konfirmasi pesanan masuk</h3>' +
-      '<div class="actions"><button type="button" class="btn ghost" data-sendreceived="1">Kirim pesan</button>' +
-      '<span class="why">Pesanan sudah kami terima, sedang dicek — kirim link pembayaran menyusul.</span></div>' +
-      '</div>';
   }
 
   function paymentBlock(o) {
@@ -1821,20 +1813,6 @@ function buildTicketLines_(items, catalog) {
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
-    /* The acknowledgement prompt exists only until it has been used. The
-       write is optimistic, so it disappears and the card returns to its
-       normal sorted position immediately; a failed server write restores it. */
-    if (!o.confirmed) {
-      var confirmationPending = isPending(o.ref, 'confirmed');
-      var confirmationErr = fieldErrors[o.ref + '|confirmed'];
-      html += '<div class="block"><h3>Konfirmasi pesanan masuk</h3>' +
-        '<div class="actions"><button type="button" class="btn ghost" data-confirmorder="1"' +
-        (confirmationPending ? ' disabled' : '') + '>Kirim pesan</button>' +
-        '<span class="why">Pesanan sudah kami terima, sedang dicek — kirim link pembayaran menyusul.</span></div>' +
-        (confirmationErr ? '<p class="why err">' + esc(confirmationErr) + '</p>' : '') +
-        '</div>';
-    }
-
     html += paymentBlock(o);
 
     /* Verification gate — only while the work has not started. */
@@ -1872,11 +1850,14 @@ function buildTicketLines_(items, catalog) {
           }).join('') + '</ul>'
         : '<p class="why">' + esc(o.itemsRaw || 'Tidak ada rincian item.') + '</p>') + '</div>';
 
-    /* Finishing — wrap and the card, nothing else. */
-    var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
-    html += '<div class="block"><h3>Penyelesaian</h3>' +
-      '<div class="pair"><span class="k">Kertas pembungkus</span><span class="v">' +
-      '<span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span></div>';
+    /* Finishing — bouquet colour (when relevant) and the card. Individual
+       flower wrapping is shown on its own item line above. */
+    html += '<div class="block"><h3>Penyelesaian</h3>';
+    if (usesBouquetWrap(o.items)) {
+      var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
+      html += '<div class="pair"><span class="k">Warna kertas buket</span><span class="v">' +
+        '<span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span></div>';
+    }
 
     if (o.card) {
       html += '<div style="margin-top:15px"><span class="k" style="display:block;font:600 10.5px/1 var(--sans);' +
@@ -1920,7 +1901,7 @@ function buildTicketLines_(items, catalog) {
       (notesPending ? 'disabled ' : '') +
       'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea></div>' +
       '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
-      '<span>Desk menulis: Order Confirmation Sent · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
+      '<span>Desk menulis: Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
       '<span>Kolom lain hanya dibaca</span></div>';
 
     elTicket.innerHTML = html;
@@ -2092,12 +2073,6 @@ function buildTicketLines_(items, catalog) {
 
     if (e.target.closest('[data-back]')) { document.body.classList.remove('detail'); return; }
 
-    if (e.target.closest('[data-confirmorder]')) {
-      openWhatsApp(o, orderReceivedMessage(o));
-      writeField(o.ref, 'confirmed', true, 'Order Confirmation Sent');
-      return;
-    }
-
     var tick = e.target.closest('[data-tick]');
     if (tick) {
       p.ticks = p.ticks || {};
@@ -2144,11 +2119,6 @@ function buildTicketLines_(items, catalog) {
     if (copyCard && o.card) {
       copyText(o.card.text + '\n— ' + o.card.from);
       copyCard.textContent = 'Tersalin';
-      return;
-    }
-
-    if (e.target.closest('[data-sendreceived]')) {
-      openWhatsApp(o, orderReceivedMessage(o));
       return;
     }
 
@@ -2203,11 +2173,6 @@ function buildTicketLines_(items, catalog) {
     var digits = String(o.wa || '').replace(/[^\d]/g, '');
     var url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
     window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  function orderReceivedMessage(o) {
-    return 'Halo ' + firstName(o.buyer) + ', pesananmu (' + o.ref + ') sudah kami terima dan sedang kami cek. ' +
-      'Kami akan segera mengirimkan total dan detail pembayaran.';
   }
 
   function paymentRequestMessage(o) {

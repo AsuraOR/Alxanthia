@@ -35,7 +35,7 @@ assert(serverSrc, 'Could not locate the Apps Script code block in STUDIO-DESK-SE
 // ---------------------------------------------------------------------------
 const HEADERS = [
   'Order Reference', 'Idempotency Key', 'Payload Hash', 'Catalog Version', 'Submitted Catalog Version',
-  'Submitted At', 'Language', 'Currency', 'Source', 'Acknowledged', 'Order Confirmation Sent', 'Buyer Name', 'Buyer WhatsApp',
+  'Submitted At', 'Language', 'Currency', 'Source', 'Acknowledged', 'Buyer Name', 'Buyer WhatsApp',
   'Location Type', 'Regency', 'Delivery Method', 'Address', 'City', 'Postal Code', 'Preferred Date',
   'Order Mode', 'Order Summary', 'Item Data', 'Total Stems', 'Wrap', 'Message Card', 'Gift Message',
   'Recipient Name', 'Card Sender Name', 'Submitted Product Subtotal', 'Submitted Message Card Fee',
@@ -151,7 +151,6 @@ console.log('--- SUITE 1: listOrders() maps a fixture row to the documented shap
     rowFor({
       'Order Reference': 'ALX-260912-K4T9',
       'Submitted At': new Date(Date.UTC(2026, 8, 12, 1, 14)),
-      'Order Confirmation Sent': 'No',
       'Buyer Name': 'Ni Putu Ayu Lestari', 'Buyer WhatsApp': '+6281234567890',
       'Location Type': 'bali', 'Regency': 'Denpasar', 'Delivery Method': 'grab_gojek',
       'Preferred Date': '2026-09-14',
@@ -178,7 +177,6 @@ console.log('--- SUITE 1: listOrders() maps a fixture row to the documented shap
   assert.strictEqual(o.verified, 497000);
   assert.strictEqual(o.shipping, null, 'a blank Shipping Fee cell must map to null');
   assert.strictEqual(o.mismatch, false);
-  assert.strictEqual(o.confirmed, false);
   assert.strictEqual(o.payment, 'Paid');
   assert.strictEqual(o.phase, 'Not started');
   console.log('✔ Suite 1 Passed\n');
@@ -222,7 +220,7 @@ console.log('--- SUITE 4: malformed Item Data never throws ---');
 }
 
 // ---------------------------------------------------------------------------
-console.log('--- SUITE 5: updateOrder rejects a column outside the writable five ---');
+console.log('--- SUITE 5: updateOrder rejects a column outside the writable four ---');
 {
   const sheet = makeSheetStub([rowFor({ 'Order Reference': 'E', 'Work Phase': 'Not started' })]);
   const sandbox = makeSandbox({ sheet });
@@ -352,52 +350,13 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
   const lines = sandbox.buildTicketLines_([{ type: 'stem', id: 'unknown-flower', qty: 1 }], catalog);
   assert.strictEqual(lines.length, 1);
   assert.strictEqual(lines[0].name, 'Unknown Flower');
+  const wrapped = sandbox.buildTicketLines_([{ type: 'stem', id: 'Sunflower', wrapped: true, qty: 1 }], catalog);
+  const unwrapped = sandbox.buildTicketLines_([{ type: 'stem', id: 'Sunflower', wrapped: false, qty: 1 }], catalog);
+  assert.ok(wrapped[0].lines.some((line) => line.k === 'bungkus' && line.v === 'Dengan kertas pembungkus'));
+  assert.ok(unwrapped[0].lines.some((line) => line.k === 'bungkus' && line.v === 'Tanpa kertas pembungkus'));
   console.log('✔ Suite 13 Passed\n');
 }
 
-// ---------------------------------------------------------------------------
-console.log('--- SUITE 14: Confirmation Sent maps to a Boolean ---');
-{
-  const sheet = makeSheetStub([
-    rowFor({ 'Order Reference': 'N1', 'Order Confirmation Sent': 'Yes', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Work Phase': 'Not started' }),
-    rowFor({ 'Order Reference': 'N2', 'Order Confirmation Sent': '', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Work Phase': 'Not started' })
-  ]);
-  const orders = makeSandbox({ sheet }).listOrders();
-  assert.strictEqual(orders[0].confirmed, true);
-  assert.strictEqual(orders[1].confirmed, false);
-  console.log('✔ Suite 14 Passed\n');
-}
-
-// ---------------------------------------------------------------------------
-console.log('--- SUITE 15: confirming an order writes Yes to the dedicated column ---');
-{
-  const sheet = makeSheetStub([
-    rowFor({ 'Order Reference': 'O', 'Order Confirmation Sent': '', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Work Phase': 'Not started' })
-  ]);
-  const sandbox = makeSandbox({ sheet });
-  const res = sandbox.updateOrder({ ref: 'O', row: 2, field: 'confirmed', value: true });
-  assert.strictEqual(res.ok, true, JSON.stringify(res));
-  assert.strictEqual(res.order.confirmed, true);
-  assert.strictEqual(sheet._writes[0].col, colIndex('Order Confirmation Sent') + 1);
-  assert.strictEqual(sheet._writes[0].value, 'Yes');
-  console.log('✔ Suite 15 Passed\n');
-}
-
-// ---------------------------------------------------------------------------
-console.log('--- SUITE 16: client pins and conditionally hides confirmations ---');
-{
-  const htmlBlocks = [...guideSrc.matchAll(/```html\n([\s\S]*?)\n```/g)].map((m) => m[1]);
-  const clientSrc = htmlBlocks.find((block) => block.includes('function renderQueue'));
-  assert(clientSrc, 'Could not locate the Studio Desk HTML block');
-  assert.ok(clientSrc.includes('if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;'),
-    'queue comparator must pin unconfirmed orders first');
-  assert.ok(clientSrc.includes('if (!o.confirmed)'),
-    'incoming-order confirmation block must render only while unconfirmed');
-  assert.ok(clientSrc.includes("writeField(o.ref, 'confirmed', true, 'Order Confirmation Sent')"),
-    'confirmation action must persist before normal sorting resumes');
-  console.log('✔ Suite 16 Passed\n');
-}
-
 console.log('======================================================================');
-console.log('✔ ALL 16 STUDIO DESK SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 13 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

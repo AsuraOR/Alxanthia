@@ -14,8 +14,8 @@ Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   
 
 The Studio Desk is a second, separate Apps Script project — a phone-friendly page for the maker
 that reads the same `Orders` worksheet the order-writer script (set up in
-`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly four columns:
-**Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**. It never touches pricing,
+`CONFIGURE-SUBMISSION-ENDPOINT.md`) already writes to, and writes back exactly five columns:
+**Payment Plan**, **Payment Status**, **Shipping Fee**, **Work Phase**, **Internal Notes**. It never touches pricing,
 never recalculates a total, and is a completely separate Apps Script project from the order writer —
 a mistake in the Desk's code can never stop a customer's order from being saved.
 
@@ -42,14 +42,17 @@ Properties, set in Part 5 below.
 
 ---
 
-## Part 2 — Update the two dropdown lists in the sheet
+## Part 2 — Add the payment plan and update the dropdown lists
 
 The words the Desk uses for work stage and payment are changing to match what
 `CONFIGURE-SUBMISSION-ENDPOINT.md` now documents. Old rows keep their old words until you fix them,
 and the Desk cannot show a stage it does not recognise.
 
-1. In the sheet, click the **Work Phase** column header to select the column.
-2. **Data → Data validation**, click the existing rule, and replace the list with exactly these six
+1. Add a column named **Payment Plan** immediately before **Payment Status**. Fill existing order rows
+   with `Full`; new orders receive that default automatically. Do not add a dropdown to this column—the
+   Desk writes either `Full` or `Deposit 50%`.
+2. In the sheet, click the **Work Phase** column header to select the column.
+3. **Data → Data validation**, click the existing rule, and replace the list with exactly these six
    lines:
 
    ```text
@@ -61,16 +64,19 @@ and the Desk cannot show a stage it does not recognise.
    Cancelled
    ```
 
-3. Click the **Payment Status** column header and do the same with exactly these four:
+4. Click the **Payment Status** column header and do the same with exactly these seven:
 
    ```text
    Unpaid
    Checking transfer
+   Checking deposit
+   Deposit paid
+   Checking balance
    Paid
    Cancelled
    ```
 
-4. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
+5. Now fix the orders already in the sheet. Scroll through the `Work Phase` column and change any old
    value to its nearest new one:
 
    | Old value | Change it to |
@@ -133,17 +139,19 @@ var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
 var CATALOG_TTL_SECONDS = 21600; // 6 hours, the CacheService maximum
 
-// Page-side field name -> sheet column header. The only four columns the
+// Page-side field name -> sheet column header. The only five columns the
 // Desk is ever allowed to write, enforced here rather than trusted from the
 // page.
 var WRITABLE_FIELDS = {
+  paymentPlan: 'Payment Plan',
   payment: 'Payment Status',
   shipping: 'Shipping Fee',
   phase: 'Work Phase',
   notes: 'Internal Notes'
 };
 
-var PAYMENT_VALUES = ['Unpaid', 'Checking transfer', 'Paid', 'Cancelled'];
+var PAYMENT_PLAN_VALUES = ['Full', 'Deposit 50%'];
+var PAYMENT_VALUES = ['Unpaid', 'Checking transfer', 'Checking deposit', 'Deposit paid', 'Checking balance', 'Paid', 'Cancelled'];
 var PHASE_VALUES = ['Not started', 'Assembly and packing', 'Ready for dispatch', 'Shipped', 'Delivered', 'Cancelled'];
 
 // ============================================================================
@@ -262,6 +270,7 @@ function rowToOrder_(rowValues, headers, rowNumber) {
     verified: Number(get('Verified Total')) || 0,
     shipping: shipping,
     mismatch: String(get('Price Mismatch') || '') !== '',
+    paymentPlan: String(get('Payment Plan') || 'Full'),
     payment: String(get('Payment Status') || ''),
     phase: String(get('Work Phase') || ''),
     notes: String(get('Internal Notes') || '')
@@ -325,6 +334,24 @@ function updateOrder(payload) {
       return { ok: false, code: 'STALE_ROW', message: 'Baris pesanan berubah. Muat ulang daftar pesanan lalu coba lagi.' };
     }
 
+    if (field === 'paymentPlan') {
+      var planPaymentCol = headers.map['Payment Status'];
+      var planPayment = planPaymentCol === undefined ? '' : sheet.getRange(row, planPaymentCol + 1).getValue();
+      if (String(planPayment || 'Unpaid') !== 'Unpaid') {
+        return { ok: false, code: 'PAYMENT_STARTED', message: 'Cara pembayaran tidak bisa diubah setelah transfer mulai diproses.' };
+      }
+    }
+
+    // A deposit may start production, but an order must be fully paid before
+    // it can leave the studio. Enforce this on the server, not only in the UI.
+    if (field === 'phase' && (validated.value === 'Shipped' || validated.value === 'Delivered')) {
+      var paymentCol = headers.map['Payment Status'];
+      var currentPayment = paymentCol === undefined ? '' : sheet.getRange(row, paymentCol + 1).getValue();
+      if (String(currentPayment) !== 'Paid') {
+        return { ok: false, code: 'PAYMENT_DUE', message: 'Pelunasan harus diterima sebelum pesanan dikirim.' };
+      }
+    }
+
     sheet.getRange(row, colIdx + 1).setValue(validated.value);
 
     var rowValues = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
@@ -335,6 +362,12 @@ function updateOrder(payload) {
 }
 
 function validateFieldValue_(field, value) {
+  if (field === 'paymentPlan') {
+    if (PAYMENT_PLAN_VALUES.indexOf(value) === -1) {
+      return { ok: false, message: 'Cara pembayaran tidak dikenali.' };
+    }
+    return { ok: true, value: value };
+  }
   if (field === 'payment') {
     if (PAYMENT_VALUES.indexOf(value) === -1) {
       return { ok: false, message: 'Status pembayaran tidak dikenali.' };
@@ -1346,6 +1379,9 @@ function buildTicketLines_(items, catalog) {
   var PAYMENTS = [
     { key: 'Unpaid',            label: 'Belum bayar' },
     { key: 'Checking transfer', label: 'Perlu dicek' },
+    { key: 'Checking deposit',  label: 'Periksa DP' },
+    { key: 'Deposit paid',      label: 'DP diterima' },
+    { key: 'Checking balance',  label: 'Periksa pelunasan' },
     { key: 'Paid',              label: 'Lunas' },
     { key: 'Cancelled',         label: 'Dibatalkan' }
   ];
@@ -1493,6 +1529,16 @@ function buildTicketLines_(items, catalog) {
     return o.verified + Number(o.shipping);
   }
 
+  function usesDeposit(o) { return o.paymentPlan === 'Deposit 50%'; }
+  function depositAmount(o) {
+    var total = billed(o);
+    return total === null ? null : Math.ceil(total / 2);
+  }
+  function balanceAmount(o) {
+    var total = billed(o), deposit = depositAmount(o);
+    return total === null ? null : total - deposit;
+  }
+
   function usesBouquetWrap(items) {
     return (items || []).some(function (item) {
       return item && (item.type === 'package' || item.type === 'custom');
@@ -1521,8 +1567,8 @@ function buildTicketLines_(items, catalog) {
     var pay = order.payment;
     var payLabel = (PAYMENTS.find(function (p) { return p.key === pay; }) || {}).label || pay;
     auto.push({
-      ok: pay === 'Paid',
-      label: pay === 'Paid' ? 'Pembayaran lunas' : 'Pembayaran belum lunas',
+      ok: pay === 'Paid' || pay === 'Deposit paid',
+      label: pay === 'Paid' ? 'Pembayaran lunas' : (pay === 'Deposit paid' ? 'DP 50% diterima' : 'Pembayaran belum diterima'),
       sub: 'Status di sheet: ' + payLabel
     });
     auto.push({
@@ -1715,30 +1761,18 @@ function buildTicketLines_(items, catalog) {
     var pay = o.payment;
     var ship = o.shipping;
     var amount = billed(o);
+    var deposit = depositAmount(o);
+    var balance = balanceAmount(o);
+    var isDeposit = usesDeposit(o);
     var shippingPending = isPending(o.ref, 'shipping');
     var paymentPending = isPending(o.ref, 'payment');
+    var planPending = isPending(o.ref, 'paymentPlan');
     var shipErr = fieldErrors[o.ref + '|shipping'];
-    var payErr = fieldErrors[o.ref + '|payment'];
-
-    if (pay === 'Paid') {
-      return '<div class="block"><h3>Pembayaran</h3><div class="paid-line">' +
-        '<span class="ok">Lunas</span><span class="amt">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
-        '<button type="button" class="btn ghost small" data-pay="Checking transfer"' + (paymentPending ? ' disabled' : '') + '>Ubah</button>' +
-        '<button type="button" class="btn ghost small" data-sendpaid="1">Kirim pesan</button></div>' +
-        (payErr ? '<p class="why err">' + esc(payErr) + '</p>' : '') +
-        '</div>';
-    }
-    if (pay === 'Cancelled') {
-      return '<div class="block"><h3>Pembayaran</h3><div class="paid-line">' +
-        '<span class="cancelled">Dibatalkan</span>' +
-        '<button type="button" class="btn ghost small" data-pay="Unpaid"' + (paymentPending ? ' disabled' : '') + '>Ubah</button></div>' +
-        (payErr ? '<p class="why err">' + esc(payErr) + '</p>' : '') +
-        '</div>';
-    }
+    var payErr = fieldErrors[o.ref + '|payment'] || fieldErrors[o.ref + '|paymentPlan'];
 
     var html = '<div class="block pay-open"><h3>Pembayaran</h3>' +
       '<div class="amount"><span class="big">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
-      '<span class="lbl">yang ditagih ke pembeli</span></div>' +
+      '<span class="lbl">total yang ditagih ke pembeli</span></div>' +
       '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
       '<span>Ongkir ' + (ship === null || ship === undefined || ship === '' ? 'belum diisi' : esc(rupiah(ship))) + '</span></div>';
 
@@ -1751,36 +1785,59 @@ function buildTicketLines_(items, catalog) {
         '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
         'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
         (shippingPending ? ' disabled' : '') + '>' +
-        '<span class="hint">Kurir ke ' + esc(o.city) + '. Final Total di sheet mengisi sendiri begitu ongkir ada.</span></div>';
+        '<span class="hint">Kurir ke ' + esc(o.city) + '. Sisa pelunasan mengikuti total terbaru.</span></div>';
       if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
     }
 
-    html += '<div class="paystate">' + PAYMENTS.filter(function (p) { return p.key !== 'Cancelled'; }).map(function (p, i, arr) {
-      var cur = arr.findIndex(function (x) { return x.key === pay; });
-      var cls = i === cur ? 'step on' : (i < cur ? 'step past' : 'step');
-      return '<span class="' + cls + '">' + esc(p.label) + '</span>';
-    }).join('') + '</div>';
+    html += '<div class="actions" role="group" aria-label="Cara pembayaran">' +
+      '<button type="button" class="btn ' + (!isDeposit ? '' : 'ghost') + '" data-plan="Full"' + (planPending ? ' disabled' : '') + '>Bayar penuh</button>' +
+      '<button type="button" class="btn ' + (isDeposit ? '' : 'ghost') + '" data-plan="Deposit 50%"' + (planPending || amount === null ? ' disabled' : '') + '>DP 50%</button></div>';
 
-    html += '<div class="actions">' +
-      '<button type="button" class="btn ghost" data-sendpayment="1"' + (amount === null ? ' disabled' : '') + '>Kirim pesan</button>' +
-      (pay === 'Unpaid'
-        ? '<button type="button" class="btn ghost" data-pay="Checking transfer"' + (paymentPending ? ' disabled' : '') + '>Tandai perlu dicek</button>'
-        : '<button type="button" class="btn ghost" data-pay="Unpaid"' + (paymentPending ? ' disabled' : '') + '>Belum ada transfer</button>') +
-      '<button type="button" class="btn" data-askpaid="1"' + (amount === null || paymentPending ? ' disabled' : '') + '>Tandai lunas</button>' +
-      '<button type="button" class="btn ghost small" data-pay="Cancelled"' + (paymentPending ? ' disabled' : '') + '>Batalkan pesanan</button>' +
-      (amount === null ? '<span class="why">Isi ongkir dulu supaya totalnya bisa ditagih.</span>' : '') +
-      (payErr ? '<span class="why err">' + esc(payErr) + '</span>' : '') +
-      '</div>';
-
-    if (confirming && amount !== null) {
-      var bank = state.catalog.bank || {};
-      html += '<div class="confirm"><p><b>' + esc(rupiah(amount)) + '</b> sudah masuk ke rekening ' +
-        esc(bank.bank || '—') + ' ' + esc(bank.number || '') + '?</p>' +
-        '<p class="rule">Cek di mutasi rekening — jangan dari screenshot pembeli.</p>' +
-        '<div class="actions"><button type="button" class="btn" data-pay="Paid">Ya, sudah masuk</button>' +
-        '<button type="button" class="btn ghost" data-cancelconfirm="1">Batal</button></div></div>';
+    if (isDeposit && amount !== null) {
+      html += '<div class="breakdown"><span>DP 50% ' + esc(rupiah(deposit)) + '</span>' +
+        '<span>Sisa pelunasan ' + esc(rupiah(balance)) + '</span></div>';
     }
 
+    if (pay === 'Paid') {
+      html += '<div class="paid-line"><span class="ok">Lunas</span><span class="amt">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
+        '<button type="button" class="btn ghost small" data-sendpaid="1">Kirim pesan</button></div>';
+    } else if (pay === 'Cancelled') {
+      html += '<div class="paid-line"><span class="cancelled">Dibatalkan</span>' +
+        (isDeposit ? '<span class="why">Jika DP sudah diterima, proses pengembalian dicatat manual.</span>' : '') + '</div>';
+    } else if (isDeposit) {
+      var depositReceived = pay === 'Deposit paid' || pay === 'Checking balance';
+      html += '<div class="paid-line"><span class="' + (depositReceived ? 'ok' : '') + '">' +
+        (depositReceived ? 'DP diterima' : (pay === 'Checking deposit' ? 'DP perlu dicek' : 'Belum bayar DP')) + '</span>' +
+        '<span class="amt">' + esc(rupiah(depositReceived ? balance : deposit)) + '</span></div>' +
+        '<div class="actions">' +
+        (!depositReceived
+          ? '<button type="button" class="btn ghost" data-sendpayment="deposit">Kirim tagihan DP</button>' +
+            '<button type="button" class="btn ghost" data-pay="Checking deposit">Tandai DP perlu dicek</button>' +
+            '<button type="button" class="btn" data-askpaid="Deposit paid">Tandai DP diterima</button>'
+          : (o.phase === 'Ready for dispatch'
+            ? '<button type="button" class="btn" data-sendpayment="balance">Kirim pesan pelunasan</button>' +
+              '<button type="button" class="btn ghost" data-pay="Checking balance">Tandai perlu dicek</button>' +
+              '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>'
+            : '<span class="why">Pelunasan diminta saat pesanan Siap dikirim.</span>')) +
+        '<button type="button" class="btn ghost small" data-pay="Cancelled">Batalkan pesanan</button></div>';
+    } else {
+      html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full">Kirim pesan</button>' +
+        '<button type="button" class="btn ghost" data-pay="Checking transfer">Tandai perlu dicek</button>' +
+        '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>' +
+        '<button type="button" class="btn ghost small" data-pay="Cancelled">Batalkan pesanan</button></div>';
+    }
+
+    if (amount === null) html += '<span class="why">Isi ongkir dulu supaya totalnya bisa ditagih.</span>';
+    if (payErr) html += '<span class="why err">' + esc(payErr) + '</span>';
+    if (confirming && amount !== null) {
+      var target = confirming === 'Deposit paid' ? deposit : (confirming === 'Paid' && isDeposit ? balance : amount);
+      var bank = state.catalog.bank || {};
+      html += '<div class="confirm"><p><b>' + esc(rupiah(target)) + '</b> sudah masuk ke rekening ' +
+        esc(bank.bank || '—') + ' ' + esc(bank.number || '') + '?</p>' +
+        '<p class="rule">Cek di mutasi rekening — jangan dari screenshot pembeli.</p>' +
+        '<div class="actions"><button type="button" class="btn" data-pay="' + esc(confirming) + '">Ya, sudah masuk</button>' +
+        '<button type="button" class="btn ghost" data-cancelconfirm="1">Batal</button></div></div>';
+    }
     return html + '</div>';
   }
 
@@ -1901,7 +1958,7 @@ function buildTicketLines_(items, catalog) {
       (notesPending ? 'disabled ' : '') +
       'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea></div>' +
       '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
-      '<span>Desk menulis: Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
+      '<span>Desk menulis: Payment Plan · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
       '<span>Kolom lain hanya dibaca</span></div>';
 
     elTicket.innerHTML = html;
@@ -2100,11 +2157,22 @@ function buildTicketLines_(items, catalog) {
       return;
     }
 
-    if (e.target.closest('[data-askpaid]')) { confirming = true; renderTicket(); return; }
+    var planBtn = e.target.closest('[data-plan]');
+    if (planBtn) {
+      writeField(o.ref, 'paymentPlan', planBtn.dataset.plan, 'Payment Plan');
+      return;
+    }
+
+    var askPaid = e.target.closest('[data-askpaid]');
+    if (askPaid) { confirming = askPaid.dataset.askpaid; renderTicket(); return; }
     if (e.target.closest('[data-cancelconfirm]')) { confirming = false; renderTicket(); return; }
 
     if (e.target.closest('[data-advance]')) {
       var i = PHASES.findIndex(function (x) { return x.key === o.phase; });
+      if (PHASES[i + 1] && PHASES[i + 1].key === 'Shipped' && o.payment !== 'Paid') {
+        toast('Pelunasan harus diterima sebelum pesanan dikirim.', true);
+        return;
+      }
       if (PHASES[i + 1]) writeField(o.ref, 'phase', PHASES[i + 1].key, 'Work Phase');
       return;
     }
@@ -2124,7 +2192,7 @@ function buildTicketLines_(items, catalog) {
 
     if (e.target.closest('[data-sendpayment]')) {
       if (billed(o) === null) return;
-      openWhatsApp(o, paymentRequestMessage(o));
+      openWhatsApp(o, paymentRequestMessage(o, e.target.closest('[data-sendpayment]').dataset.sendpayment));
       return;
     }
 
@@ -2175,9 +2243,23 @@ function buildTicketLines_(items, catalog) {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  function paymentRequestMessage(o) {
+  function paymentRequestMessage(o, kind) {
     var amount = billed(o);
     var bank = state.catalog.bank || {};
+    if (kind === 'deposit') {
+      return 'Halo ' + firstName(o.buyer) + ', terima kasih untuk pesanannya.\n' +
+        'Nomor pesanan: ' + o.ref + '\nTotal pesanan: ' + rupiah(amount) + '\n' +
+        'DP 50%: ' + rupiah(depositAmount(o)) + '\nSisa pelunasan: ' + rupiah(balanceAmount(o)) + '\n' +
+        'Transfer ke ' + bank.bank + ' ' + bank.number + ' a.n. ' + bank.holder + '\n' +
+        'Kalau sudah, balas chat ini ya. Produksi dimulai setelah DP kami konfirmasi.';
+    }
+    if (kind === 'balance') {
+      return 'Halo ' + firstName(o.buyer) + ', pesananmu (' + o.ref + ') sudah siap dikirim.\n' +
+        'Total pesanan: ' + rupiah(amount) + '\nDP sudah diterima: ' + rupiah(depositAmount(o)) + '\n' +
+        'Sisa pelunasan: ' + rupiah(balanceAmount(o)) + '\n' +
+        'Transfer ke ' + bank.bank + ' ' + bank.number + ' a.n. ' + bank.holder + '\n' +
+        'Setelah pelunasan kami konfirmasi, pesanan siap dikirim. Terima kasih!';
+    }
     return 'Halo ' + firstName(o.buyer) + ', terima kasih untuk pesanannya.\n' +
       'Nomor pesanan: ' + o.ref + '\n' +
       'Total: ' + rupiah(amount) + '\n' +
@@ -2186,6 +2268,10 @@ function buildTicketLines_(items, catalog) {
   }
 
   function paymentConfirmedMessage(o) {
+    if (usesDeposit(o)) {
+      return 'Halo ' + firstName(o.buyer) + ', pelunasan pesanan ' + o.ref + ' sudah kami terima. ' +
+        'Status pembayaran sekarang lunas. Terima kasih!';
+    }
     return 'Halo ' + firstName(o.buyer) + ', pembayaran untuk pesanan ' + o.ref + ' sudah kami terima. ' +
       'Terima kasih! Pesananmu akan segera kami mulai buatkan.';
   }

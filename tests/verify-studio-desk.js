@@ -40,7 +40,7 @@ const HEADERS = [
   'Order Mode', 'Order Summary', 'Item Data', 'Total Stems', 'Wrap', 'Message Card', 'Gift Message',
   'Recipient Name', 'Card Sender Name', 'Submitted Product Subtotal', 'Submitted Message Card Fee',
   'Submitted Total', 'Verified Product Subtotal', 'Verified Message Card Fee', 'Verified Total',
-  'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Payment Status',
+    'Price Mismatch', 'Shipping Fee', 'Final Total', 'Midtrans Payment Link', 'Payment Plan', 'Payment Status',
   'Work Phase', 'Delivery Service', 'Tracking Link/Number', 'Internal Notes'
 ];
 
@@ -248,7 +248,7 @@ console.log('--- SUITE 7: a stale row hint still writes the correct row, located
 {
   const sheet = makeSheetStub([
     rowFor({ 'Order Reference': 'G1', 'Work Phase': 'Not started' }),
-    rowFor({ 'Order Reference': 'G2', 'Work Phase': 'Not started' })
+    rowFor({ 'Order Reference': 'G2', 'Payment Status': 'Paid', 'Work Phase': 'Not started' })
   ]);
   const sandbox = makeSandbox({ sheet });
   // The page's row hint (2) actually belongs to G1, not G2 — the server must
@@ -293,6 +293,30 @@ console.log('--- SUITE 10: Final Total is never written by the Desk ---');
   const finalCol = colIndex('Final Total') + 1;
   sheet._writes.forEach((w) => assert.notStrictEqual(w.col, finalCol, 'Final Total must stay untouched'));
   console.log('✔ Suite 10 Passed\n');
+}
+
+console.log('--- SUITE 10a: deposit plan and statuses are persisted ---');
+{
+  const sheet = makeSheetStub([rowFor({ 'Order Reference': 'DP', 'Payment Plan': 'Full', 'Payment Status': 'Unpaid', 'Work Phase': 'Not started' })]);
+  const sandbox = makeSandbox({ sheet });
+  let res = sandbox.updateOrder({ ref: 'DP', row: 2, field: 'paymentPlan', value: 'Deposit 50%' });
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.order.paymentPlan, 'Deposit 50%');
+  res = sandbox.updateOrder({ ref: 'DP', row: 2, field: 'payment', value: 'Deposit paid' });
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.order.payment, 'Deposit paid');
+  console.log('✔ Suite 10a Passed\n');
+}
+
+console.log('--- SUITE 10b: an unpaid balance blocks dispatch server-side ---');
+{
+  const sheet = makeSheetStub([rowFor({ 'Order Reference': 'DUE', 'Payment Plan': 'Deposit 50%', 'Payment Status': 'Deposit paid', 'Work Phase': 'Ready for dispatch' })]);
+  const sandbox = makeSandbox({ sheet });
+  const res = sandbox.updateOrder({ ref: 'DUE', row: 2, field: 'phase', value: 'Shipped' });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.code, 'PAYMENT_DUE');
+  assert.strictEqual(sheet._writes.length, 0);
+  console.log('✔ Suite 10b Passed\n');
 }
 
 // ---------------------------------------------------------------------------

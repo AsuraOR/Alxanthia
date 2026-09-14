@@ -3946,7 +3946,6 @@
       '#buyer-name-label-text': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label-text': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
       '#location-legend': ck('checkoutLocationLegend'), '#location-type-label-text': `${ck('checkoutLocationTypeLabel')} `, '#regency-label-text': `${ck('checkoutRegencyLabel')} `,
       '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label-text': `${ck('checkoutAddressLabel')} `, '#city-label-text': `${ck('checkoutCityLabel')} `, '#postal-label-text': `${ck('checkoutPostalLabel')} `,
-      '#pickup-help': ck('checkoutPickupHelp'),
       '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
       '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
@@ -3958,6 +3957,23 @@
       '#postal-required': ck('checkoutRequiredMark'), '#date-required': ck('checkoutRequiredMark')
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
+    const pickupHelp = document.getElementById('pickup-help');
+    if (pickupHelp) {
+      const helpText = ck('checkoutPickupHelp');
+      const location = ck('checkoutPickupLocation');
+      const locationIndex = helpText.indexOf(location);
+      if (locationIndex >= 0) {
+        const strong = document.createElement('strong');
+        strong.textContent = location;
+        pickupHelp.replaceChildren(
+          helpText.slice(0, locationIndex),
+          strong,
+          helpText.slice(locationIndex + location.length)
+        );
+      } else {
+        pickupHelp.textContent = helpText;
+      }
+    }
     const form = document.getElementById('checkout-form');
     const en = currentLang === 'en';
     const setOptions = (name, options) => {

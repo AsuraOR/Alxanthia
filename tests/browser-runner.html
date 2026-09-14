@@ -14,7 +14,7 @@
   <h1>ALXANTHIA REAL-BROWSER TEST RUNNER</h1>
   <div id="status">Loading application iframe...</div>
   <pre id="results"></pre>
-  <iframe id="app-frame" src="../index.html?unlock=22062024"></iframe>
+  <iframe id="app-frame" title="Alxanthia application under test"></iframe>
 
   <script>
     const resultsEl = document.getElementById('results');
@@ -182,6 +182,15 @@
       console.log('BROWSER_SPEC_RESULTS:\n' + logs.join('\n'));
       document.body.setAttribute('data-done', 'true');
     };
+
+    // The production app intentionally no longer accepts a passcode through
+    // the URL. Seed the same non-sensitive browser flag used by the main
+    // Playwright suite before navigating the same-origin iframe, so focus is
+    // not trapped by the private-preview lock screen during these tests.
+    try {
+      iframe.contentWindow.localStorage.setItem('alxanthia_unlocked', 'true');
+    } catch (e) {}
+    iframe.src = '../index.html';
   </script>
 </body>
 </html>

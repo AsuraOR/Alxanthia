@@ -886,12 +886,7 @@ export default {
 
     let googleResult;
     try {
-      const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order })
-      });
-      googleResult = await googleResponse.json();
+      googleResult = await submitToGoogleScript(env, order);
     } catch (upstreamError) {
       log(order.order_reference, 'UPSTREAM_UNREACHABLE', origin);
       return reply({ ok: false, error: 'Order could not be stored.' }, 502, headers);
@@ -915,6 +910,30 @@ export default {
 
 function hostnameOf(originUrl) {
   try { return new URL(originUrl).hostname; } catch (e) { return ''; }
+}
+
+// A cold Apps Script instance can take long enough to wake up that the
+// connection drops before it replies at all — the customer sees a failed
+// checkout, then it works a moment later on their own retry. One automatic
+// retry here does the same thing without making them do it: it's safe
+// because Apps Script's doPost dedupes by idempotency_key (DEV-04), so a
+// retry of the same payload returns the original success instead of
+// storing a second row.
+async function submitToGoogleScript(env, order) {
+  const body = JSON.stringify({ webhook_secret: env.WEBHOOK_SECRET, order });
+  const attempts = 2;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const googleResponse = await fetch(env.GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body
+      });
+      return await googleResponse.json();
+    } catch (err) {
+      if (attempt === attempts) throw err;
+    }
+  }
 }
 
 const STATUS_BY_CODE = {

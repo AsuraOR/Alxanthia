@@ -3486,26 +3486,40 @@ function buildTicketLines_(items, catalog) {
         if (savedSettings) state.settings = Object.assign({}, DEFAULT_SETTINGS, JSON.parse(savedSettings));
       } catch (e) {}
 
-      // 2. Data source: Live Apps Script or Local Mockup Fallback
-      if (isAppsScript()) {
-        state.loading = true;
-        renderQueue();
+      // Initialize orders with cache/default so page is immediately populated
+      try {
+        const raw = localStorage.getItem('alx_desk_remake_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.orders && parsed.orders.length) state.orders = parsed.orders;
+          if (parsed.selectedRef) state.selectedRef = parsed.selectedRef;
+        } else {
+          state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
+          state.selectedRef = state.orders[0].ref;
+        }
+      } catch (e) {
+        state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
+        state.selectedRef = state.orders[0].ref;
+      }
 
+      // Render immediately so user sees UI instantly
+      renderAll();
+
+      // If running live inside Google Apps Script, fetch live orders & catalog in background
+      if (isAppsScript()) {
         google.script.run
           .withSuccessHandler(function(orders) {
-            state.loading = false;
-            state.orders = Array.isArray(orders) ? orders : [];
-            if (state.orders.length > 0) {
+            if (Array.isArray(orders) && orders.length > 0) {
+              state.orders = orders;
               if (!state.selectedRef || !state.orders.some(o => o.ref === state.selectedRef)) {
                 state.selectedRef = state.orders[0].ref;
               }
+              saveState();
+              renderAll();
             }
-            renderAll();
           })
           .withFailureHandler(function(err) {
-            state.loading = false;
-            showToast('Gagal memuat pesanan: ' + (err.message || err), true);
-            renderAll();
+            showToast('Gagal terhubung ke Sheet: ' + (err.message || err), true);
           })
           .listOrders();
 
@@ -3532,24 +3546,6 @@ function buildTicketLines_(items, catalog) {
             })
             .getDeskSettings();
         }
-      } else {
-        try {
-          const raw = localStorage.getItem('alx_desk_remake_v1');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.orders && parsed.orders.length) state.orders = parsed.orders;
-            if (parsed.selectedRef) state.selectedRef = parsed.selectedRef;
-            if (parsed.settings) state.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings);
-          } else {
-            state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
-            state.selectedRef = state.orders[0].ref;
-            saveState();
-          }
-        } catch (e) {
-          state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
-          state.selectedRef = state.orders[0].ref;
-        }
-        renderAll();
       }
     }
 
@@ -3559,13 +3555,11 @@ function buildTicketLines_(items, catalog) {
         localStorage.setItem('alx_desk_ticks', JSON.stringify(state.orderItemTicks));
         localStorage.setItem('alx_desk_prep_ticks', JSON.stringify(state.prepCheckedItems));
         localStorage.setItem('alx_desk_settings', JSON.stringify(state.settings));
-        if (!isAppsScript()) {
-          localStorage.setItem('alx_desk_remake_v1', JSON.stringify({
-            orders: state.orders,
-            selectedRef: state.selectedRef,
-            settings: state.settings
-          }));
-        }
+        localStorage.setItem('alx_desk_remake_v1', JSON.stringify({
+          orders: state.orders,
+          selectedRef: state.selectedRef,
+          settings: state.settings
+        }));
       } catch (e) {}
     }
 
@@ -3989,7 +3983,6 @@ function buildTicketLines_(items, catalog) {
     return buyer.indexOf(q) !== -1 || ref.indexOf(q) !== -1;
   }
 
-
   function paymentBlock(o) {
     var pay = o.payment;
     if (pay === 'Paid') return '';
@@ -3997,9 +3990,207 @@ function buildTicketLines_(items, catalog) {
     const totals = computeTotals(o);
     const isDepositPlan = o.paymentPlan === 'Deposit 50%';
     const isDepositReceived = o.payment === 'Deposit paid' || o.payment === 'Checking balance';
+    const isFullyPaid = false;
 
     return `
-        ${paymentBlock(order)}
+        <!-- 1. PEMBAYARAN & SISTEM DP -->
+        <div class="ticket-block">
+          <div class="block-title">
+            <span>Pembayaran & Skema DP</span>
+            <span style="font-family: var(--font-mono); font-size: 11px;">Status: <b>${o.payment}</b></span>
+          </div>
+
+          <div class="payment-box ${!isFullyPaid ? 'needs-attention' : ''}">
+            <!-- Skema Switcher -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
+                Pilih Skema Pembayaran:
+              </span>
+              <div class="plan-switch-group">
+                <button type="button" class="btn-plan ${!isDepositPlan ? 'active' : ''}" id="btn-plan-full">Bayar Penuh (100%)</button>
+                <button type="button" class="btn-plan ${isDepositPlan ? 'active' : ''}" id="btn-plan-dp">DP 50% (Uang Muka)</button>
+              </div>
+            </div>
+
+            <!-- Total display -->
+            <div class="payment-main-row">
+              <div class="amount-display">
+                <span class="amount-val">${formatRupiah(totals.finalTotal)}</span>
+                <span class="amount-lbl">Total keseluruhan pesanan</span>
+              </div>
+            </div>
+
+            <div class="payment-breakdown">
+              <span>Produk: <b>${formatRupiah(totals.product)}</b></span>
+              ${totals.card > 0 ? `<span>· Kartu: <b>${formatRupiah(totals.card)}</b></span>` : ''}
+              <span>· Ongkir: <b>${totals.shipping > 0 ? formatRupiah(totals.shipping) : 'Rp 0'}</b></span>
+            </div>
+
+            <!-- DP 50% Banner Card (jika DP aktif) -->
+            ${isDepositPlan ? `
+              <div class="dp-banner-card">
+                <div class="dp-banner-cell">
+                  <span class="dp-banner-label">Wajib DP 50% (Awal)</span>
+                  <span class="dp-banner-val" style="color: #8E520A;">${formatRupiah(totals.depositAmount)}</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">
+                    ${isDepositReceived || isFullyPaid ? '✓ DP Sudah Diterima' : '⏳ Belum Dibayar'}
+                  </span>
+                </div>
+                <div class="dp-banner-cell">
+                  <span class="dp-banner-label">Sisa Pelunasan (50%)</span>
+                  <span class="dp-banner-val">${formatRupiah(totals.balanceAmount)}</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">
+                    ${isFullyPaid ? '✓ Lunas Sepenuhnya' : (o.phase === 'Ready for dispatch' ? '⚠️ Wajib Lunas Sekarang' : 'Dibayar saat bunga siap kirim')}
+                  </span>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Input Ongkir -->
+            <div class="ongkir-input-row">
+              ${o.locationType === 'bali' ? `
+                <span class="ongkir-hint">
+                  ✓ <b>Ongkir Rp 0</b> — Pesanan area Bali. ${o.method === 'self_pickup' ? 'Pelanggan mengambil sendiri di studio.' : 'Ongkir Grab/Gojek dibayarkan pembeli langsung ke driver saat barang tiba.'}
+                </span>
+              ` : `
+                <label for="inp-ship-fee">Biaya Ongkir (Rp):</label>
+                <input type="number" id="inp-ship-fee" value="${o.shipping || ''}" placeholder="0" step="1000">
+                <span class="ongkir-hint">
+                  Kirim ke ${o.city || 'Luar Bali'}. Masukkan tarif ekspedisi; DP dan sisa pelunasan otomatis terhitung.
+                </span>
+              `}
+            </div>
+
+            <!-- Action Buttons for Payment / DP -->
+            <div class="payment-actions-row">
+              ${isDepositPlan ? `
+                ${!isDepositReceived && !isFullyPaid ? `
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-dp-paid">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Tandai DP 50% Diterima (${formatRupiah(totals.depositAmount)})
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-dp">
+                    Tandai DP Perlu Dicek
+                  </button>
+                ` : !isFullyPaid ? `
+                  <span style="font-size: 13px; font-weight: 600; color: #2A6638; background: #E8F5EB; padding: 6px 12px; border-radius: var(--radius-pill);">
+                    ✓ DP 50% Diterima — Rangkaian boleh dibuat
+                  </span>
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-full-paid" style="background: #1B532C;">
+                    Tandai Pelunasan Diterima (Lunas Total)
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-balance">
+                    Tandai Pelunasan Perlu Dicek
+                  </button>
+                ` : `
+                  <span style="font-size: 13px; font-weight: 700; color: #2A6638;">
+                    ✓ Lunas Sepenuhnya (DP & Pelunasan Beres)
+                  </span>
+                  <button type="button" class="btn-secondary" id="btn-revert-pay" style="font-size: 12px;">
+                    Ubah Status
+                  </button>
+                `}
+              ` : `
+                ${!isFullyPaid ? `
+                  <button type="button" class="btn-pay-confirm" id="btn-mark-full-paid">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Tandai Lunas Penuh (${formatRupiah(totals.finalTotal)})
+                  </button>
+                  <button type="button" class="btn-secondary" id="btn-check-transfer">
+                    Tandai Perlu Dicek
+                  </button>
+                ` : `
+                  <span style="font-size: 13px; font-weight: 700; color: #2A6638;">
+                    ✓ Pembayaran Lunas
+                  </span>
+                  <button type="button" class="btn-secondary" id="btn-revert-pay" style="font-size: 12px;">
+                    Ubah Status
+                  </button>
+                `}
+              `}
+              
+              <button type="button" class="btn-secondary" id="btn-copy-bill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Salin Rincian Rekening & Tagihan
+              </button>
+            </div>
+          </div>
+        </div>
+
+
+    `;
+  }
+
+  function renderTicket() {
+      const ticketEl = document.getElementById('ticket-pane');
+      const order = state.orders.find(o => o.ref === state.selectedRef);
+
+      if (!order) {
+        ticketEl.innerHTML = `
+          <div style="padding: 60px 20px; text-align: center; color: var(--text-muted);">
+            <p style="font-size: 16px; font-weight: 600;">Pilih pesanan di sebelah kiri</p>
+            <p style="font-size: 13px; opacity: 0.7;">Lembar kerja pembuat akan ditampilkan di sini.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const totals = computeTotals(order);
+      const d = daysUntil(order.date);
+      let headerCls = '';
+      if (order.phase !== 'Delivered') {
+        if (d < 0) headerCls = 'is-late';
+        else if (d === 0) headerCls = 'is-today';
+      }
+
+      const wrapInfo = CATALOG.wraps[order.wrap] || { swatch: '#ccc', name: order.wrap, note: '' };
+      const recipes = getItemRecipeList(order);
+      const orderTicks = state.orderItemTicks[order.ref] || {};
+      const completedCount = recipes.filter(r => orderTicks[r.key]).length;
+      const progressPct = recipes.length > 0 ? Math.round((completedCount / recipes.length) * 100) : 0;
+
+      const phaseIdx = PHASES.findIndex(p => p.key === order.phase);
+      const nextPhase = PHASES[phaseIdx + 1];
+
+      const cleanWa = (order.wa || '').replace(/[^0-9]/g, '');
+      const isDepositPlan = order.paymentPlan === 'Deposit 50%';
+      const isDepositReceived = order.payment === 'Deposit paid' || order.payment === 'Checking balance';
+      const isFullyPaid = order.payment === 'Paid';
+
+      ticketEl.innerHTML = `
+        <button type="button" class="ticket-mobile-back" id="btn-mobile-back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Kembali ke Antrean Pesanan
+        </button>
+
+        <!-- Ticket Header -->
+        <div class="ticket-header ${headerCls}">
+          <div class="buyer-info">
+            <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); margin-bottom: 2px;">
+              ${order.ref} · Masuk ${order.submitted}
+            </div>
+            <h2>${order.buyer}</h2>
+            <div class="buyer-links">
+              <a class="wa-link" href="https://wa.me/${cleanWa}" target="_blank" rel="noopener">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                Chat WhatsApp (${order.wa})
+              </a>
+              <span style="color: var(--text-muted);">
+                ${order.locationType === 'bali' 
+                  ? `🛵 Bali (${order.regency}) · ${order.method === 'self_pickup' ? 'Ambil Sendiri' : 'Grab/Gojek'}`
+                  : `📦 Ekspedisi ke ${order.city || 'Luar Bali'}`}
+              </span>
+            </div>
+          </div>
+
+          <div class="ticket-badges">
+            <div class="due-headline">${order.date}</div>
+            <div class="due-relative">${formatRelativeDate(order.date)}</div>
+          </div>
+        </div>
+
+        <div class="ticket-body">
+          ${paymentBlock(order)}
 
         <!-- 2. WHATSAPP ASSISTANT (Connected to Template Settings) -->
         <div class="ticket-block">

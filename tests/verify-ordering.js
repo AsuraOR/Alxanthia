@@ -326,6 +326,11 @@ registerEl('span', 'custom-min-warning-text');
 registerEl('p', 'order-note');
 registerEl('div', 'order-announcer');
 
+// Native checkout trigger (ALX-11)
+const btnCheckout = registerEl('button', 'btn-checkout', 'btn-channel');
+btnCheckout.appendChild(createMockElement('span', '', 'channel-name'));
+btnCheckout.appendChild(createMockElement('span', '', 'channel-action'));
+
 // Channel elements
 const btnWhatsapp = registerEl('a', 'btn-whatsapp', 'btn-channel btn-whatsapp-primary');
 btnWhatsapp.appendChild(createMockElement('span', '', 'channel-name'));
@@ -369,6 +374,7 @@ registerEl('div', 'nav-menu');
 registerEl('div', 'nav-scrim');
 registerEl('a', 'brand-link');
 registerEl('button', 'btn-edit-selection');
+registerEl('h3', 'cat1-title');
 registerEl('h3', 'finish-label');
 registerEl('textarea', 'card-note-input');
 registerEl('textarea', 'order-note-input');
@@ -595,7 +601,7 @@ assert.strictEqual(app.getState().orderMode, 'stem');
 assert.strictEqual(app.getState().selectedFlower, 'Tulip');
 
 assert.strictEqual(cartLineEls().length, 1, 'Selecting a stem from empty must yield exactly one cart line');
-assert.strictEqual(cartLineTitle(0), 'Tulip');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Tanpa kertas pembungkus');
 assert.strictEqual(summaryPrice.textContent, 'Rp 50.000');
 
 // WhatsApp button must now be active
@@ -611,8 +617,8 @@ assert(decodedWa.includes('belum termasuk ongkir'), 'WhatsApp text must specify 
 // P1-01 / P1-02: exercise production message assembly for every mode and language.
 const originalMessageData = JSON.parse(JSON.stringify(app.getData()));
 const messageCases = [
-  ['id', 'stem', 'Halo Alxanthia! Saya ingin memesan 1 × Mawar — tangkai jadi — Total Rp 60.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 60.000'],
-  ['en', 'stem', 'Hello Alxanthia! I would like to order 1 × Rose — finished stem — Total Rp 60.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 60.000'],
+  ['id', 'stem', 'Halo Alxanthia! Saya ingin memesan 1 × Mawar — tangkai jadi · Tanpa kertas pembungkus — Total Rp 60.000 (belum termasuk ongkir). Apakah masih tersedia?', 'Rp 60.000'],
+  ['en', 'stem', 'Hello Alxanthia! I would like to order 1 × Rose — finished stem · Without wrapping paper — Total Rp 60.000 (excludes delivery fee). Is it available?', 'Rp 60.000'],
   ['id', 'package', 'Halo Alxanthia! Saya ingin memesan Buket Mini (3 tangkai) — Rp 195.000 (belum termasuk ongkir). Pembungkus: Kraft. Apakah masih tersedia?', 'Rp 195.000'],
   ['en', 'package', 'Hello Alxanthia! I would like to order The Posy (3 stems) — Rp 195.000 (excludes delivery fee). Wrap: Kraft. Is it available?', 'Rp 195.000'],
   ['id', 'custom', 'Halo Alxanthia! Saya ingin memesan Buket Custom (3 tangkai, estimasi Rp 205.000, belum termasuk ongkir):\n• 2 × Bunga Matahari\n• 1 × Mawar\nPembungkus: Kraft. Apakah bisa dibuatkan?', 'Rp 205.000'],
@@ -635,7 +641,7 @@ for (const [lang, mode, expected, total] of messageCases) {
   assert(!/[{}]/.test(readWaMessage()), `${lang}/${mode}: empty note must leave no braces`);
   if (mode === 'stem') {
     assert(!/\(\s*—/.test(readWaMessage()), `${lang}: stem suffix must not be parenthesized`);
-    assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar' : 'Rose');
+    assert.strictEqual(cartLineTitle(0), lang === 'id' ? 'Mawar — Tanpa kertas pembungkus' : 'Rose — Without wrapping paper');
   }
   // With the message-card checkbox off, note text must never leak into the message.
   app.setOrderNote('Untuk {Alam}');
@@ -694,13 +700,39 @@ console.log('\n--- SUITE 4: Cart-Line Quantity Stepper ---');
 const tulipLineId = app.getCart()[0].id;
 app.bumpLineQty(tulipLineId, 2); // 1 + 2 = 3 stems
 assert.strictEqual(cartLineEls().length, 1, 'Bumping qty must mutate the existing line, not add a new one');
-assert.strictEqual(cartLineTitle(0), 'Tulip');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Tanpa kertas pembungkus');
 assert.strictEqual(cartLineQty(0), '3');
 assert.strictEqual(summaryPrice.textContent, 'Rp 150.000');
 
 const decodedWaQty = decodeURIComponent(waBtn.getAttribute('href'));
-assert(decodedWaQty.includes('3 × Tulip — tangkai jadi — Total Rp 150.000'));
+assert(decodedWaQty.includes('3 × Tulip — tangkai jadi · Tanpa kertas pembungkus — Total Rp 150.000'));
 console.log('✔ Suite 4 Passed: 3x Tulip calculated exactly to Rp 150.000 in summary and message');
+
+// Finished flowers are two distinct variants. Wrapping is Rp5.000 per stem,
+// and wrapped/unwrapped selections must never merge into one ambiguous line.
+app.resetToInitial();
+app.selectStem('Tulip', false, true);
+assert.strictEqual(app.getCart()[0].wrapped, true);
+assert.strictEqual(summaryPrice.textContent, 'Rp 55.000');
+assert.strictEqual(cartLineTitle(0), 'Tulip — Dengan kertas pembungkus');
+assert(decodeURIComponent(waBtn.getAttribute('href')).includes('Dengan kertas pembungkus'));
+assert(!decodeURIComponent(waBtn.getAttribute('href')).includes('Pembungkus: Kraft'), 'A wrapped individual flower must not ask for a bouquet paper colour');
+assert.strictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must stay hidden for individual flowers');
+app.selectStem('Tulip', false, false);
+assert.strictEqual(app.getCart().length, 2, 'Wrapped and unwrapped versions of the same flower must remain separate cart lines');
+assert.strictEqual(summaryPrice.textContent, 'Rp 105.000');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(app.normalizedCheckoutState().itemData)), [
+  { type: 'stem', id: 'Tulip', wrapped: true, qty: 1 },
+  { type: 'stem', id: 'Tulip', wrapped: false, qty: 1 }
+]);
+
+app.resetToInitial();
+app.selectPackage(0, false);
+assert.notStrictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must appear for a predefined bouquet');
+app.resetToInitial();
+app.bumpCustom('Rose', 3);
+app.useCustom();
+assert.notStrictEqual(mockDocument.getElementById('wrap-chips').style.display, 'none', 'Bouquet colour options must appear for a custom bouquet');
 
 // ---------------------------------------------------------------------------
 // Suite 5: Florist Bouquet Packages (Tiers 0, 1, 2, 3)
@@ -1238,7 +1270,7 @@ app.selectPackage(0, false); // Buket Mini: 3 stems, Rp 195.000
 app.bumpCustom('Rose', 3);
 app.useCustom(); // Buket custom (3 tangkai): Rp 180.000 flowers + Rp 35.000 wrap = Rp 215.000
 const mixedMsg = decodeURIComponent(waBtn.getAttribute('href'));
-assert(mixedMsg.includes('2 × Bunga Matahari — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem line');
+assert(mixedMsg.includes('2 × Bunga Matahari — Tanpa kertas pembungkus — Rp 110.000'), 'Mixed-cart WhatsApp message must enumerate the stem variant');
 assert(mixedMsg.includes('1 × Buket Mini — Rp 195.000'), 'Mixed-cart WhatsApp message must enumerate the package line');
 assert(mixedMsg.includes('Buket custom (3 tangkai) — Rp 215.000'), 'Mixed-cart WhatsApp message must enumerate the custom line, including its own wrap fee');
 const mixedCartTotal = app.computeCartTotals(app.getCart());
@@ -1303,7 +1335,7 @@ assert.strictEqual(includesList.children.length, 0);
 
 const pickerFlowers = mockDocument.getElementById('order-picker-flowers');
 const pickerPackages = mockDocument.getElementById('order-picker-packages');
-assert.strictEqual(pickerFlowers.children.length, 4, 'Picker must render one tile per flower');
+assert.strictEqual(pickerFlowers.children.length, 8, 'Picker must render wrapped and unwrapped tiles for every flower');
 assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
 
 // Clicking a picker tile adds a line and scrolls to #order, same as every
@@ -1526,8 +1558,201 @@ app.resetToInitial();
 console.log('✔ Suite 26 Passed: Cart, wrap and gift note survive a reload; stale or corrupt storage is validated and never breaks the page');
 
 // ---------------------------------------------------------------------------
+console.log('\n--- SUITE 27: Cart & Custom-Builder Limits Mirror the Server (ALX-06) ---');
+
+// A single line can never exceed the server's MAX_QTY_PER_LINE (20).
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+const roseLineId = app.getCart()[0].id;
+for (let i = 0; i < 30; i += 1) app.bumpLineQty(roseLineId, 1);
+assert.strictEqual(app.getCart().find(l => l.id === roseLineId).qty, 20, 'A line quantity must clamp at MAX_QTY_PER_LINE (20), matching the server cap');
+
+// The whole order can never exceed MAX_TOTAL_QTY (60), even split across
+// several lines that each individually stay under MAX_QTY_PER_LINE.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.bumpLineQty(app.getCart()[0].id, 19); // Rose line at 20
+app.selectStem('Tulip', false);
+app.bumpLineQty(app.getCart().find(l => l.flowerKey === 'Tulip').id, 19); // Tulip line at 20
+app.selectStem('Sunflower', false);
+app.bumpLineQty(app.getCart().find(l => l.flowerKey === 'Sunflower').id, 25); // would be 26, but total cap is 60
+const totalQtyAfterCap = app.getCart().reduce((sum, l) => sum + l.qty, 0);
+assert.strictEqual(totalQtyAfterCap, 60, 'The order total must clamp at MAX_TOTAL_QTY (60) across lines, matching the server cap');
+
+// Distinct lines can never exceed MAX_LINES_PER_ORDER (20) — custom bouquets
+// never merge, so repeated commits are an easy way to reach many distinct lines.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.bumpCustom('Rose', 3);
+for (let i = 0; i < 25; i += 1) app.useCustom();
+assert.strictEqual(app.getCart().length, 20, 'The order must clamp at MAX_LINES_PER_ORDER (20) distinct lines, matching the server cap');
+
+// The custom-builder draft can never exceed MAX_CUSTOM_STEMS_PER_FLOWER (60)
+// per flower, nor MAX_CUSTOM_TOTAL_STEMS (60) across the whole draft.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetCustom();
+app.bumpCustom('Rose', 90);
+assert.strictEqual(app.getState().customCounts.Rose, 60, 'A single custom-flower count must clamp at MAX_CUSTOM_STEMS_PER_FLOWER (60)');
+app.resetCustom();
+app.bumpCustom('Rose', 40);
+app.bumpCustom('Tulip', 40); // would bring the draft total to 80, over MAX_CUSTOM_TOTAL_STEMS
+const customTotalAfterCap = app.getState().customCounts.Rose + app.getState().customCounts.Tulip;
+assert.strictEqual(customTotalAfterCap, 60, 'The custom-builder draft total must clamp at MAX_CUSTOM_TOTAL_STEMS (60)');
+
+// A custom addition can never exceed MAX_CUSTOM_ADDITION_PER_KEY (60), and —
+// unlike before this fix — the draft's addition counts now survive a reload.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetCustom();
+app.bumpCustom('Rose', 5);
+app.bumpCustomAddition('rounded', 90);
+assert.strictEqual(app.getState().customAdditions.rounded, 60, 'A custom addition count must clamp at MAX_CUSTOM_ADDITION_PER_KEY (60)');
+app.bumpCustomAddition('rounded', -55); // down to 5, well within bounds, to keep the reload check simple
+app.resetToInitial();
+app.restoreCartFromStorage();
+assert.strictEqual(app.getState().customAdditions.rounded, 5, 'ALX-14: the custom-builder draft\'s addition counts must survive a simulated reload');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 27 Passed: cart lines, order totals, and the custom-builder draft all enforce the same limits as the server, and draft additions persist');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 28: Website Ordering Availability (ALX-11) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false); // a valid, otherwise-checkoutable cart
+
+const origDataA11 = JSON.parse(JSON.stringify(app.getData()));
+
+const pausedData = JSON.parse(JSON.stringify(origDataA11));
+pausedData.store.channels.showWhatsapp = false;
+pausedData.store.channels.showShopee = false;
+app.setData(pausedData);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, true, 'The checkout button must disable when both manual channels are unavailable, even with a valid cart');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), false, 'isWebsiteOrderingAvailable must report false when both channels are paused');
+
+const unconfiguredData = JSON.parse(JSON.stringify(origDataA11));
+unconfiguredData.store.orderSubmissionUrl = '';
+app.setData(unconfiguredData);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, true, 'The checkout button must disable when the submission endpoint is not configured, even with a valid cart and active channels');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), false, 'isWebsiteOrderingAvailable must report false when the endpoint is unconfigured');
+
+app.setData(origDataA11);
+assert.strictEqual(mockDocument.getElementById('btn-checkout').disabled, false, 'The checkout button must re-enable once channels and the endpoint are both available again');
+assert.strictEqual(app.isWebsiteOrderingAvailable(), true, 'isWebsiteOrderingAvailable must report true when at least one channel and the endpoint are both available');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 28 Passed: website ordering availability follows one explicit rule, applied to the checkout button and independent of cosmetic channel visibility');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 29: Bali Business Date, Not Visitor-Local (ALX-12) ---');
+// 2026-09-11T16:30:00Z is 23:30 WIB (Jakarta) but already 00:30 WITA (Bali)
+// on the NEXT calendar day — exactly the window where a visitor-local
+// "today" used to disagree with the server's Asia/Makassar floor. Every
+// visitor, regardless of their own browser timezone, must get the same
+// answer here, because todayBaliISO() never reads the visitor's local zone.
+const pinnedInstant = new Date('2026-09-11T16:30:00Z');
+assert.strictEqual(app.todayBaliISO(pinnedInstant), '2026-09-12', 'todayBaliISO must resolve to the Bali calendar date at this instant, one day ahead of Jakarta\'s local date');
+assert.strictEqual(app.addDaysToISODate('2026-09-12', 2), '2026-09-14', 'addDaysToISODate must add calendar days without any timezone re-entering the calculation');
+const pinnedReference = app.generateOrderReference(pinnedInstant);
+assert(pinnedReference.startsWith('ALX-260912-'), `the order reference's date segment must use the Bali date (260912), not Jakarta's local date: "${pinnedReference}"`);
+console.log('✔ Suite 29 Passed: the business date used for the picker minimum and the order reference is the same Bali date regardless of the visitor\'s own timezone');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 30: Card Recipient/Sender Fields Excluded When Disabled (ALX-13) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.setOrderRecipientName('Ayu');
+app.setOrderCardSenderName('Sagita');
+app.setMessageCardEnabled(true);
+app.setOrderNote('Selamat ulang tahun!');
+const cardOnState = app.normalizedCheckoutState();
+assert.strictEqual(cardOnState.recipientName, 'Ayu', 'Recipient name must be submitted while the card is enabled');
+assert.strictEqual(cardOnState.cardSenderName, 'Sagita', 'Card sender name must be submitted while the card is enabled');
+
+// Uncheck the card — the UI hides these fields, so the submitted payload
+// must not keep sending names the customer believes they removed, even
+// though the draft values are left in place for re-enabling.
+app.setMessageCardEnabled(false);
+const cardOffState = app.normalizedCheckoutState();
+assert.strictEqual(cardOffState.recipientName, '', 'Recipient name must be excluded from the submitted payload once the card is disabled');
+assert.strictEqual(cardOffState.cardSenderName, '', 'Card sender name must be excluded from the submitted payload once the card is disabled');
+assert.strictEqual(cardOffState.giftMessage, '', 'Gift message must also be excluded once the card is disabled');
+assert.strictEqual(app.getState().orderRecipientName, 'Ayu', 'The draft recipient name itself is preserved (not cleared) so re-enabling the card restores it');
+
+app.setMessageCardEnabled(true);
+const cardReenabledState = app.normalizedCheckoutState();
+assert.strictEqual(cardReenabledState.recipientName, 'Ayu', 'Re-enabling the card must resubmit the preserved draft name');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 30 Passed: card recipient/sender/gift-message fields are excluded from submission whenever the card is disabled, while the draft itself survives for re-enabling');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 31: Edit Selection Reveals a Visible Category (ALX-15) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectStem('Rose', false);
+app.setCategory('pots'); // hides #collection entirely
+const colSectionBeforeEdit = mockDocument.getElementById('collection');
+assert.strictEqual(colSectionBeforeEdit.style.display, 'none', 'Setup: the pots filter must actually hide #collection');
+
+const editSelectionBtn = mockDocument.getElementById('btn-edit-selection');
+editSelectionBtn.click();
+assert.strictEqual(colSectionBeforeEdit.style.display, '', 'Clicking Edit selection must reveal #collection even when a category filter was hiding it');
+assert.strictEqual(app.getState().activeCategory, 'all', 'Edit selection must switch back to the "all" category so every product family is visible');
+assert.strictEqual(mockDocument.activeElement, mockDocument.getElementById('cat1-title'), 'Focus must land on a visible heading after Edit selection, for keyboard users');
+assert.strictEqual(app.getCart().length, 1, 'Edit selection must never discard the existing cart');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 31 Passed: Edit selection reveals a visible category from any filter, focuses a real heading, and never touches the cart');
+
+// ---------------------------------------------------------------------------
+console.log('\n--- SUITE 32: Cart Labels Describe the Action and the Products (ALX-16) ---');
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+
+// A mini-pot-only cart carries no stems — the sticky bar must not claim "0 tangkai".
+app.selectMiniPot('daisy', false);
+const potOnlySticky = mockDocument.getElementById('sticky-order-title').textContent;
+assert(!potOnlySticky.includes('0'), `A pot-only cart's sticky title must not show a stem count of 0: "${potOnlySticky}"`);
+assert(potOnlySticky.toLowerCase().includes('daisy') || potOnlySticky.toLowerCase().includes('daisi'), `A single-line cart's sticky title should name the actual product: "${potOnlySticky}"`);
+
+// A second, different product makes this a real multi-item cart — the
+// sticky bar must show a real item count, not a stem total that would
+// still be wrong for a mixed pot+stem cart.
+app.selectStem('Rose', false);
+const mixedSticky = mockDocument.getElementById('sticky-order-title').textContent;
+assert.strictEqual(app.getCart().length, 2, 'Setup: the cart must now have two distinct lines');
+assert(mixedSticky.includes('2'), `A two-line cart's sticky title must reflect the real line count: "${mixedSticky}"`);
+
+// The package "choose" button's active-state label used to read "✓ Selected"
+// even though clicking it again increments the quantity rather than
+// toggling it off. Verified in this suite via the underlying template
+// logic directly (the mock DOM's simplified HTML parser can't reliably
+// reconstruct this card's deeply-nested markup); the real-browser suite
+// (browser-runner.html) verifies the rendered button text end to end.
+app.resetToInitial();
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.selectPackage(0, false);
+assert.strictEqual(app.getCart()[0].qty, 1, 'Setup: one package must be in the cart');
+const pkgBtnActiveTemplate = app.getData().translations.id.pkgBtnActive;
+assert(!pkgBtnActiveTemplate.toLowerCase().includes('dipilih') && !pkgBtnActiveTemplate.toLowerCase().includes('selected'), `The active package button's label must not be a static "Selected"/"Dipilih" that conceals the increment action: "${pkgBtnActiveTemplate}"`);
+assert(pkgBtnActiveTemplate.includes('{qty}'), 'The active package button label must include a quantity placeholder so the customer sees the real count');
+
+mockLocalStorage.removeItem(CART_STORAGE_KEY);
+app.resetToInitial();
+console.log('✔ Suite 32 Passed: the sticky bar shows the real product/item count, and the package button label no longer implies a toggle it isn\'t');
+
+// ---------------------------------------------------------------------------
 // All Suites Completed
 // ---------------------------------------------------------------------------
 console.log('\n======================================================================');
-console.log('✔ ALL 26 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 32 INTEGRATION TEST SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

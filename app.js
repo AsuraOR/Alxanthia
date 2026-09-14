@@ -12,7 +12,26 @@
   const LANG_KEY = 'alxanthia.lang';
   const AUTH_KEY = 'alxanthia_unlocked';
   const CART_KEY = 'alxanthia_cart_v1';
+  // ALX-03: the reference/idempotency key/fingerprint of a submission whose
+  // outcome is not yet known to be safely retryable — written before the
+  // network call, so a lost response (reload, tab close, dropped connection)
+  // can resume the SAME attempt instead of minting a new idempotency key and
+  // risking a second real order for a request the server may have already stored.
+  const PENDING_ATTEMPT_KEY = 'alxanthia_pending_attempt';
+  const PENDING_ATTEMPT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — short and documented (ALX-03)
   const CARD_NOTE_MAX = 200;
+  // ALX-06: mirrors CONFIGURE-SUBMISSION-ENDPOINT.md's MAX_QTY_PER_LINE /
+  // MAX_LINES_PER_ORDER / MAX_TOTAL_QTY / MAX_CUSTOM_* / MAX_TEXT exactly —
+  // that file is the source of truth; keep both in sync if either changes.
+  const MAX_QTY_PER_LINE = 20;
+  const MAX_LINES_PER_ORDER = 20;
+  const MAX_TOTAL_QTY = 60;
+  const MAX_CUSTOM_STEMS_PER_FLOWER = 60;
+  const MAX_CUSTOM_TOTAL_STEMS = 60;
+  const MAX_CUSTOM_ADDITION_PER_KEY = 60;
+  const MAX_TEXT = { buyer_name: 120, address: 300, city: 100, gift_message: 200, recipient_name: 120, card_sender_name: 120 };
+  const SINGLE_STEM_WRAP_PRICE = 5000;
+  const CATALOG_VERSION = 2;
 
   // State
   let currentLang = 'id';
@@ -20,7 +39,7 @@
   let selectedPackage = 1; // 0: Posy (3), 1: Handful (5), 2: Armful (9), 3: Grand (15)
   let customCounts = { Sunflower: 0, Rose: 0, Tulip: 0, Gerbera: 0 }; // Starts empty (no silent preselection)
   let customAdditions = { rounded: 0, fern: 0 }; // quantity per addition, not a boolean toggle
-  let cart = []; // line items: { id, type: 'stem'|'pot'|'package'|'custom', ...type-specific fields, qty }
+  let cart = []; // stem lines also carry `wrapped` so both variants can coexist
   let nextLineId = 1;
   let selectedWrap = 'kraft';
   let orderNote = '';
@@ -62,13 +81,26 @@
     return 'Rp ' + Math.round(n).toLocaleString('id-ID');
   }
 
+  function stemWrapLabel(wrapped, lang = currentLang) {
+    if (lang === 'en') return wrapped ? 'With wrapping paper' : 'Without wrapping paper';
+    return wrapped ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus';
+  }
+
+  function stemOrderButtonLabel(wrapped, lang = currentLang) {
+    if (lang === 'en') return wrapped ? 'With wrap' : 'Without wrap';
+    return wrapped ? 'Dengan bungkus' : 'Tanpa bungkus';
+  }
+
   /**
    * Load data directly from site-content.js (window.ALXANTHIA_DATA)
    */
   function loadData() {
-    if (window.ALXANTHIA_DATA) {
-      siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
+    if (!window.ALXANTHIA_DATA) {
+      // A vague "Cannot read properties of null" surfaces later, from every
+      // call site that reads siteData — name the real cause here instead (ALX-22).
+      throw new Error('site-content.js failed to load or has a syntax error: window.ALXANTHIA_DATA is missing.');
     }
+    siteData = JSON.parse(JSON.stringify(window.ALXANTHIA_DATA));
   }
 
   /**
@@ -80,7 +112,7 @@
   function persistCart() {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify({
-        cart, wrapKey: selectedWrap, orderNote, customCounts,
+        cart, wrapKey: selectedWrap, orderNote, customCounts, customAdditions,
         messageCardEnabled, orderRecipientName, orderCardSenderName
       }));
     } catch (e) {}
@@ -108,7 +140,7 @@
         if (!(qty > 0)) return;
 
         if (line.type === 'stem' && siteData.flowers[line.flowerKey]) {
-          restoredLines.push({ type: 'stem', flowerKey: line.flowerKey, qty, _id: line.id });
+          restoredLines.push({ type: 'stem', flowerKey: line.flowerKey, wrapped: line.wrapped === true, qty, _id: line.id });
         } else if (line.type === 'pot' && (siteData.miniPots || []).some(p => p.key === line.potKey)) {
           restoredLines.push({ type: 'pot', potKey: line.potKey, qty, _id: line.id });
         } else if (line.type === 'package' && Number.isInteger(line.pkgIndex) && line.pkgIndex >= 0 && line.pkgIndex < (siteData.packages || []).length) {
@@ -155,9 +187,24 @@
         orderNote = parsed.orderNote.slice(0, CARD_NOTE_MAX);
       }
       if (parsed.customCounts && typeof parsed.customCounts === 'object') {
+        // ALX-06: re-clamp on restore too — a stale or hand-edited payload
+        // must never bypass the per-flower/total-stem caps.
+        let restoredTotal = 0;
         order.forEach(key => {
           const c = Math.floor(Number(parsed.customCounts[key]));
-          customCounts[key] = c > 0 ? c : 0;
+          const clamped = c > 0 ? Math.min(c, MAX_CUSTOM_STEMS_PER_FLOWER) : 0;
+          const withinTotal = Math.min(clamped, Math.max(0, MAX_CUSTOM_TOTAL_STEMS - restoredTotal));
+          customCounts[key] = withinTotal;
+          restoredTotal += withinTotal;
+        });
+      }
+      // ALX-14: the in-progress custom-builder draft's leaf additions were
+      // never persisted at all — a reload silently zeroed them out even
+      // though committed cart lines kept theirs.
+      if (parsed.customAdditions && typeof parsed.customAdditions === 'object') {
+        (siteData.customAdditions || []).forEach(addition => {
+          const c = Math.floor(Number(parsed.customAdditions[addition.key]));
+          customAdditions[addition.key] = c > 0 ? Math.min(c, MAX_CUSTOM_ADDITION_PER_KEY) : 0;
         });
       }
       messageCardEnabled = !!parsed.messageCardEnabled;
@@ -183,6 +230,23 @@
     const isShown = siteData.store.channels?.showShopee !== false;
     const url = String(siteData.store.shopeeUrl || '').trim();
     return isShown && !!url && url !== '#' && url !== 'https://shopee.co.id';
+  }
+
+  /**
+   * ALX-11: the single source of truth for whether the native checkout
+   * (website ordering) should be offered at all — separate from cosmetic
+   * WhatsApp/Shopee button visibility. Every order here still needs a
+   * manual studio confirmation afterward (order-request model, not instant
+   * purchase — see AUDIT.md instruction 4), so it only makes sense while
+   * the endpoint is actually configured AND at least one manual channel is
+   * reachable for that follow-up. A client-side check like this is a UX
+   * convenience, never an access control — see doPost's ORDERING_PAUSED
+   * Script Property for the real server-side stop.
+   */
+  function isWebsiteOrderingAvailable() {
+    if (!siteData || !siteData.store) return false;
+    const endpointConfigured = !!String(siteData.store.orderSubmissionUrl || '').trim();
+    return endpointConfigured && (isWhatsAppReady() || isShopeeReady());
   }
 
   /**
@@ -351,7 +415,8 @@
 
       if (line.type === 'stem') {
         const flower = siteData.flowers[line.flowerKey];
-        const price = flower ? (flower.stemPrice || 55000) : 55000;
+        const basePrice = flower ? (flower.stemPrice || 55000) : 55000;
+        const price = basePrice + (line.wrapped === true ? SINGLE_STEM_WRAP_PRICE : 0);
         stems = line.qty;
         subtotal = price * line.qty;
       } else if (line.type === 'pot') {
@@ -406,7 +471,8 @@
     const t = siteData.translations[lang] || siteData.translations.id;
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
-      return `${line.qty} × ${(flower && (flower[lang] || flower.en).name) || line.flowerKey}`;
+      const wrapLabel = stemWrapLabel(line.wrapped === true, lang);
+      return `${line.qty} × ${(flower && (flower[lang] || flower.en).name) || line.flowerKey} — ${wrapLabel}`;
     }
     if (line.type === 'pot') {
       const pot = (siteData.miniPots || []).find(item => item.key === line.potKey);
@@ -435,7 +501,7 @@
     const totals = computeCartTotals(cart);
     const types = [...new Set(cart.map(line => line.type))];
     const itemData = cart.map(line => {
-      if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, qty: line.qty };
+      if (line.type === 'stem') return { type: 'stem', id: line.flowerKey, wrapped: line.wrapped === true, qty: line.qty };
       if (line.type === 'pot') return { type: 'pot', id: line.potKey, qty: line.qty };
       if (line.type === 'package') return { type: 'package', id: String(line.pkgIndex), qty: line.qty };
       return { type: 'custom', qty: line.qty, additions: { ...(line.additions || {}) }, stems: siteData.flowerOrder.reduce((out, key) => {
@@ -455,9 +521,13 @@
       wrapId: selectedWrap,
       messageCardEnabled,
       messageCardFee: totals.messageCardFee,
+      // ALX-13: recipient/sender names are card-specific fields, same as
+      // giftMessage above — the UI hides them the instant the card is
+      // unchecked, so the submitted payload must not keep sending names a
+      // customer believes they already removed.
       giftMessage: messageCardEnabled ? orderNote : '',
-      recipientName: orderRecipientName,
-      cardSenderName: orderCardSenderName,
+      recipientName: messageCardEnabled ? orderRecipientName : '',
+      cardSenderName: messageCardEnabled ? orderCardSenderName : '',
       productSubtotal: totals.subtotal + totals.wrapFee,
       estimatedProductTotal: totals.total,
       currency: 'IDR', language: currentLang, isValid: totals.isValid
@@ -465,7 +535,13 @@
   }
 
   function generateOrderReference(now = new Date()) {
-    const date = [String(now.getFullYear()).slice(-2), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
+    // ALX-12: the reference's YYMMDD segment used the visitor's local date,
+    // so a late-evening order from a western timezone could carry a
+    // reference dated a day before its Sheet timestamp. Anchored at the
+    // same Bali business date as the date picker's minimum, for the same
+    // reason.
+    const iso = todayBaliISO(now);
+    const date = iso.slice(2, 4) + iso.slice(5, 7) + iso.slice(8, 10);
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const bytes = new Uint8Array(4);
     if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
@@ -534,7 +610,7 @@
     return {
       order_reference: reference,
       idempotency_key: idempotencyKey,
-      catalog_version: siteData.catalogVersion ?? 1,
+      catalog_version: CATALOG_VERSION,
       cf_turnstile_token: turnstileToken,
       submitted_language: state.language,
       order_mode: state.orderMode,
@@ -596,6 +672,26 @@
   }
 
   /**
+   * Visible + screen-reader-announced feedback when a cart/custom-builder
+   * limit is hit, instead of silently clamping or letting the order reach
+   * the server only to fail there (ALX-06).
+   */
+  let cartLimitNoticeTimer = null;
+  function showCartLimitNotice(key, vars) {
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const message = fillTemplate(t[key] || '', vars);
+    if (!message) return;
+    const el = document.getElementById('cart-limit-notice');
+    if (el) {
+      el.textContent = message;
+      el.hidden = false;
+      if (cartLimitNoticeTimer) clearTimeout(cartLimitNoticeTimer);
+      cartLimitNoticeTimer = setTimeout(() => { el.hidden = true; }, 5000);
+    }
+    announceToScreenReader(message);
+  }
+
+  /**
    * Announce a cart mutation via the single #order-announcer live region.
    * Throttled to at most one DOM write per 500ms so holding a stepper
    * button doesn't flood the queue — a rapid burst still ends with one
@@ -629,20 +725,36 @@
    * never merge — each committed bouquet is a distinct line.
    */
   function addLine(lineSpec) {
-    const addQty = lineSpec.qty || 1;
+    const requestedQty = lineSpec.qty || 1;
     let line;
+    let existing;
     if (lineSpec.type !== 'custom') {
-      const existing = cart.find(l => l.type === lineSpec.type && (
-        lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey :
+      existing = cart.find(l => l.type === lineSpec.type && (
+        lineSpec.type === 'stem' ? l.flowerKey === lineSpec.flowerKey && (l.wrapped === true) === (lineSpec.wrapped === true) :
         lineSpec.type === 'pot' ? l.potKey === lineSpec.potKey :
         l.pkgIndex === lineSpec.pkgIndex
       ));
-      if (existing) {
-        existing.qty += addQty;
-        line = existing;
-      }
     }
-    if (!line) {
+
+    // ALX-06: never let a merge or a new line exceed the server's caps —
+    // MAX_QTY_PER_LINE for one line, MAX_LINES_PER_ORDER for distinct
+    // lines, MAX_TOTAL_QTY for the whole order.
+    if (!existing && cart.length >= MAX_LINES_PER_ORDER) {
+      showCartLimitNotice('cartLimitLines', { max: MAX_LINES_PER_ORDER });
+      return existing || null;
+    }
+    const lineCeiling = existing ? Math.max(0, MAX_QTY_PER_LINE - existing.qty) : MAX_QTY_PER_LINE;
+    const totalCeiling = Math.max(0, MAX_TOTAL_QTY - cartUnitCount());
+    const addQty = Math.max(0, Math.min(requestedQty, lineCeiling, totalCeiling));
+    if (addQty < requestedQty) {
+      showCartLimitNotice(addQty < requestedQty && lineCeiling < totalCeiling ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: lineCeiling < totalCeiling ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+    }
+    if (addQty <= 0) return existing || null;
+
+    if (existing) {
+      existing.qty += addQty;
+      line = existing;
+    } else {
       line = { ...lineSpec, id: nextLineId++, qty: addQty };
       cart.push(line);
     }
@@ -693,10 +805,21 @@
   function bumpLineQty(id, delta) {
     const line = cart.find(l => l.id === id);
     if (!line) return;
-    const newQty = line.qty + delta;
+    let newQty = line.qty + delta;
     if (newQty <= 0) {
       removeLine(id);
       return;
+    }
+    // ALX-06: mirrors the server's MAX_QTY_PER_LINE / MAX_TOTAL_QTY caps —
+    // an increment can't push a line, or the order, past what doPost would
+    // reject anyway.
+    if (delta > 0) {
+      const totalCeiling = MAX_TOTAL_QTY - (cartUnitCount() - line.qty);
+      const clamped = Math.min(newQty, MAX_QTY_PER_LINE, totalCeiling);
+      if (clamped < newQty) {
+        showCartLimitNotice(newQty > MAX_QTY_PER_LINE ? 'cartLimitQtyPerLine' : 'cartLimitTotalQty', { max: newQty > MAX_QTY_PER_LINE ? MAX_QTY_PER_LINE : MAX_TOTAL_QTY });
+      }
+      newQty = Math.max(line.qty, clamped);
     }
     line.qty = newQty;
     renderCartLines();
@@ -712,12 +835,12 @@
   /**
    * Order action: Choose a single finished stem
    */
-  function selectStemOrder(flowerKey, scroll = true) {
+  function selectStemOrder(flowerKey, scroll = true, wrapped = false) {
     const wasCartEmpty = cart.length === 0;
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
-    addLine({ type: 'stem', flowerKey: selectedFlower, qty: 1 });
+    addLine({ type: 'stem', flowerKey: selectedFlower, wrapped: wrapped === true, qty: 1 });
     if (scroll) {
       if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
       const finishLabel = document.getElementById('finish-label');
@@ -800,7 +923,19 @@
    */
   function bumpCustomCount(flowerKey, delta) {
     const cur = customCounts[flowerKey] || 0;
-    customCounts[flowerKey] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_STEMS_PER_FLOWER /
+    // MAX_CUSTOM_TOTAL_STEMS caps on a custom bouquet definition.
+    if (delta > 0) {
+      const currentTotal = getCustomTotals().stems;
+      const totalCeiling = MAX_CUSTOM_TOTAL_STEMS - (currentTotal - cur);
+      const clamped = Math.min(next, MAX_CUSTOM_STEMS_PER_FLOWER, totalCeiling);
+      if (clamped < next) {
+        showCartLimitNotice(next > MAX_CUSTOM_STEMS_PER_FLOWER ? 'customLimitStemsPerFlower' : 'customLimitTotalStems', { max: next > MAX_CUSTOM_STEMS_PER_FLOWER ? MAX_CUSTOM_STEMS_PER_FLOWER : MAX_CUSTOM_TOTAL_STEMS });
+      }
+      next = Math.max(cur, clamped);
+    }
+    customCounts[flowerKey] = next;
     renderCustomBuilder();
     renderBouquetsUI();
     persistCart();
@@ -822,8 +957,15 @@
   function bumpCustomAddition(key, delta) {
     if (!Object.prototype.hasOwnProperty.call(customAdditions, key)) return;
     const cur = customAdditions[key] || 0;
-    customAdditions[key] = Math.max(0, cur + delta);
+    let next = Math.max(0, cur + delta);
+    // ALX-06: mirrors the server's MAX_CUSTOM_ADDITION_PER_KEY cap.
+    if (delta > 0 && next > MAX_CUSTOM_ADDITION_PER_KEY) {
+      showCartLimitNotice('customLimitAddition', { max: MAX_CUSTOM_ADDITION_PER_KEY });
+      next = MAX_CUSTOM_ADDITION_PER_KEY;
+    }
+    customAdditions[key] = next;
     renderCustomBuilder();
+    persistCart(); // ALX-14: was never persisted, so a reload silently dropped selected additions
   }
 
   /**
@@ -1050,7 +1192,7 @@
         ? fillTemplate(t.miniPotHeight || '~{h} cm', { h: pot.heightCm })
         : t.miniPotMaterial;
       card.innerHTML = `
-        <div class="mini-pot-photo-wrapper"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
+        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
         <div class="mini-pot-info">
           <span class="mini-pot-material">${heightBadge}</span>
           <h4 class="mini-pot-title">${trans.name}</h4>
@@ -1059,6 +1201,23 @@
           <button type="button" class="btn-choose-bouquet btn-add-mini-pot">${t.miniPotBtn}</button>
         </div>`;
       card.querySelector('.btn-add-mini-pot').addEventListener('click', () => selectMiniPot(pot.key));
+
+      // ALX-17: mini pots previously had no detail/inspector action at
+      // all — reuse the same accessible image-modal pattern the finished
+      // stems already use.
+      const potPhotoWrap = card.querySelector('.mini-pot-photo-wrapper');
+      if (potPhotoWrap) {
+        potPhotoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
+        const handleOpenPotInspector = (e) => {
+          e.preventDefault();
+          openImageModal(pot.photo, trans.name, trans.name, `${heightBadge} · ${trans.blurb}`, potPhotoWrap);
+        };
+        potPhotoWrap.addEventListener('click', handleOpenPotInspector);
+        potPhotoWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpenPotInspector(e);
+        });
+      }
+
       grid.appendChild(card);
     });
   }
@@ -1146,6 +1305,7 @@
       if (!flower) return;
       const trans = flower[currentLang] || flower.en;
       const priceStr = formatRp(flower.stemPrice || 55000);
+      const wrappedPriceStr = formatRp((flower.stemPrice || 55000) + SINGLE_STEM_WRAP_PRICE);
       const flowerAlt = currentLang === 'en'
         ? (flower.alt || `${trans.name} handcrafted from chenille stems`)
         : `${trans.name} buatan tangan dari benang chenille`;
@@ -1181,8 +1341,11 @@
             ${singleNoteHtml}
           </div>
           <div class="flower-actions-row">
-            <button type="button" class="btn-order-stem" data-flower="${key}" style="--accent-hover:${flower.accent}">
-              ${t.orderStemLabel}
+            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" style="--accent-hover:${flower.accent}">
+              <span>${stemOrderButtonLabel(false)}</span><span class="btn-order-stem-price">${priceStr}</span>
+            </button>
+            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" style="--accent-hover:${flower.accent}">
+              <span>${stemOrderButtonLabel(true)}</span><span class="btn-order-stem-price">${wrappedPriceStr}</span>
             </button>
           </div>
         </div>
@@ -1205,13 +1368,13 @@
       }
 
       // Button: Order this stem
-      const orderBtn = card.querySelector('.btn-order-stem');
-      if (orderBtn) {
+      const orderButtons = card.querySelectorAll('.btn-order-stem');
+      orderButtons.forEach(orderBtn => {
         orderBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          selectStemOrder(key, true);
+          selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true');
         });
-      }
+      });
 
       grid.appendChild(card);
     });
@@ -1235,7 +1398,8 @@
     const expectedCount = (siteData.packages || []).length;
     if (existingCards.length === expectedCount && existingCards[0].getAttribute('data-lang') === currentLang) {
       existingCards.forEach((card, index) => {
-        const active = cart.some(l => l.type === 'package' && l.pkgIndex === index);
+        const activeLine = cart.find(l => l.type === 'package' && l.pkgIndex === index);
+        const active = !!activeLine;
         const wasActive = card.classList.contains('active');
 
         if (active) {
@@ -1257,7 +1421,9 @@
 
         const chooseBtn = card.querySelector('.btn-choose-bouquet');
         if (chooseBtn) {
-          chooseBtn.textContent = active ? t.pkgBtnActive : t.pkgBtn;
+          // ALX-16: "✓ Selected" implied a toggle, but clicking again still
+          // increments the line's quantity — label the actual action instead.
+          chooseBtn.textContent = active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn;
           chooseBtn.classList.toggle('is-active', active);
           if (active && !wasActive) {
             chooseBtn.classList.remove('is-active-pop');
@@ -1282,7 +1448,8 @@
     grid.innerHTML = '';
 
     (siteData.packages || []).forEach((pkg, index) => {
-      const active = cart.some(l => l.type === 'package' && l.pkgIndex === index);
+      const activeLine = cart.find(l => l.type === 'package' && l.pkgIndex === index);
+      const active = !!activeLine;
       const isPopular = index === 1; // Handful / 5-stem package is classic studio favorite
       const name = t.pkgNames[index] || `Package ${index + 1}`;
       const blurb = t.pkgBlurbs[index] || '';
@@ -1291,7 +1458,7 @@
       card.setAttribute('data-lang', currentLang);
       card.className = `bouquet-card ${active ? 'active' : ''} ${isPopular ? 'popular-card' : ''}`;
       card.innerHTML = `
-        <div class="bouquet-photo-wrapper">
+        <div class="bouquet-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name })}">
           ${isPopular ? `<span class="pkg-popular-badge">${t.pkgFavoriteTag || 'Favorit Studio'}</span>` : ''}
           <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
         </div>
@@ -1304,7 +1471,7 @@
           ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
           <div class="pkg-actions-col">
             <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
-              ${active ? t.pkgBtnActive : t.pkgBtn}
+              ${active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn}
             </button>
           </div>
         </div>
@@ -1314,6 +1481,22 @@
       if (chooseBtn) {
         chooseBtn.addEventListener('click', () => {
           selectPackageOrder(index);
+        });
+      }
+
+      // ALX-17: bouquet packages previously had no detail/inspector action
+      // at all — reuse the same accessible image-modal pattern the
+      // finished stems already use.
+      const pkgPhotoWrap = card.querySelector('.bouquet-photo-wrapper');
+      if (pkgPhotoWrap) {
+        pkgPhotoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
+        const handleOpenPkgInspector = (e) => {
+          e.preventDefault();
+          openImageModal(pkg.photoWebp || pkg.photo, name, name, `${pkg.stems} ${t.pkgStemLine} · ${blurb}`, pkgPhotoWrap);
+        };
+        pkgPhotoWrap.addEventListener('click', handleOpenPkgInspector);
+        pkgPhotoWrap.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpenPkgInspector(e);
         });
       }
 
@@ -1658,7 +1841,8 @@
     if (line.type === 'stem') {
       const flower = siteData.flowers[line.flowerKey];
       const trans = flower ? (flower[currentLang] || flower.en) : { name: line.flowerKey };
-      return { title: trans.name, photoSrc: flower ? flower.photo : '', photoAlt: trans.name };
+      const wrapLabel = stemWrapLabel(line.wrapped === true);
+      return { title: `${trans.name} — ${wrapLabel}`, photoSrc: flower ? flower.photo : '', photoAlt: trans.name };
     }
     if (line.type === 'pot') {
       const pot = (siteData.miniPots || []).find(item => item.key === line.potKey);
@@ -1894,14 +2078,18 @@
         const flower = siteData.flowers[key];
         if (!flower) return;
         const trans = flower[currentLang] || flower.en;
-        const priceStr = formatRp(flower.stemPrice || 55000);
-        flowersEl.appendChild(renderPickerTile({
-          photoSrc: flower.photo,
-          title: trans.name,
-          priceStr,
-          ariaLabel: `${t.orderStemLabel} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectStemOrder(key, true)
-        }));
+        [false, true].forEach(wrapped => {
+          const price = (flower.stemPrice || 55000) + (wrapped ? SINGLE_STEM_WRAP_PRICE : 0);
+          const priceStr = formatRp(price);
+          const variantLabel = stemOrderButtonLabel(wrapped);
+          flowersEl.appendChild(renderPickerTile({
+            photoSrc: flower.photo,
+            title: `${trans.name} — ${variantLabel}`,
+            priceStr,
+            ariaLabel: `${trans.name}, ${variantLabel}, ${priceStr}`,
+            onSelect: () => selectStemOrder(key, true, wrapped)
+          }));
+        });
       });
     }
 
@@ -1997,7 +2185,9 @@
     setText('#order-eyebrow', t.orderEyebrow);
     setText('#order-title', t.orderTitle);
     setText('#finish-label', t.finishLabel);
-    setText('#wrap-intro', t.wrapIntro);
+    setText('#wrap-intro', currentLang === 'en'
+      ? 'Choose the paper colour for your bouquet.'
+      : 'Pilih warna kertas untuk buket.');
     setText('#card-label', t.cardLabel);
     setText('#card-note-hint', t.cardNote);
     setText('#selection-label', t.selectionLabel);
@@ -2022,7 +2212,7 @@
         btn.setAttribute('tabindex', active ? '0' : '-1');
         btn.setAttribute('data-wrap-key', w.key);
         btn.setAttribute('data-wrap-index', wIdx);
-        btn.setAttribute('aria-label', `${name} wrap paper`);
+        btn.setAttribute('aria-label', `${name} ${t.wrapAriaSuffix || 'wrap paper'}`);
         btn.innerHTML = `
           <span class="wrap-swatch" style="background:${w.swatch}"></span>
           <span>${name}</span>
@@ -2122,7 +2312,16 @@
     if (editBtn) {
       editBtn.style.display = cartHasSelection ? '' : 'none';
       editBtn.onclick = () => {
+        // ALX-15: a category filter (e.g. "Mini Pots") hides #collection
+        // entirely, so scrolling straight there could land on a section
+        // with display:none and nothing visible. Reveal every category
+        // first — this only changes visibility, never the cart — so the
+        // button always lands somewhere with visible products, regardless
+        // of whichever filter was active when the customer clicked it.
+        setCategory('all', false);
         scrollToSection('#collection');
+        const heading = document.getElementById('cat1-title');
+        if (heading) heading.focus({ preventScroll: true });
       };
     }
 
@@ -2148,10 +2347,18 @@
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
+    const cartUsesWrap = cart.some(line => line.type === 'package' || line.type === 'custom');
+    const wrapIntroEl = document.getElementById('wrap-intro');
+    if (wrapIntroEl) wrapIntroEl.style.display = cartUsesWrap ? '' : 'none';
+    if (wrapChipsEl) wrapChipsEl.style.display = cartUsesWrap ? '' : 'none';
 
     const checkoutButton = document.getElementById('btn-checkout');
     if (checkoutButton) {
-      const enabled = cartHasSelection && !cartInvalid;
+      // ALX-11: website ordering must respect the same availability rule as
+      // every other order-entry point, not just cart validity — a paused
+      // store (or an unconfigured endpoint) must never offer submission.
+      const orderingAvailable = isWebsiteOrderingAvailable();
+      const enabled = cartHasSelection && !cartInvalid && orderingAvailable;
       checkoutButton.disabled = !enabled;
       checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
       checkoutButton.classList.toggle('btn-disabled', !enabled);
@@ -2159,7 +2366,9 @@
       const action = checkoutButton.querySelector('.channel-action');
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
-        : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
+        : !orderingAvailable
+          ? (currentLang === 'en' ? 'Ordering paused — contact us directly' : 'Pemesanan dijeda — hubungi kami langsung')
+          : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
       if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
@@ -2205,7 +2414,7 @@
           if (cartTotals.wrapFee > 0) {
             allIncludes.push(`${t.wrapFeeLabel}: ${formatRp(cartTotals.wrapFee)}`);
           }
-          allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
+          if (cartUsesWrap) allIncludes.push(`${t.wrapLinePrefix}: ${wrapName}`);
           if (messageCardEnabled) {
             const feeText = cartTotals.messageCardFee > 0 ? ` (+${formatRp(cartTotals.messageCardFee)})` : '';
             allIncludes.push(orderNote.trim()
@@ -2354,7 +2563,7 @@
       btnWhatsapp.removeAttribute('aria-disabled');
 
       const waNumber = (siteData.store.whatsappNumber || '').replace(/[^0-9]/g, '');
-      const wrapTxt = `${t.wrapLinePrefix}: ${wrapName}. `;
+      const wrapTxt = cartUsesWrap ? `${t.wrapLinePrefix}: ${wrapName}. ` : '';
       const cardTxt = messageCardEnabled && orderNote.trim() ? `${t.cardLinePrefix}: "${orderNote.trim()}". ` : '';
 
       let waMsg = '';
@@ -2416,7 +2625,8 @@
           // stem
           const flower = siteData.flowers[line.flowerKey];
           const flTrans = flower[currentLang] || flower.en;
-          const items = `${line.qty} × ${flTrans.name} ${t.stemSuffix}`;
+          const wrapVariantLabel = stemWrapLabel(line.wrapped === true);
+          const items = `${line.qty} × ${flTrans.name} ${t.stemSuffix} · ${wrapVariantLabel}`;
           const vars = {
             items, total: formatRp(cartTotals.total), stems: line.qty,
             itemList: `• ${items}`, wrapInfo: wrapTxt, cardInfo: cardTxt
@@ -2424,9 +2634,9 @@
           if (hasTemplate) {
             waMsg = fillTemplate(template, vars);
           } else if (currentLang === 'en') {
-            waMsg = `Hello Alxanthia! I would like to order ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
+            waMsg = `Hello Alxanthia! I would like to order ${items} — Total ${formatRp(cartTotals.total)} (excludes delivery fee). ${wrapTxt}${cardTxt}Is it available?`;
           } else {
-            waMsg = `Halo Alxanthia! Saya ingin memesan ${line.qty} × ${flTrans.name} ${t.stemSuffix} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
+            waMsg = `Halo Alxanthia! Saya ingin memesan ${items} — Total ${formatRp(cartTotals.total)} (belum termasuk ongkir). ${wrapTxt}${cardTxt}Apakah masih tersedia?`;
           }
         }
       } else {
@@ -2465,7 +2675,15 @@
       setText('#sticky-order-price', minPrompt);
       setText('#sticky-order-cta', t.configureStemsCta || (currentLang === 'en' ? 'Configure stems ↑' : 'Atur bunga ↑'));
     } else {
-      setText('#sticky-order-title', `${cartTotals.stems} ${t.stemsWord}`);
+      // ALX-16: cartTotals.stems is 0 for an all-mini-pot cart (pots carry
+      // no stem count) and undercounts any cart mixing pots/packages with
+      // stems, so it was never a correct summary for anything but an
+      // all-stems cart. Show the actual product name for one line, or a
+      // real line count for several.
+      const stickyTitle = cart.length === 1
+        ? describeLine(cart[0], t).title
+        : fillTemplate(t.stickyMultiItemLabel || '{n}', { n: cart.length });
+      setText('#sticky-order-title', stickyTitle);
       setText('#sticky-order-price', formatRp(cartTotals.total));
       setText('#sticky-order-cta', `${t.navOrder || (currentLang === 'en' ? 'Order' : 'Pesan')} →`);
     }
@@ -2635,6 +2853,10 @@
     const relockBtn = document.getElementById('btn-lock-site');
 
     const authConfig = siteData.auth || { enabled: true, passcode: '22062024' };
+    // Single source of truth for the expected passcode (ALX-22) — computed
+    // once here, not re-read with its own fallback at every comparison site,
+    // so rotating it is one edit instead of three.
+    const expectedPasscode = String(authConfig.passcode || '22062024').trim();
 
     if (!authConfig.enabled) {
       if (lockScreen) lockScreen.classList.add('unlocked');
@@ -2644,14 +2866,8 @@
     }
 
     try {
-      if (typeof window !== 'undefined' && window.location && window.location.search) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const expected = String(authConfig.passcode || '22062024').trim();
-        if (urlParams.get('unlock') === expected) {
-          localStorage.setItem(AUTH_KEY, 'true');
-        }
-      }
-
+      // No `?unlock=` query-parameter branch here by design: it placed the
+      // passcode into browser history and outbound Referer headers (ALX-22).
       if (localStorage.getItem(AUTH_KEY) === 'true') {
         if (lockScreen) {
           lockScreen.classList.add('unlocked');
@@ -2674,9 +2890,8 @@
       lockForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const entered = (passInput ? passInput.value : '').trim();
-        const expected = String(authConfig.passcode || '22062024').trim();
 
-        if (entered === expected) {
+        if (entered === expectedPasscode) {
           try {
             localStorage.setItem(AUTH_KEY, 'true');
           } catch (err) {}
@@ -3087,6 +3302,10 @@
    * doesn't already cover as "kept for this order".
    */
   const RECENT_ORDER_KEY = 'alxanthia_recent_order_v1';
+  // ALX-18: matches the order lifecycle this record exists to support
+  // (confirmation → payment → fulfillment) — an expired record is stale
+  // recovery information, not a live order, and must stop reappearing.
+  const RECENT_ORDER_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
   function saveRecentOrder() {
     if (!checkoutAttempt || !checkoutAttempt.submitted) return;
@@ -3098,7 +3317,11 @@
         orderSummary: checkoutAttempt.state.items.join('; '),
         total: checkoutAttempt.state.estimatedProductTotal,
         language: checkoutAttempt.state.language,
-        waUrl: checkoutAttempt.waUrl || ''
+        dismissed: false
+        // ALX-18: deliberately no waUrl here — buildPostSubmissionWhatsApp()
+        // embeds the buyer's name, which the privacy notice does not cover
+        // for long-term storage. The WhatsApp link is rebuilt on demand
+        // (without a name) when recovering from this record.
       }));
     } catch (e) {}
   }
@@ -3109,6 +3332,12 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || !parsed.reference) return null;
+      // ALX-18: the stored `timestamp` was written but never read — an
+      // arbitrarily old record kept reappearing as "recent" forever.
+      if (!(Date.now() - Number(parsed.timestamp || 0) < RECENT_ORDER_MAX_AGE_MS)) {
+        clearRecentOrder();
+        return null;
+      }
       return parsed;
     } catch (e) {
       return null;
@@ -3128,7 +3357,10 @@
     // checking in-memory checkoutAttempt state (that used to leave the
     // banner hidden until a full page reload, since checkoutAttempt.submitted
     // stays true for the rest of the session after a successful order).
-    if (!record) {
+    // ALX-18: dismiss used to only hide the banner in memory, so it
+    // reappeared on the very next reload despite the wording promising
+    // dismissal — `dismissed` is persisted with the record itself.
+    if (!record || record.dismissed) {
       banner.hidden = true;
       return;
     }
@@ -3191,7 +3423,82 @@
     if (isSubmitting && notice && !notice.textContent) notice.textContent = '';
   }
 
+  /**
+   * Identity of "what would be submitted right now" — used both to decide
+   * whether a review reuses the in-flight attempt's reference (DEV-04) and,
+   * on success, to detect that the cart has since diverged from what was
+   * actually recorded (ALX-05).
+   */
+  function checkoutFingerprint(state) {
+    return JSON.stringify({
+      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
+      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
+    });
+  }
+
+  /**
+   * ALX-03: write the pending attempt's identity BEFORE the network call —
+   * this is the only copy that survives a reload while the outcome is
+   * still unknown. Cleared once the outcome is definitively "success" or
+   * "duplicate" (the order is safely recorded); kept for every other
+   * outcome (conflict/ambiguous/connection/rejected) so a retry after
+   * reload still reuses the same idempotency key.
+   */
+  function persistPendingAttempt() {
+    try {
+      localStorage.setItem(PENDING_ATTEMPT_KEY, JSON.stringify({
+        reference: checkoutAttempt.reference,
+        idempotencyKey: checkoutAttempt.idempotencyKey,
+        fingerprint: checkoutAttempt.fingerprint,
+        startedAt: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  function clearPendingAttempt() {
+    try { localStorage.removeItem(PENDING_ATTEMPT_KEY); } catch (e) {}
+  }
+
+  /**
+   * Called once at startup, after the cart/draft has been restored, so the
+   * fingerprint comparison is against the same order the pending attempt
+   * was recorded for. A mismatched or expired record belongs to an order
+   * that no longer exists in this form — safe to discard, never to reuse.
+   */
+  function restorePendingAttempt() {
+    let pending;
+    try {
+      const raw = localStorage.getItem(PENDING_ATTEMPT_KEY);
+      if (!raw) return;
+      pending = JSON.parse(raw);
+    } catch (e) { clearPendingAttempt(); return; }
+    if (!pending || typeof pending !== 'object' || !pending.reference || !pending.idempotencyKey || !pending.fingerprint) {
+      clearPendingAttempt();
+      return;
+    }
+    if (!(Date.now() - Number(pending.startedAt || 0) < PENDING_ATTEMPT_MAX_AGE_MS)) {
+      clearPendingAttempt();
+      return;
+    }
+    const currentFingerprint = checkoutFingerprint(normalizedCheckoutState());
+    if (pending.fingerprint !== currentFingerprint) {
+      // The cart no longer matches what was pending — reusing this key for
+      // a different order would be wrong, and a genuinely new order must
+      // get a genuinely new UUID (ALX-03/ALX-05).
+      clearPendingAttempt();
+      return;
+    }
+    checkoutAttempt = { reference: pending.reference, idempotencyKey: pending.idempotencyKey, fingerprint: pending.fingerprint };
+  }
+
   function openCheckoutReview() {
+    // ALX-11: defense in depth — the checkout button is already gated on
+    // this, but nothing stops a stale render or a direct call from
+    // reaching here while ordering isn't actually available.
+    if (!isWebsiteOrderingAvailable()) {
+      announceToScreenReader(ck('checkoutNotConfigured'));
+      return;
+    }
     const state = normalizedCheckoutState();
     if (!state.isValid) {
       // DEV-19: this message used to be written into #checkout-error inside a
@@ -3208,10 +3515,7 @@
     // reviews of an unsubmitted, unchanged order (so a retry stays one
     // attempt); only start a fresh attempt once the order has actually
     // changed, or the previous attempt already succeeded.
-    const fingerprint = JSON.stringify({
-      itemData: state.itemData, wrapId: state.wrapId, messageCardEnabled: state.messageCardEnabled,
-      giftMessage: state.giftMessage, recipientName: state.recipientName, cardSenderName: state.cardSenderName
-    });
+    const fingerprint = checkoutFingerprint(state);
     if (!checkoutAttempt || checkoutAttempt.submitted || checkoutAttempt.fingerprint !== fingerprint) {
       checkoutAttempt = { reference: generateOrderReference(), idempotencyKey: generateIdempotencyKey(), fingerprint };
     }
@@ -3281,8 +3585,16 @@
 
   function openCheckoutDialog() {
     if (checkoutAttempt && checkoutAttempt.submitted) {
-      reopenCheckoutSuccess();
-      return;
+      // ALX-05: only reopen the recorded order's success screen if the cart
+      // still matches exactly what was submitted. Products added since
+      // success must lead to a fresh review of the new draft, not a stale
+      // success screen that hides them — the recorded order stays reachable
+      // separately through the recent-order banner (saveRecentOrder()).
+      const state = normalizedCheckoutState();
+      if (state.isValid && checkoutFingerprint(state) === checkoutAttempt.fingerprint) {
+        reopenCheckoutSuccess();
+        return;
+      }
     }
     openCheckoutReview();
   }
@@ -3312,15 +3624,23 @@
     const wa = document.getElementById('checkout-whatsapp');
     if (wa) {
       if (checkoutAttempt.lastPayload) {
-        // Fresh submission — rebuild with the real buyer name/date just entered.
+        // Fresh submission, same session — rebuild with the real buyer
+        // name/date just entered.
         const payload = checkoutAttempt.lastPayload;
         const url = buildPostSubmissionWhatsApp(checkoutAttempt.reference, payload.buyer_name, payload.preferred_date, checkoutAttempt.state);
         wa.href = url;
         checkoutAttempt.waUrl = url;
       } else if (checkoutAttempt.waUrl) {
-        // Recovered from the recent-order banner — reuse the URL saved at
-        // submit time rather than rebuilding one without a buyer name.
+        // Reopened later in the SAME session (no reload) — reuse the URL
+        // already built above; never persisted to localStorage (ALX-18).
         wa.href = checkoutAttempt.waUrl;
+      } else {
+        // ALX-18: recovered from the recent-order banner after a reload.
+        // The buyer's name is deliberately never persisted, so rebuild
+        // without it rather than reusing a name-bearing URL from before —
+        // buildPostSubmissionWhatsApp() already falls back to a neutral
+        // placeholder for an empty name.
+        wa.href = buildPostSubmissionWhatsApp(checkoutAttempt.reference, '', undefined, checkoutAttempt.state);
       }
     }
     const copyStatus = document.getElementById('copy-status');
@@ -3370,9 +3690,29 @@
 
   function pad2(n) { return String(n).padStart(2, '0'); }
   function toISODate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
-  function todayLocalISO() {
-    const d = new Date();
-    return toISODate(d.getFullYear(), d.getMonth(), d.getDate());
+  /**
+   * ALX-12: the studio's business date (Asia/Makassar / WITA), not the
+   * visitor's local timezone. WITA runs an hour ahead of WIB, so between
+   * 23:00 and 24:00 WIB — covering most of Indonesia's population — Bali
+   * is already on the next calendar day; a visitor-local "today" produced
+   * a picker minimum one day earlier than the server's floor and every
+   * date the widget offered in that window then failed server validation
+   * with a message naming no field.
+   */
+  function todayBaliISO(now = new Date()) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Makassar', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  }
+
+  /**
+   * Calendar-day arithmetic on a fixed Y-M-D string, anchored at UTC
+   * midnight so the caller's own timezone can't skew the result — used to
+   * add the production lead time to todayBaliISO() without ever
+   * reconstructing a Date in the visitor's local zone.
+   */
+  function addDaysToISODate(iso, days) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
 
   /**
@@ -3383,6 +3723,14 @@
   function updateDateFieldValidity(field) {
     const value = (field.value || '').trim();
     if (!value || !ISO_DATE_RE.test(value)) { field.setCustomValidity(''); return; }
+    // ALX-12: reject an impossible calendar date the same way the server
+    // does — round-trip through Date and compare components, since
+    // new Date('2027-02-31') silently rolls forward to March 3rd instead
+    // of failing.
+    const parts = value.split('-').map(Number);
+    const picked = new Date(value + 'T00:00:00');
+    const isRealDate = !isNaN(picked.getTime()) && picked.getFullYear() === parts[0] && picked.getMonth() + 1 === parts[1] && picked.getDate() === parts[2];
+    if (!isRealDate) { field.setCustomValidity('date-out-of-range'); return; }
     field.setCustomValidity(field.min && value < field.min ? 'date-out-of-range' : '');
   }
 
@@ -3407,7 +3755,7 @@
     const weekdays = DATE_PICKER_WEEKDAYS[lang];
     const minISO = input.min || '';
     const selectedISO = ISO_DATE_RE.test(input.value) ? input.value : '';
-    const todayISO = todayLocalISO();
+    const todayISO = todayBaliISO();
 
     const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
     const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
@@ -3461,7 +3809,7 @@
     const input = document.getElementById('preferred-date-input');
     if (!popover || !input) return;
     const raw = input.value.trim();
-    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayLocalISO()) ? input.min : todayLocalISO());
+    const base = ISO_DATE_RE.test(raw) ? raw : ((input.min && input.min > todayBaliISO()) ? input.min : todayBaliISO());
     datePickerViewYear = Number(base.slice(0, 4));
     datePickerViewMonth = Number(base.slice(5, 7)) - 1;
     datePickerFocusISO = null;
@@ -3500,7 +3848,7 @@
 
   function moveDatePickerFocus(deltaDays) {
     const input = document.getElementById('preferred-date-input');
-    const current = datePickerFocusISO || todayLocalISO();
+    const current = datePickerFocusISO || todayBaliISO();
     const [y, m, d] = current.split('-').map(Number);
     const next = new Date(y, m - 1, d + deltaDays);
     const nextISO = toISODate(next.getFullYear(), next.getMonth(), next.getDate());
@@ -3591,12 +3939,16 @@
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
-      '#buyer-name-label': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
-      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label': `${ck('checkoutLocationTypeLabel')} `, '#regency-label': `${ck('checkoutRegencyLabel')} `,
-      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label': `${ck('checkoutAddressLabel')} `, '#city-label': `${ck('checkoutCityLabel')} `, '#postal-label': `${ck('checkoutPostalLabel')} `,
+      // Targets the dedicated text child, not the parent `-label` span, which
+      // also contains the nested `-required` mark span — setText() replaces
+      // the element's entire textContent, so writing to the parent would
+      // destroy that child every time (ALX-21).
+      '#buyer-name-label-text': `${ck('checkoutBuyerNameLabel')} `, '#buyer-phone-label-text': `${ck('checkoutBuyerPhoneLabel')} `, '#buyer-help': `${ck('checkoutBuyerHelp')} ${ck('checkoutBuyerPhoneExample')}`,
+      '#location-legend': ck('checkoutLocationLegend'), '#location-type-label-text': `${ck('checkoutLocationTypeLabel')} `, '#regency-label-text': `${ck('checkoutRegencyLabel')} `,
+      '#delivery-method-label': ck('checkoutDeliveryMethodLabel'), '#address-label-text': `${ck('checkoutAddressLabel')} `, '#city-label-text': `${ck('checkoutCityLabel')} `, '#postal-label-text': `${ck('checkoutPostalLabel')} `,
       '#pickup-help': ck('checkoutPickupHelp'),
       '#outside-bali-help': ck('checkoutOutsideBaliHelp'),
-      '#date-label': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
+      '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
       '#checkout-back-to-review': ck('checkoutBackToReview'),
       '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
@@ -3635,9 +3987,11 @@
     // CONFIGURE-SUBMISSION-ENDPOINT.md's MINIMUM_LEAD_DAYS).
     const dateInput = form.elements['preferred_date'];
     if (dateInput) {
-      const minDate = new Date();
-      minDate.setDate(minDate.getDate() + (siteData.minimumLeadDays ?? 0));
-      dateInput.min = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
+      // ALX-12: anchor at the Bali business date (todayBaliISO), not the
+      // visitor's local "today" — then do calendar-day arithmetic on that
+      // fixed date via a UTC-midnight anchor, so the visitor's own
+      // timezone never re-enters the calculation.
+      dateInput.min = addDaysToISODate(todayBaliISO(), siteData.minimumLeadDays ?? 0);
       updateDateFieldValidity(dateInput);
       if (document.getElementById(fieldErrorId(dateInput))) {
         setFieldError(dateInput, dateInput.checkValidity() ? '' : fieldValidationMessage(dateInput));
@@ -3728,6 +4082,10 @@
       if (!window.turnstile) return;
       turnstileWidgetId = window.turnstile.render(container, {
         sitekey: siteKey,
+        // ALX-10: must match TURNSTILE_ACTION in the Worker exactly — the
+        // Worker checks this so a token can't be replayed for some other
+        // action on a site sharing the same Turnstile account.
+        action: 'order_submission',
         callback: (token) => { turnstileToken = token; },
         'expired-callback': () => { turnstileToken = ''; },
         'error-callback': () => { turnstileToken = ''; }
@@ -3757,6 +4115,10 @@
     event.preventDefault();
     const form = event.currentTarget;
     const error = document.getElementById('form-error');
+    // ALX-04: explicit guard at entry — a double `submit` (double-click,
+    // Enter held down) must issue exactly one request, not queue a second
+    // one behind the first's still-open button-disable.
+    if (checkoutAttempt && checkoutAttempt.isSubmitting) return;
     const invalidFields = validateCheckoutForm(form);
     if (invalidFields.length > 0) {
       error.textContent = ck('checkoutFieldsIncomplete', { count: invalidFields.length });
@@ -3787,6 +4149,9 @@
     button.disabled = true;
     button.textContent = ck('checkoutSaving');
     error.textContent = '';
+    // ALX-03: written before the network call — the only record that
+    // survives if the response never comes back.
+    persistPendingAttempt();
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS) : null;
@@ -3796,46 +4161,75 @@
     let outcome;
     let response = null;
     try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller ? controller.signal : undefined
-      });
-    } catch (networkError) {
-      outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
-    }
-    if (timeoutId) clearTimeout(timeoutId);
+      // ALX-04: the timeout stays active across this ENTIRE try block —
+      // request, body read, and response validation — not just until
+      // fetch()'s promise settles at headers-received. response.json()
+      // below shares the same AbortSignal-backed body read, so a stalled
+      // body still aborts within CHECKOUT_TIMEOUT_MS instead of hanging
+      // forever on "Saving…".
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller ? controller.signal : undefined
+        });
+      } catch (networkError) {
+        // A request that never got a response at all: an abort (whether
+        // from our own timeout or a stalled body — see below) is
+        // uncertain, never a definite failure; anything else is a plain
+        // connection failure.
+        outcome = networkError && networkError.name === 'AbortError' ? 'ambiguous' : 'connection';
+      }
 
-    if (!outcome) {
-      if (response.status === 409) {
-        outcome = 'conflict';
-      } else if (response.status >= 500) {
-        outcome = 'ambiguous';
-      } else if (!response.ok) {
-        outcome = 'rejected';
-      } else {
-        try {
-          const result = await response.json();
-          // DEV-06: both the success flag and the exact matching reference
-          // are required — `{ "ok": true }` alone is no longer accepted.
-          if (result && result.ok === true && result.order_reference === checkoutAttempt.reference) {
-            outcome = result.duplicate === true ? 'duplicate' : 'success';
-          } else {
+      if (!outcome) {
+        if (response.status === 409) {
+          outcome = 'conflict';
+        } else if (response.status >= 500) {
+          outcome = 'ambiguous';
+        } else if (!response.ok) {
+          outcome = 'rejected';
+        } else {
+          try {
+            const result = await response.json();
+            // DEV-06: both the success flag and the exact matching reference
+            // are required — `{ "ok": true }` alone is no longer accepted.
+            // ALX-09: the one exception is a server-side rename after a rare
+            // reference collision — accepted only when the server explicitly
+            // echoes back the exact reference THIS attempt sent as
+            // `renamed_from`, so a stale/replayed response for a different
+            // order still can't be mistaken for this one's success.
+            const referenceMatches = result && (
+              result.order_reference === checkoutAttempt.reference ||
+              (result.renamed_from === checkoutAttempt.reference && !!result.order_reference)
+            );
+            if (result && result.ok === true && referenceMatches) {
+              if (result.order_reference !== checkoutAttempt.reference) {
+                checkoutAttempt.reference = result.order_reference;
+              }
+              outcome = result.duplicate === true ? 'duplicate' : 'success';
+            } else {
+              outcome = 'ambiguous';
+            }
+          } catch (parseError) {
+            // Headers came back fine, but the body read was aborted (a
+            // stalled body past CHECKOUT_TIMEOUT_MS) or was malformed —
+            // either way the server may have already stored the order,
+            // so this is ambiguous, never a plain rejection (ALX-04).
             outcome = 'ambiguous';
           }
-        } catch (parseError) {
-          outcome = 'ambiguous';
         }
       }
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setCheckoutSubmitGuard(false);
+      button.disabled = false;
+      button.textContent = ck('checkoutSaveOrder');
+      resetTurnstile(); // a Turnstile token is single-use regardless of outcome
     }
 
-    setCheckoutSubmitGuard(false);
-    button.disabled = false;
-    button.textContent = ck('checkoutSaveOrder');
-    resetTurnstile(); // a Turnstile token is single-use regardless of outcome
-
     if (outcome === 'success' || outcome === 'duplicate') {
+      clearPendingAttempt(); // ALX-03: safely recorded — no longer "uncertain"
       showRecordedOrder(payload, outcome === 'duplicate');
     } else if (outcome === 'conflict') {
       checkoutAttempt.conflicted = true;
@@ -3967,8 +4361,9 @@
         submitted: true,
         duplicate: false,
         state: { language: record.language || currentLang, items: record.orderSummary ? record.orderSummary.split('; ') : [], estimatedProductTotal: record.total || 0 },
-        lastPayload: null,
-        waUrl: record.waUrl
+        lastPayload: null
+        // ALX-18: no waUrl here — the buyer's name is never persisted, so
+        // renderSuccessStep() rebuilds the WhatsApp link fresh, without one.
       };
       renderSuccessStep();
       setCheckoutSubmitGuard(false);
@@ -3978,6 +4373,15 @@
     document.getElementById('recent-order-dismiss')?.addEventListener('click', () => {
       const banner = document.getElementById('recent-order-banner');
       if (banner) banner.hidden = true;
+      // ALX-18: persist the dismissal itself, not just this session's DOM
+      // state, so the banner stays gone after a reload — a later order
+      // still shows normally, since saveRecentOrder() always writes a
+      // fresh record with dismissed:false.
+      const record = loadRecentOrder();
+      if (record) {
+        record.dismissed = true;
+        try { localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify(record)); } catch (e) {}
+      }
     });
   }
 
@@ -4042,17 +4446,34 @@
    * Initialize App
    */
   function init() {
-    loadData();
-    restoreCartFromStorage();
-    initLang();
-    setupEventListeners();
-    setupReducedMotionListener();
-    setupAuth();
-    renderAll();
-    initCheckout();
-    initTurnstile();
-    renderRecentOrderBanner();
-    initScrollReveals();
+    try {
+      loadData();
+      restoreCartFromStorage();
+      restorePendingAttempt();
+      initLang();
+      setupEventListeners();
+      setupReducedMotionListener();
+      setupAuth();
+      renderAll();
+      initCheckout();
+      initTurnstile();
+      renderRecentOrderBanner();
+      initScrollReveals();
+    } catch (err) {
+      // Fail closed (ALX-22): a broken site-content.js must never publish
+      // the unfinished draft. Keep the passcode curtain up regardless of
+      // its previous state, and surface a hardcoded (never siteData-driven)
+      // contact fallback, since nothing behind the curtain can be trusted.
+      console.error('Alxanthia failed to initialize — the site is showing its fallback state: ' + (err && err.message ? err.message : err));
+      const lockScreen = document.getElementById('lock-screen');
+      if (lockScreen) {
+        lockScreen.classList.remove('unlocked');
+        lockScreen.style.display = 'flex';
+      }
+      const fallback = document.getElementById('site-unavailable');
+      if (fallback) fallback.classList.add('is-visible');
+      return;
+    }
 
     try {
       if (typeof window !== 'undefined' && window.location && window.location.search) {
@@ -4126,6 +4547,8 @@
       computeCartTotals: computeCartTotals,
       normalizedCheckoutState: normalizedCheckoutState,
       generateOrderReference: generateOrderReference,
+      todayBaliISO: todayBaliISO,
+      addDaysToISODate: addDaysToISODate,
       buildPostSubmissionWhatsApp: buildPostSubmissionWhatsApp,
       buildOrderSubmission: buildOrderSubmission,
       normalizeIndonesianPhone: normalizeIndonesianPhone,
@@ -4138,6 +4561,7 @@
       bumpLineQty: bumpLineQty,
       isWhatsAppReady: isWhatsAppReady,
       isShopeeReady: isShopeeReady,
+      isWebsiteOrderingAvailable: isWebsiteOrderingAvailable,
       setCategory: setCategory,
       interpolateRules: interpolateRules,
       getState: () => ({

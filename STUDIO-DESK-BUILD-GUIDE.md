@@ -21,7 +21,7 @@ writes.
 ## Part 1 — What you are building
 
 A **standalone Google Apps Script web app** that reads the `Orders` worksheet, shows one work ticket
-per order, and writes back exactly four columns.
+per order, and writes back exactly five columns.
 
 ```text
 Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   (existing, do not touch)
@@ -58,9 +58,10 @@ These are not preferences. Breaking one is a bug.
 1. **Money comes from the sheet, words come from `site-content.js`.** The Desk never recalculates a
    price. It reads `Verified Total` and `Shipping Fee` and adds them. Product *names, stem sizes,
    wrap colours and package sizes* come from `site-content.js` at runtime — see [Part 4](#part-4--the-live-catalogue).
-2. **Exactly four columns are writable**, and the list is enforced on the server, never trusted from
-   the page: `Payment Status`, `Shipping Fee`, `Work Phase`, `Internal Notes`. A request to write
-   anything else is rejected, not ignored.
+2. **Exactly five columns are writable**, and the list is enforced on the server, never trusted from
+   the page: `Order Confirmation Sent`, `Payment Status`, `Shipping Fee`, `Work Phase`,
+   `Internal Notes`. A request to write anything else is rejected, not ignored. `Acknowledged`
+   remains the customer's checkout consent and must never be repurposed for this.
 3. **Columns are found by header text, never by letter or index.** Reuse the order writer's
    approach (`readHeaders`/`headers.map` in `CONFIGURE-SUBMISSION-ENDPOINT.md`). Someone reordering
    the sheet must not break the Desk.
@@ -114,6 +115,7 @@ rows.
   verified: 497000,              // Verified Total
   shipping: 0,                   // Shipping Fee; null when the cell is blank
   mismatch: true,                // Price Mismatch is non-empty
+  confirmed: true,               // Order Confirmation Sent is Yes
   payment: 'Paid',               // Payment Status, English key
   phase: 'Not started',          // Work Phase, English key
   notes: ''                      // Internal Notes
@@ -136,9 +138,10 @@ updateOrder({ ref: 'ALX-260912-K4T9', row: 128, field: 'phase', value: 'Assembly
   → { ok: false, code: 'STALE_ROW' | 'BAD_FIELD' | 'BAD_VALUE' | 'NOT_FOUND' | 'LOCKED', message: 'Indonesian sentence' }
 ```
 
-`field` is one of `payment`, `shipping`, `phase`, `notes` — page-side names, mapped server-side to
-the four column headers. Validation before any write:
+`field` is one of `confirmed`, `payment`, `shipping`, `phase`, `notes` — page-side names,
+mapped server-side to the five column headers. Validation before any write:
 
+- `confirmed` — a Boolean, stored as `Yes` or `No` in `Order Confirmation Sent`
 - `payment` ∈ `Unpaid`, `Checking transfer`, `Paid`, `Cancelled`
 - `phase` ∈ `Not started`, `Assembly and packing`, `Ready for dispatch`, `Shipped`, `Delivered`, `Cancelled`
 - `shipping` — a finite number ≥ 0, or `''` to clear it. Reject anything else.
@@ -251,7 +254,12 @@ render functions. The changes:
    or a manual refresh button, so two devices do not drift. Never poll on a timer.
 6. **`BANK`** comes from Script Properties via `getCatalog()`'s payload (add a `bank` field to it),
    not from a literal in the page.
-7. **Keep**: the seven chips, both sort orders, the colour stripes, the payment block with its
+7. **Incoming-order confirmation**: add `Order Confirmation Sent` to the sheet. Blank/`No`
+   orders sort before confirmed orders regardless of the active sort; within each group the selected
+   date/submission sort still applies. The confirmation block opens WhatsApp with the received-order
+   message and optimistically writes `Yes`; it disappears immediately, and a failed write restores
+   both the block and pinned position.
+8. **Keep**: the seven chips, both sort orders, the colour stripes, the payment block with its
    confirmation step, the gate, the one-tick-per-line-item build list, the five-phase stepper, the
    Indonesian copy, and both themes.
 
@@ -458,8 +466,11 @@ to … → Allow** path.
 
 Place one test order on the website, then on the Desk confirm:
 
-- The new order appears in the queue with the right buyer, date and flowers.
-- **Salin teks rekening** produces a message with the right total and your account number.
+- Add a sheet column named exactly **Order Confirmation Sent** before opening the updated Desk.
+- The new, unconfirmed order appears at the top of the queue with the right buyer, date and flowers.
+- Tapping **Kirim pesan** in **Konfirmasi pesanan masuk** opens WhatsApp, hides that section, writes
+  `Yes` to **Order Confirmation Sent**, and returns the order to its normal sorted position.
+- The payment **Kirim pesan** action produces a message with the right total and your account number.
 - Marking it *perlu dicek* and then *lunas* changes `Payment Status` in the sheet within a second.
 - Typing an ongkir on an out-of-Bali order fills in `Final Total` in the sheet by itself.
 - **Lanjut** changes `Work Phase` in the sheet.

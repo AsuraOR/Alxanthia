@@ -23,18 +23,18 @@ jobs.
 
 Keep `Orders` exactly as it is and stop reading it by hand: make it the **database only**, written by
 the Apps Script, and give the maker a separate interface that shows a dozen fields, renders
-`Item Data` as a checklist, and writes back to four columns.
+`Item Data` as a checklist, and writes back to five columns.
 
 ```text
 Website → Cloudflare Worker → Apps Script → Orders sheet   (database, schema unchanged)
                                                  ↕
                                           Studio Desk       (interface, new)
-                    reads 12 fields · writes Payment Status, Shipping Fee, Work Phase, Internal Notes
+                    writes Confirmation Sent, Payment Status, Shipping Fee, Work Phase, Internal Notes
 ```
 
 Every change she makes goes straight into that order's row — see
-[How the sheet stays in step](#how-the-sheet-stays-in-step). No column is added or removed and no
-formula changes.
+[How the sheet stays in step](#how-the-sheet-stays-in-step). One dedicated
+`Order Confirmation Sent` column is added; formulas and existing business columns do not change.
 
 ## Settled decisions
 
@@ -67,6 +67,10 @@ and sortable two ways:
 - **Deadline terdekat** — by `Preferred Date`. What to touch next.
 - **Pesanan pertama** — by `Submitted At`. Who has been waiting longest, which is the fair order to
   answer messages in and the one that settles "who ordered first".
+
+Unconfirmed cards stay above the chosen date/submission sort. Tapping the incoming-order
+**Kirim pesan** action opens WhatsApp, records the confirmation, removes that one-time section, and
+returns the card to its normal sorted position.
 
 A card carries the reference, buyer, due date with a plain-language countdown, a one-line summary of
 what to make, when the order came in, and badges for anything unusual — `Review`, the payment state,
@@ -149,11 +153,12 @@ unaffected.
 
 ## How the sheet stays in step
 
-Each of the four writable fields goes to the sheet the moment she changes it, and the Desk confirms
+Each of the five writable fields goes to the sheet the moment she changes it, and the Desk confirms
 it by name ("Tersimpan ke sheet Orders · Work Phase"):
 
 | She does | Column written |
 | --- | --- |
+| Sends the incoming-order confirmation | `Order Confirmation Sent` |
 | Marks perlu dicek / lunas | `Payment Status` |
 | Types the ongkir | `Shipping Fee` |
 | Taps **Lanjut** or **Kembali** | `Work Phase` |
@@ -176,10 +181,10 @@ Everything else on the row is read-only in the Desk, and the ticket's footer say
 | Bucket | Columns |
 | --- | --- |
 | **Shown** | `Order Reference`, `Submitted At`, `Preferred Date`, `Buyer Name`, `Buyer WhatsApp`, `Location Type` + `Regency` + `Delivery Method` + `Address` + `City` + `Postal Code` (one destination line), `Item Data` (the build list), `Wrap`, `Message Card` + `Gift Message` + `Recipient Name` + `Card Sender Name` (one card block), `Verified Total` (as the amount to collect) |
-| **Written by her** | `Payment Status`, `Shipping Fee`, `Work Phase`, `Internal Notes` |
+| **Written by her** | `Order Confirmation Sent`, `Payment Status`, `Shipping Fee`, `Work Phase`, `Internal Notes` |
 | **Shown as a light, not a number** | `Price Mismatch` — a pass/fail line in the gate |
 | **Owner only** | `Submitted Product Subtotal`, `Submitted Message Card Fee`, `Submitted Total`, `Verified Product Subtotal`, `Verified Message Card Fee`, `Final Total`, `Delivery Service`, `Tracking Link/Number` |
-| **Never shown** | `Idempotency Key`, `Payload Hash`, `Catalog Version`, `Submitted Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged`, `Order Summary` (superseded by the build list), `Total Stems`, `Order Mode`, `Midtrans Payment Link` |
+| **Never shown** | `Idempotency Key`, `Payload Hash`, `Catalog Version`, `Submitted Catalog Version`, `Language`, `Currency`, `Source`, `Acknowledged` (customer consent; not confirmation status), `Order Summary` (superseded by the build list), `Total Stems`, `Order Mode`, `Midtrans Payment Link` |
 
 ## What this costs on the sheet side
 

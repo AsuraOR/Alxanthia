@@ -160,7 +160,8 @@ var PHASE_VALUES = ['Not started', 'Assembly and packing', 'Ready for dispatch',
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
-    .setTitle('Alxanthia Studio Desk — Meja Kerja Perajin');
+    .setTitle('Alxanthia Studio Desk — Meja Kerja Perajin')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 // ============================================================================
@@ -511,6 +512,9 @@ function saveDeskSettings(settings) {
   checkAccess_();
   settings = settings || {};
   var props = PropertiesService.getScriptProperties();
+  if (settings.bank) props.setProperty('BANK_NAME', String(settings.bank).trim());
+  if (settings.accNumber) props.setProperty('BANK_NUMBER', String(settings.accNumber).trim());
+  if (settings.accHolder) props.setProperty('BANK_HOLDER', String(settings.accHolder).trim());
   props.setProperty('DESK_CUSTOM_SETTINGS', JSON.stringify({
     signature: settings.signature || '',
     templates: settings.templates || {}
@@ -2841,7 +2845,7 @@ function buildTicketLines_(items, catalog) {
     <div class="header-inner">
       <div class="brand-group">
         <div class="brand-logo">
-          <img src="../img/sunflower-720.webp" onerror="this.src='img/sunflower-720.webp'" alt="Alxanthia Logo">
+          <img src="https://alxanthia.com/alxanthia-logo-96.webp" onerror="this.src='https://alxanthia.com/img/sunflower-720.webp'" alt="Alxanthia Logo">
         </div>
         <div class="brand-titles">
           <h1>Alxanthia Studio Desk</h1>
@@ -3509,10 +3513,14 @@ function buildTicketLines_(items, catalog) {
       if (isAppsScript()) {
         google.script.run
           .withSuccessHandler(function(orders) {
-            if (Array.isArray(orders) && orders.length > 0) {
+            if (Array.isArray(orders)) {
               state.orders = orders;
-              if (!state.selectedRef || !state.orders.some(o => o.ref === state.selectedRef)) {
-                state.selectedRef = state.orders[0].ref;
+              if (orders.length > 0) {
+                if (!state.selectedRef || !state.orders.some(o => o.ref === state.selectedRef)) {
+                  state.selectedRef = state.orders[0].ref;
+                }
+              } else {
+                state.selectedRef = null;
               }
               saveState();
               renderAll();
@@ -3577,32 +3585,44 @@ function buildTicketLines_(items, catalog) {
     /* --- Helper Calculations & DP System --- */
     function computeTotals(order) {
       let subtotal = 0;
-      order.items.forEach(item => {
-        if (item.type === 'stem') {
-          subtotal += CATALOG.flowers[item.id].price * item.qty;
-        } else if (item.type === 'pot') {
-          subtotal += CATALOG.pots[item.id].price * item.qty;
-        } else if (item.type === 'package') {
-          subtotal += CATALOG.packages[Number(item.id)].price * item.qty;
-        } else if (item.type === 'custom') {
-          let stemsCount = 0;
-          let stemsPrice = 0;
-          Object.keys(item.stems || {}).forEach(k => {
-            const count = item.stems[k];
-            stemsCount += count;
-            stemsPrice += count * CATALOG.flowers[k].price;
-          });
-          Object.keys(item.additions || {}).forEach(k => {
-            const count = item.additions[k];
-            stemsPrice += count * CATALOG.additions[k].price;
-          });
-          const wrapFee = stemsCount > 0 ? Math.ceil(stemsCount / CATALOG.wrapFeeUnitStems) * CATALOG.wrapFeePerUnit : 0;
-          subtotal += (stemsPrice + wrapFee) * item.qty;
-        }
-      });
+      if (order.items && order.items.length) {
+        order.items.forEach(item => {
+          if (item.type === 'stem') {
+            const f = CATALOG.flowers[item.id];
+            subtotal += (f && f.price ? f.price : 55000) * (item.qty || 1);
+          } else if (item.type === 'pot') {
+            const p = CATALOG.pots[item.id];
+            subtotal += (p && p.price ? p.price : 125000) * (item.qty || 1);
+          } else if (item.type === 'package') {
+            const pkg = CATALOG.packages[Number(item.id)];
+            subtotal += (pkg && pkg.price ? pkg.price : 195000) * (item.qty || 1);
+          } else if (item.type === 'custom') {
+            let stemsCount = 0;
+            let stemsPrice = 0;
+            Object.keys(item.stems || {}).forEach(k => {
+              const count = item.stems[k];
+              stemsCount += count;
+              const f = CATALOG.flowers[k];
+              stemsPrice += count * (f && f.price ? f.price : 55000);
+            });
+            Object.keys(item.additions || {}).forEach(k => {
+              const count = item.additions[k];
+              const a = CATALOG.additions[k];
+              stemsPrice += count * (a && a.price ? a.price : 12000);
+            });
+            const wrapFee = stemsCount > 0 ? Math.ceil(stemsCount / CATALOG.wrapFeeUnitStems) * CATALOG.wrapFeePerUnit : 0;
+            subtotal += (stemsPrice + wrapFee) * (item.qty || 1);
+          }
+        });
+      }
+      if (order.verified && order.verified > 0) {
+        subtotal = order.verified - (order.card ? CATALOG.messageCardPrice : 0);
+        if (subtotal < 0) subtotal = order.verified;
+      }
       const cardFee = order.card ? CATALOG.messageCardPrice : 0;
       const shipFee = Number(order.shipping || 0);
-      const finalTotal = subtotal + cardFee + shipFee;
+      const verifiedTotal = order.verified && order.verified > 0 ? order.verified : (subtotal + cardFee);
+      const finalTotal = verifiedTotal + shipFee;
       const isDeposit = order.paymentPlan === 'Deposit 50%';
       const deposit = Math.ceil(finalTotal / 2);
       const balance = finalTotal - deposit;
@@ -3611,7 +3631,7 @@ function buildTicketLines_(items, catalog) {
         product: subtotal,
         card: cardFee,
         shipping: shipFee,
-        verified: subtotal + cardFee,
+        verified: verifiedTotal,
         finalTotal: finalTotal,
         isDeposit: isDeposit,
         depositAmount: deposit,
@@ -5200,6 +5220,17 @@ function buildTicketLines_(items, catalog) {
           modal.close();
           showToast('Pengaturan studio & template WhatsApp tersimpan!');
           renderTicket();
+
+          if (isAppsScript()) {
+            google.script.run
+              .withSuccessHandler(function() {
+                showToast('Pengaturan studio tersimpan ke Cloud Properties ✓');
+              })
+              .withFailureHandler(function(err) {
+                showToast('Gagal simpan ke cloud: ' + (err.message || err), true);
+              })
+              .saveDeskSettings(state.settings);
+          }
         };
       }
 
@@ -5571,6 +5602,35 @@ function buildTicketLines_(items, catalog) {
       const datePart = (buyerDate || TODAY).replace(/-/g, '').slice(2);
       const newRef = `ALX-${datePart}-${randomSuffix}`;
 
+      let sub = 0;
+      Object.keys(newOrderCounts.flowers).forEach(k => {
+        sub += (newOrderCounts.flowers[k] || 0) * CATALOG.flowers[k].price;
+      });
+      Object.keys(newOrderCounts.additions).forEach(k => {
+        sub += (newOrderCounts.additions[k] || 0) * CATALOG.additions[k].price;
+      });
+      Object.keys(newOrderCounts.pots).forEach(k => {
+        sub += (newOrderCounts.pots[k] || 0) * CATALOG.pots[k].price;
+      });
+      if (totalStems > 0) {
+        sub += Math.ceil(totalStems / CATALOG.wrapFeeUnitStems) * CATALOG.wrapFeePerUnit;
+      }
+      if (hasCard) {
+        sub += CATALOG.messageCardPrice;
+      }
+
+      const summaryParts = [];
+      items.forEach(it => {
+        if (it.type === 'custom') {
+          summaryParts.push('Rangkaian custom');
+        } else if (it.type === 'stem') {
+          summaryParts.push(`${it.qty}x ${CATALOG.flowers[it.id] ? CATALOG.flowers[it.id].name : it.id}`);
+        } else if (it.type === 'pot') {
+          summaryParts.push(`${it.qty}x ${CATALOG.pots[it.id] ? CATALOG.pots[it.id].name : it.id}`);
+        }
+      });
+      const itemsRaw = summaryParts.join(', ') || 'Pesanan Studio Desk';
+
       const newOrder = {
         row: state.orders.length + 120,
         ref: newRef,
@@ -5588,6 +5648,8 @@ function buildTicketLines_(items, catalog) {
         paymentPlan: plan,
         payment: 'Unpaid',
         paidAt: null,
+        verified: sub,
+        itemsRaw: itemsRaw,
         mismatch: false,
         shipping: locType === 'bali' ? 0 : 35000,
         phase: 'Not started',

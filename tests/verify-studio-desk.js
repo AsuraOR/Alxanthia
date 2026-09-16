@@ -1586,6 +1586,47 @@ console.log('--- SUITE 61 (SD-05 client): Perlu ditangani is the default view, a
   console.log('✔ Suite 61 Passed\n');
 }
 
+console.log('--- SUITE 62 (SD-06 client): one prominent primary action per stage, reusing existing validated commands, never a new bypass ---');
+{
+  assert.ok(deskHtml.includes('function primaryAction(o, catalog)'), 'a shared primaryAction() function must exist');
+
+  // Every branch must reuse an existing, already-server-validated action —
+  // never a bespoke shortcut that could bypass a payment/review/packing rule.
+  assert.ok(deskHtml.includes("return { text: 'Tinjau pesanan', attrs: 'data-markreviewed=\"1\"' };"),
+    "not reviewed -> Tinjau pesanan, via the existing markReviewed command");
+  assert.ok(deskHtml.includes("return { text: 'Siapkan tagihan WhatsApp', attrs: 'data-sendpayment=\"' + (usesDeposit(o) ? 'deposit' : 'full') + '\"' };"),
+    "reviewed with an unrequested quote -> Siapkan tagihan WhatsApp");
+  assert.ok(deskHtml.includes("return { text: 'Periksa pembayaran', attrs: 'data-focusblock=\"paymentHeading\"' };"),
+    "a Checking* payment status -> Periksa pembayaran, pointing at the existing payment block rather than a new verifying command");
+  assert.ok(deskHtml.includes("return { text: g.allOk ? 'Mulai kerjakan' : 'Tetap mulai kerjakan', attrs: 'data-advance=\"1\"' };") &&
+    deskHtml.includes('var g = gate(o, catalog);\n      if (!g.ready) return null;'),
+    "Mulai kerjakan must only ever appear once gate()'s own ready check passes — the same check the advance button itself already enforces");
+  assert.ok(deskHtml.includes("return packingComplete(o) ? { text: 'Lanjut: Siap dikirim', attrs: 'data-advance=\"1\"' }") &&
+    deskHtml.includes("{ text: 'Periksa & kemas', attrs: 'data-focusblock=\"packingHeading\"' };"),
+    "Assembly and packing must offer Periksa & kemas until the packing checklist is complete, then Lanjut, never a shortcut around packingComplete()");
+  assert.ok(deskHtml.includes("return { text: 'Siapkan pesan pelunasan', attrs: 'data-sendpayment=\"balance\"' };"),
+    "Ready for dispatch with an outstanding balance -> Siapkan pesan pelunasan");
+  assert.ok(deskHtml.includes("if (!(o.delivery && o.delivery.handoffAt)) return { text: 'Catat penyerahan', attrs: 'data-markhandoff=\"1\"' };"),
+    "paid and packed, not yet handed off -> Catat penyerahan, via the existing (payment/blocker-gated) markHandoff command");
+  assert.ok(deskHtml.includes("if (!(o.delivery && o.delivery.completedAt)) return { text: 'Tandai selesai', attrs: 'data-markdeliverycomplete=\"1\"' };"),
+    "handed off, not yet confirmed received/picked up -> Tandai selesai");
+  assert.ok(deskHtml.includes('if (!isActive(o) || o.blocker) return null;'),
+    'a blocked order must never get a primary action button — blockerBanner()\'s own resolve action is the only thing offered');
+
+  assert.ok(deskHtml.includes("html += '<button type=\"button\" class=\"btn primary-action-btn\" ' + pAction.attrs + '>' + esc(pAction.text) + '</button>';"),
+    'the ticket must render primaryAction() as an actual button, not just text, when one applies');
+  assert.ok(deskHtml.includes('} else if (!o.blocker && ticketAction) {'),
+    "the plain-text next-action banner must be the fallback only when there is no single clickable primary action");
+
+  assert.ok(deskHtml.includes("var focusBlock = e.target.closest('[data-focusblock]');") &&
+    deskHtml.includes('focusTarget.scrollIntoView({ behavior:'),
+    'data-focusblock must bring the relevant section into view rather than perform a hidden mutation on her behalf');
+
+  assert.ok(deskHtml.includes("'>Kembali: ' + esc(PHASES[pIndex - 1].label) + '</button>'"),
+    'the reverse-stage action must name its destination phase (e.g. Kembali: Dirangkai dan dikemas), not just say Kembali');
+  console.log('✔ Suite 62 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 61 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 62 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

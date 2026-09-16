@@ -365,6 +365,16 @@
     padding: 11px 14px;
     margin: 0 0 12px;
   }
+  /* SD-06 — the one prominent primary action per stage, sized and placed
+     ahead of every other button in the ticket so it reads as THE thing to
+     do, not one option among several. */
+  .primary-action-btn {
+    display: flex;
+    width: 100%;
+    font-size: 15px;
+    padding: 15px 17px;
+    margin: 0 0 12px;
+  }
 
   .tag {
     display: inline-flex;
@@ -1515,6 +1525,50 @@
     return null;
   }
 
+  /* SD-06 — one prominent, clickable primary action per order stage,
+     mapped directly from the brief's own state table. Every option here
+     reuses the exact data-* attribute an existing block already renders
+     elsewhere (data-markreviewed in reviewBlock(), data-sendpayment in
+     paymentBlock(), data-advance in the phase actions, data-markhandoff/
+     data-markdeliverycomplete in deliveryBlock()) — this only decides
+     which ONE of them to surface prominently at the top of the ticket.
+     Every prerequisite and transition rule stays exactly as validated
+     server-side (updateOrder(), markHandoff(), etc.) and client-side
+     (gate(), packingComplete()) elsewhere; nothing here is a new or
+     shortcut path. Returns null when nothing in the table applies —
+     nextAction()'s plain-text banner covers those cases (blocked, missing
+     info, overdue-only, "just keep working") instead. */
+  function primaryAction(o, catalog) {
+    if (!isActive(o) || o.blocker) return null;
+    if (!o.reviewedAt) return { text: 'Tinjau pesanan', attrs: 'data-markreviewed="1"' };
+
+    var total = billed(o);
+    if (o.payment === 'Unpaid' && total !== null) {
+      return { text: 'Siapkan tagihan WhatsApp', attrs: 'data-sendpayment="' + (usesDeposit(o) ? 'deposit' : 'full') + '"' };
+    }
+    if (o.payment === 'Checking transfer' || o.payment === 'Checking deposit' || o.payment === 'Checking balance') {
+      return { text: 'Periksa pembayaran', attrs: 'data-focusblock="paymentHeading"' };
+    }
+    if (o.phase === 'Not started') {
+      var g = gate(o, catalog);
+      if (!g.ready) return null;
+      return { text: g.allOk ? 'Mulai kerjakan' : 'Tetap mulai kerjakan', attrs: 'data-advance="1"' };
+    }
+    if (o.phase === 'Assembly and packing') {
+      return packingComplete(o) ? { text: 'Lanjut: Siap dikirim', attrs: 'data-advance="1"' }
+        : { text: 'Periksa & kemas', attrs: 'data-focusblock="packingHeading"' };
+    }
+    if (o.phase === 'Ready for dispatch') {
+      var outstanding = total === null ? null : total - (o.received || 0);
+      if (outstanding !== null && outstanding > 0 && o.payment !== 'Paid') {
+        return { text: 'Siapkan pesan pelunasan', attrs: 'data-sendpayment="balance"' };
+      }
+      if (!(o.delivery && o.delivery.handoffAt)) return { text: 'Catat penyerahan', attrs: 'data-markhandoff="1"' };
+      if (!(o.delivery && o.delivery.completedAt)) return { text: 'Tandai selesai', attrs: 'data-markdeliverycomplete="1"' };
+    }
+    return null;
+  }
+
   /* The filtered, sorted list she is actually looking at — computed once and
      shared between renderQueue() and the default-selection logic in
      render(), so the ticket on the right is always the card at the top of
@@ -2521,13 +2575,20 @@
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
-    /* SD-05 — the same one-line next action shown on the card, at the top
-       of the ticket too, so opening it never contradicts what the queue
-       already said. Skipped when a blocker is open — blockerBanner() below
-       already says so, with its own resolve action; showing the same
-       "Kendala: ..." text twice would just be noise. */
+    /* SD-06 — one prominent, clickable primary action when the current
+       stage has one (the brief's own 8-row table); otherwise SD-05's plain
+       next-action text (blocked, missing info, overdue-only, "just keep
+       working" — none of which are a single button). Skipped entirely
+       when a blocker is open — blockerBanner() below already says so, with
+       its own resolve action; repeating "Kendala: ..." here would just be
+       noise. Same underlying nextAction()/primaryAction() the card itself
+       used to pick this order, so the queue and the open ticket never
+       disagree about what to do next. */
+    var pAction = primaryAction(o, catalog);
     var ticketAction = nextAction(o);
-    if (!o.blocker && ticketAction) {
+    if (!o.blocker && pAction) {
+      html += '<button type="button" class="btn primary-action-btn" ' + pAction.attrs + '>' + esc(pAction.text) + '</button>';
+    } else if (!o.blocker && ticketAction) {
       html += '<p class="next-action-banner">' + esc(ticketAction) + '</p>';
     }
 
@@ -2643,7 +2704,8 @@
         html += '<div class="actions">' +
           (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending || packingBlocksAdvance || blockerBlocksAdvance ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
                 : '<span class="why">Pesanan selesai.</span>') +
-          (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
+          (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') +
+            '>Kembali: ' + esc(PHASES[pIndex - 1].label) + '</button>' : '') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
           (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' :
             (packingBlocksAdvance ? '<span class="why">Centang dulu semua item pengecekan kemasan di atas.</span>' :
@@ -3114,6 +3176,21 @@
 
     if (e.target.closest('[data-back]')) {
       if (historyPushed) { historyPushed = false; history.back(); } else { closeDetail(); }
+      return;
+    }
+
+    /* SD-06 — "Periksa pembayaran"/"Periksa & kemas" aren't a single
+       mutating action (verifying a bank transfer or finishing the packing
+       checklist both need her to actually look at something), so the
+       primary action here just brings the relevant section into view
+       instead of performing a click for her. */
+    var focusBlock = e.target.closest('[data-focusblock]');
+    if (focusBlock) {
+      var focusTarget = elTicket.querySelector('[data-fk="' + focusBlock.dataset.focusblock + '"]');
+      if (focusTarget) {
+        focusTarget.focus();
+        focusTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       return;
     }
 

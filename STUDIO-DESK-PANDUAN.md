@@ -57,6 +57,13 @@ hijau di bagian bawah kartu — misalnya **Cek DP Rp100.000**, **Tentukan jadwal
 lengkap**. Baris yang sama juga muncul di bagian paling atas tiket saat pesanan itu dibuka, supaya
 kartu dan tiketnya selalu memberi tahu hal yang sama.
 
+Untuk tahap-tahap yang punya satu tombol jelas untuk ditekan — **Tinjau pesanan**, **Siapkan tagihan
+WhatsApp**, **Mulai kerjakan**, **Periksa & kemas**, **Siapkan pesan pelunasan**, **Catat penyerahan**,
+**Tandai selesai** — tombolnya sengaja dibuat besar dan ditaruh paling atas tiket, terpisah dari
+tombol-tombol lain yang lebih kecil di bawahnya. Itu **satu** tindakan yang paling perlu Anda lakukan
+sekarang untuk pesanan itu; tombol-tombol lain (Kembali, Kirim pesan, dan sejenisnya) tetap ada di
+tempat biasanya kalau Anda perlu.
+
 ## 4. Memilih pesanan, dan apa yang diperiksa "Periksa dulu"
 
 Ketuk sebuah kartu pesanan di daftar untuk membuka tiketnya — tahap kerjanya sekarang juga muncul

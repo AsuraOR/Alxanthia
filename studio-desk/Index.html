@@ -760,6 +760,28 @@
   .toast b { font-family: var(--mono); font-weight: 600; }
   .toast.err { background: var(--madder); }
 
+  /* SD-07 — the "Sudah saya kirim?" prompt after opening WhatsApp. Fixed to
+     the viewport (not the ticket) so it survives navigating to a different
+     order before she answers it, and padded for the home-indicator safe
+     area so it never sits under it on a notched phone. */
+  .send-confirm-bar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 22;
+    background: var(--pine);
+    color: var(--on-accent);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font: 500 13px/1.4 var(--sans);
+    box-shadow: var(--shadow);
+  }
+  .send-confirm-bar .actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
   .foot {
     margin-top: 22px;
     padding-top: 16px;
@@ -894,6 +916,16 @@
     { key: 'Paid',              label: 'Lunas' },
     { key: 'Cancelled',         label: 'Dibatalkan' }
   ];
+
+  /* SD-07 — purpose labels for the phase-update WhatsApp message, e.g.
+     "Buka WhatsApp: pesanan siap" — matches phaseMessage(o)'s own content
+     for the same phase. */
+  var PHASE_MESSAGE_LABELS = {
+    'Assembly and packing': 'sedang dikerjakan',
+    'Ready for dispatch': 'pesanan siap',
+    'Shipped': 'sudah dikirim',
+    'Delivered': 'terima kasih'
+  };
 
   /* SD-12 — mirrors ARCHIVE_MIN_QUERY_LENGTH in Code.gs, so the client can
      show its own "type more" prompt without a wasted round trip for a query
@@ -2421,8 +2453,8 @@
         '<span>Ongkir ' + (o.shipping === null || o.shipping === undefined || o.shipping === ''
           ? 'belum diisi' : esc(rupiah(o.shipping))) + '</span></div>' +
         '<div class="actions">' +
-        '<button type="button" class="btn ghost" data-sendpaid="1">Kirim konfirmasi lunas</button>' +
-        '</div></div>';
+        '<button type="button" class="btn ghost" data-sendpaid="1">Buka WhatsApp: konfirmasi lunas</button>' +
+        '</div>' + lastMessageNote(o, 'payment_confirmed') + '</div>';
     }
 
     var ship = o.shipping;
@@ -2511,21 +2543,21 @@
         '<span class="amt">' + esc(rupiah(depositReceived ? balance : deposit)) + '</span></div>' +
         '<div class="actions">' +
         (!depositReceived
-          ? '<button type="button" class="btn ghost" data-sendpayment="deposit"' + (bankReady ? '' : ' disabled') + '>Kirim tagihan DP</button>' +
+          ? '<button type="button" class="btn ghost" data-sendpayment="deposit"' + (bankReady ? '' : ' disabled') + '>Buka WhatsApp: tagihan DP</button>' +
             '<button type="button" class="btn ghost" data-pay="Checking deposit">Tandai DP perlu dicek</button>' +
             '<button type="button" class="btn" data-askpaid="Deposit paid">Tandai DP diterima</button>'
           : (balanceDue
             ? (o.phase === 'Ready for dispatch'
-                ? '<button type="button" class="btn" data-sendpayment="balance"' + (bankReady ? '' : ' disabled') + '>Kirim pesan pelunasan</button>'
+                ? '<button type="button" class="btn" data-sendpayment="balance"' + (bankReady ? '' : ' disabled') + '>Buka WhatsApp: pelunasan</button>'
                 : '') +
               '<button type="button" class="btn ghost" data-pay="Checking balance">Tandai perlu dicek</button>' +
               '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>'
             : '<span class="why">Pelunasan diminta saat pesanan Siap dikirim.</span>')) +
-        '</div>';
+        '</div>' + lastMessageNote(o, !depositReceived ? 'payment_deposit' : 'payment_balance');
     } else {
-      html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full"' + (bankReady ? '' : ' disabled') + '>Kirim pesan</button>' +
+      html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full"' + (bankReady ? '' : ' disabled') + '>Buka WhatsApp: tagihan</button>' +
         '<button type="button" class="btn ghost" data-pay="Checking transfer">Tandai perlu dicek</button>' +
-        '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button></div>';
+        '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button></div>' + lastMessageNote(o, 'payment_full');
     }
 
     if (!bankReady) html += '<span class="why">Nomor rekening belum diisi — pesan pembayaran tidak bisa dikirim.</span>';
@@ -2706,10 +2738,11 @@
                 : '<span class="why">Pesanan selesai.</span>') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') +
             '>Kembali: ' + esc(PHASES[pIndex - 1].label) + '</button>' : '') +
-          (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
+          (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Buka WhatsApp: ' + esc(PHASE_MESSAGE_LABELS[phase] || 'update') + '</button>' : '') +
           (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' :
             (packingBlocksAdvance ? '<span class="why">Centang dulu semua item pengecekan kemasan di atas.</span>' :
               (blockerBlocksAdvance ? '<span class="why">Selesaikan kendala di atas dulu sebelum melanjutkan.</span>' : ''))) +
+          (pIndex > 0 ? lastMessageNote(o, 'phase_' + phase) : '') +
           '</div>';
       }
       html += '</div>';
@@ -3311,18 +3344,20 @@
 
     if (e.target.closest('[data-sendpayment]')) {
       if (billed(o) === null) return;
-      openWhatsApp(o, paymentRequestMessage(o, e.target.closest('[data-sendpayment]').dataset.sendpayment));
+      var sendKind = e.target.closest('[data-sendpayment]').dataset.sendpayment;
+      var sendKindLabels = { deposit: 'tagihan DP', balance: 'pelunasan', full: 'tagihan' };
+      openWhatsApp(o, paymentRequestMessage(o, sendKind), 'payment_' + sendKind, sendKindLabels[sendKind] || sendKindLabels.full);
       return;
     }
 
     if (e.target.closest('[data-sendpaid]')) {
-      openWhatsApp(o, paymentConfirmedMessage(o));
+      openWhatsApp(o, paymentConfirmedMessage(o), 'payment_confirmed', 'konfirmasi lunas');
       return;
     }
 
     if (e.target.closest('[data-sendphase]')) {
       var msg = phaseMessage(o);
-      if (msg) openWhatsApp(o, msg);
+      if (msg) openWhatsApp(o, msg, 'phase_' + o.phase, PHASE_MESSAGE_LABELS[o.phase] || 'update');
       return;
     }
 
@@ -3450,14 +3485,95 @@
     if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
   }
 
-  /* Opens the buyer's WhatsApp chat with the message already typed in,
-     ready to send — never sent automatically, she still taps send herself.
-     A new top-level window, not the Apps Script iframe (wa.me refuses to
-     render framed). */
-  function openWhatsApp(o, message) {
+  /* SD-07 — opening WhatsApp only ever records that a message was
+     PREPARED, never that it was sent; "sent" is only ever the operator's
+     own later, explicit confirmation (see confirmMessageSentAction()
+     below) — this function must never itself claim more than that a draft
+     was handed to her. The event ID is minted here, client-side, before
+     window.open() — logMessagePrepared() is a background, best-effort
+     call sent right after; waiting on that round trip first would run
+     window.open() outside the click's own event, which browsers treat as
+     a popup and block. */
+  function openWhatsApp(o, message, type, purposeLabel) {
     var digits = String(o.wa || '').replace(/[^\d]/g, '');
     var url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(message);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    var win = window.open(url, '_blank', 'noopener,noreferrer');
+    var eventId = generateIdempotencyKey();
+    pendingSendConfirm = { ref: o.ref, eventId: eventId, type: type, purposeLabel: purposeLabel };
+    renderSendConfirmBar();
+    google.script.run
+      .withSuccessHandler(function () {})
+      .withFailureHandler(function () { /* best-effort audit trail; never blocks the confirm step below */ })
+      .logMessagePrepared({ ref: o.ref, type: type, eventId: eventId });
+    if (!win) {
+      copyText(message);
+      toast('WhatsApp tidak bisa dibuka otomatis — teks pesan sudah disalin, tempel manual.', true);
+    }
+  }
+
+  /* The one-line "last confirmed send" note next to the button that would
+     resend the same message type — reduces duplicate messages without
+     blocking a deliberate resend, which stays just as reachable as any
+     first send. */
+  function lastMessageNote(o, type) {
+    if (!o.lastMessage || o.lastMessage.type !== type) return '';
+    return '<span class="why" style="display:block;margin-top:8px">Terakhir dikonfirmasi terkirim ' + esc(fmtStamp(o.lastMessage.confirmedAt)) + '.</span>';
+  }
+
+  /* SD-07 — the "Sudah saya kirim?" prompt lives outside the ticket
+     (appended once to <body>) and is keyed off pendingSendConfirm.ref, not
+     state.selected — she can open WhatsApp for one order, switch to
+     another, and the confirmation she taps afterwards still lands on the
+     original order, never the one she happens to be looking at when she
+     taps it. */
+  var pendingSendConfirm = null; // { ref, eventId, type, purposeLabel } | null
+  function renderSendConfirmBar() {
+    var el = document.getElementById('sendConfirmBar');
+    if (!pendingSendConfirm) {
+      if (el) el.hidden = true;
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'sendConfirmBar';
+      el.className = 'send-confirm-bar';
+      el.setAttribute('role', 'status');
+      document.body.appendChild(el);
+      el.addEventListener('click', function (e) {
+        if (e.target.closest('[data-confirmsent]')) { confirmMessageSentAction(); return; }
+        if (e.target.closest('[data-dismisssend]')) { pendingSendConfirm = null; renderSendConfirmBar(); return; }
+      });
+    }
+    el.hidden = false;
+    el.innerHTML = '<span>Pesan (' + esc(pendingSendConfirm.purposeLabel) + ') untuk ' + esc(pendingSendConfirm.ref) +
+      ' dibuka di WhatsApp. Sudah dikirim?</span>' +
+      '<div class="actions"><button type="button" class="btn small" data-confirmsent="1">Sudah saya kirim</button>' +
+      '<button type="button" class="btn ghost small" data-dismisssend="1">Belum</button></div>';
+  }
+
+  function confirmMessageSentAction() {
+    if (!pendingSendConfirm) return;
+    var target = pendingSendConfirm; // captured now — pendingSendConfirm may change before this call returns
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.ok) {
+          toast('Dicatat: pesan untuk ' + esc(target.ref) + ' sudah dikirim.');
+          var order = findOrder(target.ref);
+          if (order) order.lastMessage = { type: target.type, confirmedAt: res.confirmedAt, confirmedBy: '' };
+        } else {
+          toast(esc((res && res.message) || 'Gagal mencatat pesan terkirim.'), true);
+        }
+        if (pendingSendConfirm === target) pendingSendConfirm = null;
+        renderSendConfirmBar();
+        render();
+      })
+      .withFailureHandler(function (err) {
+        toast(esc(String((err && err.message) || err)), true);
+        if (pendingSendConfirm === target) pendingSendConfirm = null;
+        renderSendConfirmBar();
+        render();
+      })
+      .confirmMessageSent({ ref: target.ref, eventId: target.eventId });
   }
 
   function paymentRequestMessage(o, kind) {

@@ -179,10 +179,10 @@ yang tidak masuk akal itu. Mengubah jadwal tidak pernah menimpa tanggal pesanan 
 
 Pesanan berjalan lewat tahap: **Belum mulai → Dirangkai dan dikemas → Siap dikirim → Dikirim →
 Selesai**. Ketuk **Lanjut** untuk maju satu tahap. Di setiap tahap setelah "Belum mulai", ada tombol
-**Kirim pesan** yang membuka WhatsApp ke pembeli dengan kabar yang sesuai tahap itu sudah diketik —
-Anda tinggal membaca sekali lalu ketuk kirim. Kalau sebuah pesanan ditandai **Selesai**, ia langsung
-pindah keluar dari daftar **Aktif** — akan muncul pesan kecil di bawah layar yang menjelaskan ini,
-jadi kartunya menghilang bukan karena ada yang salah.
+**Buka WhatsApp: ...** yang membuka WhatsApp ke pembeli dengan kabar yang sesuai tahap itu sudah
+diketik — lihat §18 untuk cara kerjanya secara lengkap. Kalau sebuah pesanan ditandai **Selesai**, ia
+langsung pindah keluar dari daftar **Aktif** — akan muncul pesan kecil di bawah layar yang menjelaskan
+ini, jadi kartunya menghilang bukan karena ada yang salah.
 
 Sebelum bisa lanjut dari **Dirangkai dan dikemas** ke **Siap dikirim**, ada bagian baru **Cek sebelum
 siap kirim** yang harus dicentang semua dulu:
@@ -277,7 +277,35 @@ Di bagian paling bawah halaman ada tiga tombol kecil: **Otomatis**, **Terang**, 
 gelap apa pun pengaturan ponselnya (misalnya supaya lebih jelas di bawah lampu bengkel), ketuk salah
 satu pilihan lain. Pilihan ini diingat di ponsel itu saja.
 
-## 18. Kalau ada yang terlihat aneh
+## 18. Mengirim pesan WhatsApp dan mengonfirmasi terkirim
+
+Setiap tombol **Buka WhatsApp: ...** di seluruh tiket (tagihan DP, pelunasan, konfirmasi lunas, update
+tahap kerja) membuka aplikasi WhatsApp dengan pesan yang sudah diketik lengkap — Anda tinggal membaca
+sekali lalu ketuk kirim di WhatsApp sendiri, sama seperti sebelumnya. Yang baru: Desk **tidak pernah
+menganggap pesan itu sudah terkirim hanya karena WhatsApp-nya terbuka**. Begitu Anda kembali ke Desk,
+muncul bilah kecil di bagian bawah layar bertuliskan "Sudah dikirim?" dengan dua pilihan:
+
+- **Sudah saya kirim** — konfirmasi eksplisit bahwa pesan itu benar-benar sudah dikirim ke pembeli.
+  Waktunya dicatat dan bisa dilihat lagi nanti (lihat di bawah).
+- **Belum** — menutup bilahnya tanpa mencatat apa-apa. Tidak masalah kalau Anda berubah pikiran atau
+  belum sempat kirim; tidak ada yang dianggap terjadi sampai Anda benar-benar menekan **Sudah saya
+  kirim**.
+
+Bilah ini tetap tertaut ke pesanan yang tadi Anda buka WhatsApp-nya, meskipun Anda sempat berpindah ke
+pesanan lain sebelum menjawabnya — jadi konfirmasinya tidak pernah salah tersasar ke pesanan yang
+sedang Anda lihat saat ini.
+
+Setelah dikonfirmasi, muncul catatan kecil **"Terakhir dikonfirmasi terkirim ..."** di dekat tombol
+yang sama — supaya Anda tidak perlu menebak-nebak apa pesan sejenis itu sudah pernah dikirim sebelumnya.
+Ini hanya pengingat, bukan penghalang: tombolnya tetap bisa ditekan lagi kapan saja kalau memang perlu
+mengirim ulang (misalnya pembeli minta dikirim ulang, atau pesan sebelumnya ternyata tidak sampai).
+Mengirim ulang tidak pernah mengubah status pembayaran atau tahap kerja pesanan — itu murni riwayat
+pengiriman pesan, terpisah dari data pesanan yang sebenarnya.
+
+Kalau WhatsApp tidak bisa terbuka otomatis (misalnya browser memblokirnya), teks pesannya otomatis
+tersalin — tinggal buka WhatsApp sendiri dan tempel.
+
+## 19. Kalau ada yang terlihat aneh
 
 - **Tag merah "Review"** pada kartu pesanan berarti harga di pesanan itu perlu dicek pemilik studio
   dulu sebelum dikerjakan — jangan mulai kerjakan sebelum itu selesai.

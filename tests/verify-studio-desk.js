@@ -1159,7 +1159,7 @@ console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and repor
 
   const applyReport = sandbox.deskOpsMigrationApply();
   assert.ok(applyReport.includes('Desk Ledger') && applyReport.includes('creating'));
-  assert.strictEqual(sandbox._insertedSheetNames.length, 7, 'all seven Desk Ops sheets must be created');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 8, 'all eight Desk Ops sheets must be created');
   // Array.from() re-materialises both sides in this (outer) realm — the vm
   // sandbox's own arrays are a different realm than this test file's, so a
   // strict-equal Array constructor check would fail here despite matching
@@ -1173,7 +1173,7 @@ console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and repor
   // Re-running after creation must be a no-op, not a duplicate/second sheet.
   const secondApply = sandbox.deskOpsMigrationApply();
   assert.ok(secondApply.includes('OK'), 're-running the migration once sheets exist must report OK, not recreate them');
-  assert.strictEqual(sandbox._insertedSheetNames.length, 7, 'a second run must not insert any further sheets');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 8, 'a second run must not insert any further sheets');
   console.log('✔ Suite 49 Passed\n');
 }
 
@@ -1627,6 +1627,115 @@ console.log('--- SUITE 62 (SD-06 client): one prominent primary action per stage
   console.log('✔ Suite 62 Passed\n');
 }
 
+console.log('--- SUITE 63 (SD-07): opening WhatsApp only ever records a prepared message, never a sent claim, until explicitly confirmed ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-MSG-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Message': makeOpsSheetStub([[]]), 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const prepared = sandbox.logMessagePrepared({ ref: 'ALX-MSG-1', type: 'payment_deposit' });
+  assert.strictEqual(prepared.ok, true);
+  assert.ok(prepared.eventId);
+  assert.ok(prepared.preparedAt);
+
+  // Never sent, just prepared and abandoned — getMessageHistory() must show
+  // it as unconfirmed, and the order's own lastMessage must stay unset.
+  let history = sandbox.getMessageHistory('ALX-MSG-1');
+  assert.strictEqual(history.length, 1);
+  assert.strictEqual(history[0].confirmedAt, '');
+  assert.strictEqual(sandbox.listOrders()[0].lastMessage, null,
+    'an order with only an unconfirmed prepared message must not show a lastMessage — opening WhatsApp is never itself a sent claim');
+
+  const confirmed = sandbox.confirmMessageSent({ ref: 'ALX-MSG-1', eventId: prepared.eventId });
+  assert.strictEqual(confirmed.ok, true);
+  assert.ok(confirmed.confirmedAt);
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].lastMessage.type, 'payment_deposit');
+  assert.strictEqual(orders[0].lastMessage.confirmedAt, confirmed.confirmedAt,
+    'listOrders() must surface the last CONFIRMED send, keyed correctly to this order');
+
+  // A retry after a lost response confirms the same event once, not twice.
+  const retry = sandbox.confirmMessageSent({ ref: 'ALX-MSG-1', eventId: prepared.eventId });
+  assert.strictEqual(retry.idempotentReplay, true);
+  assert.strictEqual(retry.confirmedAt, confirmed.confirmedAt);
+
+  const unknownEvent = sandbox.confirmMessageSent({ ref: 'ALX-MSG-1', eventId: 'msg_doesnotexist' });
+  assert.strictEqual(unknownEvent.ok, false);
+  assert.strictEqual(unknownEvent.code, 'NOT_FOUND');
+  console.log('✔ Suite 63 Passed\n');
+}
+
+console.log('--- SUITE 64 (SD-07): a deliberate resend records its own new event, keeping full history without altering payment or work stage ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-MSG-2', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Message': makeOpsSheetStub([[]]), 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const first = sandbox.logMessagePrepared({ ref: 'ALX-MSG-2', type: 'payment_deposit' });
+  sandbox.confirmMessageSent({ ref: 'ALX-MSG-2', eventId: first.eventId });
+  const second = sandbox.logMessagePrepared({ ref: 'ALX-MSG-2', type: 'payment_deposit' });
+  assert.notStrictEqual(second.eventId, first.eventId, 'a resend must mint its own event, not reuse the first one');
+  const secondConfirm = sandbox.confirmMessageSent({ ref: 'ALX-MSG-2', eventId: second.eventId });
+  assert.strictEqual(secondConfirm.ok, true);
+  assert.notStrictEqual(secondConfirm.idempotentReplay, true, 'confirming a genuinely new event must not be treated as a replay of the first');
+
+  const history = sandbox.getMessageHistory('ALX-MSG-2');
+  assert.strictEqual(history.length, 2, 'both the original send and the resend must remain in history, neither one overwritten');
+  assert.strictEqual(history[0].eventId, second.eventId, 'getMessageHistory() must return newest first');
+
+  const order = sandbox.listOrders()[0];
+  assert.strictEqual(order.payment, 'Unpaid', 'a resend must never itself change Payment Status');
+  assert.strictEqual(order.phase, 'Not started', 'a resend must never itself change Work Phase');
+  console.log('✔ Suite 64 Passed\n');
+}
+
+console.log('--- SUITE 65 (SD-07 client): WhatsApp actions are purpose-labelled, prepared and confirmed are recorded separately, and a resend never touches payment/work stage ---');
+{
+  assert.ok(deskHtml.includes(">Buka WhatsApp: tagihan DP</button>") && deskHtml.includes(">Buka WhatsApp: pelunasan</button>") &&
+    deskHtml.includes(">Buka WhatsApp: tagihan</button>") && deskHtml.includes(">Buka WhatsApp: konfirmasi lunas</button>"),
+    'every WhatsApp action must be labelled by purpose ("Buka WhatsApp: ..."), not just "Kirim pesan"/"Kirim ..." implying it was already sent');
+  assert.ok(deskHtml.includes(">Buka WhatsApp: ' + esc(PHASE_MESSAGE_LABELS[phase] || 'update')"),
+    'the phase-update WhatsApp action must also be purpose-labelled (e.g. Buka WhatsApp: pesanan siap)');
+
+  assert.ok(deskHtml.includes('function openWhatsApp(o, message, type, purposeLabel)') &&
+    deskHtml.includes('var eventId = generateIdempotencyKey();') &&
+    deskHtml.includes('.logMessagePrepared({ ref: o.ref, type: type, eventId: eventId });'),
+    'opening WhatsApp must record a PREPARED message with its own event id, minted client-side before the (possibly slow) server round trip so the popup is never blocked');
+  assert.ok(/var win = window\.open\(url,[\s\S]{0,200}var eventId = generateIdempotencyKey\(\);/.test(deskHtml),
+    'window.open() must fire before the server round trip is even started, so it stays inside the click\'s own event and is never blocked as a popup');
+  assert.ok(deskHtml.includes("if (!win) {") && deskHtml.includes('copyText(message);'),
+    'when WhatsApp cannot open, the message text must be copied as a fallback rather than leaving her stuck');
+
+  assert.ok(deskHtml.includes('function confirmMessageSentAction()') &&
+    deskHtml.includes('.confirmMessageSent({ ref: target.ref, eventId: target.eventId });'),
+    'the explicit "Sudah saya kirim" confirmation must be its own separate server call, distinct from opening WhatsApp');
+  assert.ok(deskHtml.includes('var target = pendingSendConfirm;') && deskHtml.includes("pendingSendConfirm = { ref: o.ref, eventId: eventId, type: type, purposeLabel: purposeLabel };"),
+    'the pending confirmation must capture the order reference at prepare time and confirm against THAT order, not whichever ticket happens to be open when she taps confirm');
+  assert.ok(!deskHtml.includes('openWhatsApp(o, message);') && !/openWhatsApp\(o, message\)\s*\{[^}]*window\.open[^}]*\}\s*$/m.test(deskHtml.split('function paymentRequestMessage')[0].slice(-400)),
+    'openWhatsApp must not claim a message sent on its own — no direct write of a confirmed/sent state inside it');
+
+  assert.ok(deskHtml.includes('function lastMessageNote(o, type)') && deskHtml.includes('Terakhir dikonfirmasi terkirim'),
+    'the last operator-confirmed send time/type must be shown next to the action that would resend it');
+  assert.ok((deskHtml.match(/lastMessageNote\(o, /g) || []).length >= 4,
+    'lastMessageNote() must be wired in next to each of the distinct WhatsApp actions (deposit/balance/full/confirmed/phase), not just one');
+
+  // Resending must stay reachable and must never itself touch payment or
+  // work-stage fields — openWhatsApp()/logMessagePrepared()/
+  // confirmMessageSent() must be the only calls involved, none of them
+  // updateOrder().
+  assert.ok(deskHtml.includes("openWhatsApp(o, paymentRequestMessage(o, sendKind), 'payment_' + sendKind, sendKindLabels[sendKind] || sendKindLabels.full);"),
+    'the payment-request action must always be reachable regardless of any prior send, i.e. a deliberate resend');
+
+  assert.ok(deskHtml.includes("el.id = 'sendConfirmBar';") && deskHtml.includes('env(safe-area-inset-bottom'),
+    'the confirmation prompt must be a fixed element padded for the safe area, so it stays usable on a notched phone');
+  console.log('✔ Suite 65 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 62 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 65 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

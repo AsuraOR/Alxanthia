@@ -104,6 +104,17 @@ var DESK_BLOCKER_SHEET = 'Desk Blocker';
 var DESK_BLOCKER_HEADERS = ['Event ID', 'Order Reference', 'Reason', 'Note', 'Opened At', 'Opened By', 'Resolved At', 'Resolved By'];
 var BLOCKER_REASONS = ['bahan belum tersedia', 'menunggu jawaban pembeli', 'masalah pengiriman', 'lainnya'];
 
+// SD-07 — append-only: opening WhatsApp with a prepared message and the
+// operator's own later "Sudah saya kirim" confirmation are two distinct
+// events on the SAME row (Prepared At is set immediately; Confirmed Sent
+// At/By only once she explicitly says so) — never inferred from the URL
+// having been opened. A message never sent (WhatsApp closed without
+// confirming) stays a row with no Confirmed Sent At forever; that is not
+// an error, just an unconfirmed attempt.
+var DESK_MESSAGE_SHEET = 'Desk Message';
+var DESK_MESSAGE_HEADERS = ['Event ID', 'Order Reference', 'Message Type', 'Prepared At', 'Confirmed Sent At', 'Confirmed By', 'Template Version'];
+var MESSAGE_TEMPLATE_VERSION = 'v1';
+
 // receipt: money in. refund: money out. correction: a signed adjustment for
 // fixing a mistake without silently editing or deleting the row it corrects
 // — pair it with reversesEventId. Never delete or overwrite a ledger row.
@@ -201,12 +212,13 @@ function listOrders() {
   var scheduleMap = getScheduleMap_();
   var deliveryMap = getDeliveryMap_();
   var blockerMap = getBlockerMap_();
+  var lastMessageMap = getLastConfirmedMessageMap_();
 
   var orders = [];
   allRows.forEach(function (r) {
     var order = rowToOrder_(rowValuesByRow[r], headers, r);
     if (order && includeOrder_(order, deliveryMap)) {
-      attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap);
+      attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap, lastMessageMap);
       orders.push(order);
     }
   });
@@ -301,10 +313,11 @@ function searchArchive(payload) {
   var scheduleMap = getScheduleMap_();
   var deliveryMap = getDeliveryMap_();
   var blockerMap = getBlockerMap_();
+  var lastMessageMap = getLastConfirmedMessageMap_();
 
   var results = page.map(function (m) {
     var order = rowToOrder_(m.values, headers, m.row);
-    if (order) attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap);
+    if (order) attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap, lastMessageMap);
     return order;
   }).filter(function (o) { return !!o; });
 
@@ -607,7 +620,8 @@ function ensureDeskOpsSheets_(apply) {
     { name: DESK_SCHEDULE_SHEET, headers: DESK_SCHEDULE_HEADERS },
     { name: DESK_COMPOSITION_SHEET, headers: DESK_COMPOSITION_HEADERS },
     { name: DESK_DELIVERY_SHEET, headers: DESK_DELIVERY_HEADERS },
-    { name: DESK_BLOCKER_SHEET, headers: DESK_BLOCKER_HEADERS }
+    { name: DESK_BLOCKER_SHEET, headers: DESK_BLOCKER_HEADERS },
+    { name: DESK_MESSAGE_SHEET, headers: DESK_MESSAGE_HEADERS }
   ];
   var report = [];
   specs.forEach(function (spec) {
@@ -846,7 +860,7 @@ function getPaymentLedger(ref) {
 // whose Payment Status implies money already changed hands, but which has
 // no ledger events, is surfaced as needing reconciliation rather than
 // being silently treated as freshly unpaid or, worse, as fully received.
-function attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap) {
+function attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap, lastMessageMap) {
   var ledger = ledgerSummary[order.ref];
   order.received = ledger ? ledger.received : 0;
   order.hasLedgerEvents = !!(ledger && ledger.hasLedgerEvents);
@@ -858,6 +872,7 @@ function attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliv
   order.schedule = (scheduleMap && scheduleMap[order.ref]) || null;
   order.delivery = (deliveryMap && deliveryMap[order.ref]) || null;
   order.blocker = (blockerMap && blockerMap[order.ref]) || null;
+  order.lastMessage = (lastMessageMap && lastMessageMap[order.ref]) || null;
 }
 
 // Single-order equivalent of attachOpsSummary_, for updateOrder()'s and
@@ -876,6 +891,7 @@ function attachOpsSummaryForSingle_(order) {
   order.schedule = getSchedule_(order.ref);
   order.delivery = getDelivery_(order.ref);
   order.blocker = getOpenBlocker_(order.ref);
+  order.lastMessage = getLastConfirmedMessage_(order.ref);
   return order;
 }
 
@@ -1534,6 +1550,137 @@ function resolveBlocker(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ============================================================================
+// SD-07 — WhatsApp preparation and sending history. logMessagePrepared()
+// fires the moment a WhatsApp draft is opened — this is never itself a
+// "sent" claim, just a record that she was handed a prepared message.
+// confirmMessageSent() is the separate, explicit "Sudah saya kirim" she
+// taps only after actually sending it (or not, if she changes her mind —
+// in which case the row just stays unconfirmed forever, which is honest,
+// not an error).
+// ============================================================================
+function logMessagePrepared(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var type = String(payload.type || '');
+  if (!ref || !type) return { ok: false, code: 'BAD_REF', message: 'Referensi atau jenis pesan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var sheet = openOpsSheet_(DESK_MESSAGE_SHEET);
+    var eventId = 'msg_' + Utilities.getUuid();
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    sheet.appendRow([eventId, ref, type, at, '', '', MESSAGE_TEMPLATE_VERSION]);
+    return { ok: true, eventId: eventId, preparedAt: at };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Idempotent by eventId — a retry after a lost response confirms the same
+// event once, returning the original confirmedAt rather than a second,
+// later timestamp. eventId is looked up together with ref as a defensive
+// check, exactly like findRowByReference_ elsewhere in this file, though a
+// client can only ever have minted an eventId for its own order.
+function confirmMessageSent(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var eventId = String(payload.eventId || '');
+  if (!ref || !eventId) return { ok: false, code: 'BAD_REF', message: 'Referensi pesan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var sheet = openOpsSheet_(DESK_MESSAGE_SHEET);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { ok: false, code: 'NOT_FOUND', message: 'Catatan pesan tidak ditemukan — coba buka ulang WhatsApp-nya.' };
+    var values = sheet.getRange(2, 1, lastRow - 1, DESK_MESSAGE_HEADERS.length).getValues();
+    for (var i = 0; i < values.length; i += 1) {
+      if (String(values[i][0]) !== eventId || String(values[i][1]) !== ref) continue;
+      if (values[i][4]) {
+        return { ok: true, confirmedAt: String(values[i][4]), confirmedBy: String(values[i][5] || ''), idempotentReplay: true };
+      }
+      var rowNum = i + 2;
+      var by = String(Session.getActiveUser().getEmail() || '');
+      var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+      sheet.getRange(rowNum, 5, 1, 2).setValues([[at, by]]);
+      logActivity_(ref, 'message_sent', 'Pesan WhatsApp (' + String(values[i][2]) + ') dikonfirmasi terkirim.', '');
+      return { ok: true, confirmedAt: at, confirmedBy: by };
+    }
+    return { ok: false, code: 'NOT_FOUND', message: 'Catatan pesan tidak ditemukan — coba buka ulang WhatsApp-nya.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function rowToMessage_(row) {
+  return {
+    eventId: String(row[0]), type: String(row[2] || ''), preparedAt: String(row[3] || ''),
+    confirmedAt: String(row[4] || ''), confirmedBy: String(row[5] || ''), templateVersion: String(row[6] || '')
+  };
+}
+
+function getMessageHistory(ref) {
+  checkAccess_();
+  ref = String(ref || '');
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_MESSAGE_SHEET); } catch (e) { return []; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_MESSAGE_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) !== ref) continue;
+    out.push(rowToMessage_(values[i]));
+  }
+  out.reverse();
+  return out;
+}
+
+// Single-ref equivalent of getLastConfirmedMessageMap_() below, for
+// attachOpsSummaryForSingle_()'s single-order responses.
+function getLastConfirmedMessage_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_MESSAGE_SHEET); } catch (e) { return null; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_MESSAGE_HEADERS.length).getValues();
+  var best = null;
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) !== ref) continue;
+    var confirmedAt = String(values[i][4] || '');
+    if (!confirmedAt) continue;
+    if (!best || confirmedAt > best.confirmedAt) best = { type: String(values[i][2]), confirmedAt: confirmedAt, confirmedBy: String(values[i][5] || '') };
+  }
+  return best;
+}
+
+// Bulk map for listOrders() — the single most recent CONFIRMED send per
+// order, across every message type; an unconfirmed preparation never
+// appears here, exactly like an unconfirmed receipt never appears as
+// "received" in the payment ledger.
+function getLastConfirmedMessageMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_MESSAGE_SHEET); } catch (e) { return map; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_MESSAGE_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    var confirmedAt = String(values[i][4] || '');
+    if (!confirmedAt) continue;
+    var ref = String(values[i][1]);
+    var existing = map[ref];
+    if (!existing || confirmedAt > existing.confirmedAt) {
+      map[ref] = { type: String(values[i][2]), confirmedAt: confirmedAt, confirmedBy: String(values[i][5] || '') };
+    }
+  }
+  return map;
 }
 
 // ============================================================================

@@ -228,34 +228,36 @@ Then delete the test row from the sheet.
 
 ---
 
-## Part 10 — Desk Ops setup (payment ledger, checklist, activity log, review, scheduling, composition, delivery, blockers)
+## Part 10 — Desk Ops setup (payment ledger, checklist, activity log, review, scheduling, composition, delivery, blockers, WhatsApp history)
 
 This part is for the additive features layered on top of the base Desk: a verified payment ledger, a
 server-saved production/packing checklist, a plain-Indonesian activity log, explicit order review
 completion, an agreed schedule/production deadline, saved package composition, delivery/pickup records,
-and explicit blockers. **Skip this part entirely if you haven't been asked to enable these** — the base
-Desk (Parts 1–9) works exactly as before without it, and every one of these features degrades safely
-(shows zero/nothing, never throws) until you run the migration below.
+explicit blockers, and a WhatsApp preparation/sending history. **Skip this part entirely if you haven't
+been asked to enable these** — the base Desk (Parts 1–9) works exactly as before without it, and every
+one of these features degrades safely (shows zero/nothing, never throws) until you run the migration
+below.
 
 ### What gets added
 
-Seven new sheets in the **same spreadsheet** as `Orders`, alongside it, never touching it:
+Eight new sheets in the **same spreadsheet** as `Orders`, alongside it, never touching it:
 
 | Sheet | Columns | What it's for |
 | --- | --- | --- |
 | `Desk Ledger` | Event ID, Order Reference, Type, Amount, Note, Recorded At, Recorded By, Reverses Event ID, Idempotency Key | Every verified receipt/refund/correction she records. Append-only — a correction is its own new row, never an edit to an old one. |
 | `Desk Checklist` | Order Reference, Item Key, Content Version, Completed, Completed At, Completed By | Her production and packing checks, saved so they survive a cleared browser cache or a new phone. |
-| `Desk Activity` | Event ID, Order Reference, Action, Detail, At, By, Mutation ID | A plain-Indonesian history: payments recorded, phase changes, order review, schedule changes, composition set, delivery/handoff/completion, blocker opened/resolved. |
+| `Desk Activity` | Event ID, Order Reference, Action, Detail, At, By, Mutation ID | A plain-Indonesian history: payments recorded, phase changes, order review, schedule changes, composition set, delivery/handoff/completion, blocker opened/resolved, WhatsApp message confirmed sent. |
 | `Desk Schedule` | Order Reference, Agreed Date, Agreed Time, Production Deadline, Agreed At, Agreed By, Reschedule Reason | The agreed fulfillment date/time and a separate internal production deadline — kept apart from the customer's original `Preferred Date` on `Orders`, which is never overwritten. |
 | `Desk Composition` | Order Reference, Line Key, Composition JSON, Updated At, Updated By | Which specific flowers/additions actually went into a "studio's choice" package line, with labels snapshotted at save time so a later catalogue edit can't rewrite what a past order meant. |
 | `Desk Delivery` | Order Reference, Recipient Name, Recipient Contact, Destination Detail, Courier, Tracking, Handoff At, Completed At, Updated At, Updated By | Delivery/pickup details, plus the actual handoff and completion timestamps — separate from `Work Phase`. |
 | `Desk Blocker` | Event ID, Order Reference, Reason, Note, Opened At, Opened By, Resolved At, Resolved By | Append-only: an open row (empty `Resolved At`) is the current blocker, if any; resolving fills in the last two columns rather than deleting the row. |
+| `Desk Message` | Event ID, Order Reference, Message Type, Prepared At, Confirmed Sent At, Confirmed By, Template Version | One row per WhatsApp draft opened. Prepared At is set the moment the draft opens — that is never itself a "sent" claim. Confirmed Sent At/By are only ever set by her own explicit "Sudah saya kirim" afterwards; a row with no Confirmed Sent At just means she opened WhatsApp and never confirmed sending it, which is not an error. |
 
 Nothing here touches `WRITABLE_FIELDS` — the Desk still writes exactly the same five `Orders` columns
-it always has (Part 2). These seven sheets are written only through their own narrow, validated
+it always has (Part 2). These eight sheets are written only through their own narrow, validated
 commands (`recordPayment`, `setChecklistItem`, `markReviewed`, `setSchedule`, `setComposition`,
-`setDeliveryInfo`, `markHandoff`, `markDeliveryComplete`, `setBlocker`, `resolveBlocker`), never through
-`updateOrder`.
+`setDeliveryInfo`, `markHandoff`, `markDeliveryComplete`, `setBlocker`, `resolveBlocker`,
+`logMessagePrepared`, `confirmMessageSent`), never through `updateOrder`.
 
 ### Running the migration
 
@@ -287,7 +289,7 @@ dispatch (Part 9, item 2) exactly as it always has, in addition to — not inste
 Disabling these features doesn't require deleting anything:
 
 - To stop using this layer's UI, redeploy an earlier version of this script (Part 9) that predates this
-  part — the seven `Desk *` sheets simply sit unused; nothing reads or writes them once the older code
+  part — the eight `Desk *` sheets simply sit unused; nothing reads or writes them once the older code
   is live again.
 - If you want the sheets gone entirely, delete them from the spreadsheet directly (right-click the
   sheet tab → Delete). This is a manual, deliberate step — the migration functions never delete
@@ -370,9 +372,9 @@ recalculated server-side by the order writer at submission time, never anything 
 browser or from the Desk itself. If a total looks wrong, check `Price Mismatch` on that row in the
 sheet directly (the Desk's gate surfaces this as "Harga ditandai REVIEW").
 
-### "Sheet ... belum ada" error when recording a payment, ticking a checklist item, marking reviewed, setting a schedule, saving a composition, recording delivery, or logging a blocker
+### "Sheet ... belum ada" error when recording a payment, ticking a checklist item, marking reviewed, setting a schedule, saving a composition, recording delivery, logging a blocker, or opening WhatsApp
 
 The Desk Ops sheets (Part 10) haven't been created yet in this spreadsheet, or this deployment is
 running older code that predates them. Run `deskOpsMigrationApply()` from the Apps Script editor (Part
-10) and redeploy. Everything else in the Desk keeps working normally in the meantime — these seven
+10) and redeploy. Everything else in the Desk keeps working normally in the meantime — these eight
 sheets/features are the only things that need the migration.

@@ -458,6 +458,14 @@ console.log('--- SUITE 20: an early balance payment can still be recorded ahead 
   console.log('✔ Suite 20 Passed\n');
 }
 
+console.log('--- SUITE 20a: the catalogue fetch is data, not code — no new Function() over network content ---');
+{
+  assert.ok(!serverSrc.includes('new Function'), 'the catalogue fetch must never execute the response as code');
+  assert.ok(serverSrc.includes("JSON.parse(res.getContentText())"), 'the catalogue fetch must JSON.parse the response');
+  assert.ok(serverSrc.includes("site-content.json"), 'SITE_CONTENT_URL must point at the JSON endpoint, not the executable script');
+  console.log('✔ Suite 20a Passed\n');
+}
+
 console.log('--- SUITE 21: cancelled orders get their own lane and drop out of Aktif ---');
 {
   assert.ok(deskHtml.includes("{ key: 'cancelled', label: 'Dibatalkan' }"), 'a Dibatalkan lane must exist');
@@ -476,12 +484,25 @@ console.log('--- SUITE 22: the default-selected ticket matches the top of the vi
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
+//    getCatalog() now fetches site-content.json (see P3-1 in
+//    STUDIO-DESK-FIXES.md), built from site-content.js by scripts/build.js —
+//    so the fixture reproduces that exact build step rather than trusting a
+//    second, hand-written JSON copy that could drift from it.
 // ---------------------------------------------------------------------------
 const siteContentSrc = fs.readFileSync(path.join(__dirname, '..', 'site-content.js'), 'utf8');
 
-console.log('--- SUITE 11: getCatalog() parses site-content.js into the Part 4 shape, no prices ---');
+function buildSiteContentJson(src) {
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox);
+  return JSON.stringify(sandbox.window.ALXANTHIA_DATA);
+}
+
+const siteContentJson = buildSiteContentJson(siteContentSrc);
+
+console.log('--- SUITE 11: getCatalog() parses site-content.json into the Part 4 shape, no prices ---');
 {
-  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentSrc }) });
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
   const catalog = sandbox.getCatalog();
 
   assert.ok(catalog.flowers.Sunflower, 'a known flower key must resolve');
@@ -521,9 +542,25 @@ console.log('--- SUITE 12: getCatalog() falls back to the backup on a failed fet
   console.log('✔ Suite 12 Passed\n');
 }
 
+console.log('--- SUITE 12a: a malformed catalogue payload falls back to the backup instead of throwing ---');
+{
+  const backup = JSON.stringify({
+    flowers: { Rose: { name: 'Mawar', spec: '' } }, pots: {}, additions: {}, packages: [], wraps: {}, minimumLeadDays: 2
+  });
+  const sandbox = makeSandbox({
+    props: { DESK_CATALOG_BACKUP: backup },
+    fetch: () => ({ getResponseCode: () => 200, getContentText: () => '{not valid json' })
+  });
+  const catalog = sandbox.getCatalog();
+  assert.strictEqual(catalog.stale, true);
+  assert.strictEqual(catalog.flowers.Rose.name, 'Mawar');
+  assert.strictEqual(sandbox._cachePutCalls.length, 0, 'a payload that fails to parse must not populate the cache');
+  console.log('✔ Suite 12a Passed\n');
+}
+
 console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback, not a crash ---');
 {
-  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentSrc }) });
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
   const catalog = sandbox.getCatalog();
   const lines = sandbox.buildTicketLines_([{ type: 'stem', id: 'unknown-flower', qty: 1 }], catalog);
   assert.strictEqual(lines.length, 1);
@@ -536,5 +573,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 13 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 28 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -14,6 +14,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -64,6 +65,25 @@ function findReferencedImages() {
   return allImages.filter((name) => combinedText.includes(name));
 }
 
+// Studio Desk's Apps Script server fetches site-content.js over plain HTTPS
+// to read display labels (flower names, pot specs, etc — see pickLabels_()
+// in STUDIO-DESK-SETUP.md). It used to run that response as code via
+// `new Function(...)`, which meant a compromised host or hijacked DNS record
+// for alxanthia.com could execute arbitrary code against the orders sheet.
+// This emits a data-only JSON sibling so the Desk can JSON.parse it instead —
+// a malformed or hijacked response then fails to parse rather than executes.
+function buildSiteContentJson() {
+  const src = fs.readFileSync(path.join(ROOT, 'site-content.js'), 'utf8');
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox);
+  const data = sandbox.window.ALXANTHIA_DATA;
+  if (!data) {
+    throw new Error('site-content.js did not set window.ALXANTHIA_DATA — cannot build site-content.json');
+  }
+  fs.writeFileSync(path.join(DIST, 'site-content.json'), JSON.stringify(data));
+}
+
 function gitCommit() {
   try {
     return execSync('git rev-parse --short HEAD', { cwd: ROOT }).toString().trim();
@@ -83,6 +103,8 @@ function build() {
     throw new Error('No referenced images found under img/ — refusing to publish an empty image set.');
   }
   for (const name of referencedImages) copyFile(path.join('img', name));
+
+  buildSiteContentJson();
 
   const buildInfo = {
     commit: gitCommit(),

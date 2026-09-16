@@ -9,7 +9,7 @@ Website → Cloudflare Worker → Apps Script "Order Writer" → Orders sheet   
                                                                 ↕
                                           Apps Script "Studio Desk" (new, standalone)
                                                                 ↕
-                                                  site-content.js on alxanthia.com (labels only)
+                                        site-content.json on alxanthia.com (built from site-content.js; labels only)
 ```
 
 The Studio Desk is a second, separate Apps Script project — a phone-friendly page for the maker
@@ -142,7 +142,7 @@ var MAX_ROWS = 500;
 // from the queue sooner than expected".
 var KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE = 14;
 
-var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
+var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.json';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
 var CATALOG_TTL_SECONDS = 21600; // 6 hours, the CacheService maximum
 
@@ -481,7 +481,7 @@ function fetchAndCacheCatalog_() {
   try {
     var res = UrlFetchApp.fetch(SITE_CONTENT_URL, { muteHttpExceptions: true, followRedirects: true });
     if (res.getResponseCode() === 200) {
-      var data = (new Function('window', res.getContentText() + '\nreturn window.ALXANTHIA_DATA;'))({});
+      var data = JSON.parse(res.getContentText());
       var labels = pickLabels_(data);
       labels.fetchedAt = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm');
       cache.put(CATALOG_CACHE_KEY, JSON.stringify(labels), CATALOG_TTL_SECONDS);
@@ -2579,9 +2579,11 @@ try again (another save was in progress). If it names a different problem, re-ch
 ### Flower/pot/package names look outdated or generic
 
 Tap **Muat ulang katalog** in the footer — it clears the six-hour cache and re-fetches
-`site-content.js` immediately. If a quiet banner says the catalogue couldn't be reloaded, the site's
-`site-content.js` was unreachable; the Desk keeps working from its last good copy in the meantime, and
-order data and totals are unaffected either way (they come from the sheet, never the catalogue).
+`site-content.json` immediately (built automatically from `site-content.js` by `npm run build` —
+publishing the website is enough, there is nothing extra to do). If a quiet banner says the catalogue
+couldn't be reloaded, `site-content.json` was unreachable or unparseable; the Desk keeps working from
+its last good copy in the meantime, and order data and totals are unaffected either way (they come
+from the sheet, never the catalogue).
 
 ### A finished order disappears from the queue sooner than expected
 

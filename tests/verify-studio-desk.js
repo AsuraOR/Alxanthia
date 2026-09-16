@@ -591,6 +591,18 @@ console.log('--- SUITE 29 (P2-4/P2-5/P2-6/P2-7): orientation — current phase, 
   console.log('✔ Suite 29 Passed\n');
 }
 
+console.log('--- SUITE 30 (P2-3): an unread order is tagged Baru and counted, per device ---');
+{
+  assert.ok(deskHtml.includes("var LAST_SEEN_KEY = 'alxanthia-desk-lastseen-v1';"),
+    'the last-seen timestamp must be persisted per device, like PER_KEY and NOTE_DRAFTS_KEY');
+  assert.ok(deskHtml.includes('function markSeen(') && deskHtml.includes('markSeen(o);'),
+    'opening a ticket must advance lastSeenAt for that order');
+  assert.ok(deskHtml.includes("o.submitted > lastSeenAt) tags.push('<span class=\"tag go\">Baru</span>')"),
+    'a card newer than lastSeenAt must be tagged Baru');
+  assert.ok(deskHtml.includes('pesanan baru'), 'a pesanan baru counter must appear in the pulse strip');
+  console.log('✔ Suite 30 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -683,5 +695,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 35 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 36 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -16,19 +16,27 @@ baru masuk, cukup tutup dan buka lagi.
 
 ## 2. Baris angka di atas
 
-Tepat di bawah judul ada empat angka:
+Tepat di bawah judul ada beberapa angka — **ketuk salah satunya untuk langsung melihat pesanan yang
+dihitungnya**:
 
 - **Jatuh tempo hari ini** — pesanan yang tanggalnya hari ini.
 - **Terlambat** (kalau ada, warnanya merah) — pesanan yang tanggalnya sudah lewat dan belum selesai.
+  Pesanan terlambat **tetap bisa dikerjakan** — lihat §4.
 - **Menunggu bayar** — pesanan yang pembayarannya belum lunas.
 - **Sedang dikerjakan** — pesanan yang tahap kerjanya "Dirangkai dan dikemas".
+- **Pesanan baru** (kalau ada) — pesanan yang belum pernah Anda buka tiketnya di ponsel ini. Tandanya
+  hilang begitu Anda membuka tiket pesanan itu.
+
+Angka **Terlambat** dan **Jatuh tempo hari ini** juga mengecualikan pesanan yang sudah dibatalkan atau
+sudah selesai — jadi kalau sebuah pesanan dibatalkan, ia langsung berhenti dihitung di sini.
 
 Lihat baris ini dulu setiap kali membuka Desk — itu ringkasan hari Anda.
 
 ## 3. Deretan tombol (chip) dan arti "Aktif"
 
 Di bawah baris angka ada deretan tombol bulat: **Aktif**, **Menunggu bayar**, lalu satu tombol untuk
-tiap tahap kerja, dan **Dibatalkan** di paling kanan.
+tiap tahap kerja, dan **Dibatalkan** di paling kanan. Kalau deretannya lebih panjang dari layar, geser
+ke samping — ada bayangan tipis di ujung kanan sebagai tanda masih ada tombol lain di sana.
 
 **Aktif** menunjukkan semua pesanan yang masih berjalan — pesanan yang sudah selesai (Selesai) atau
 sudah dibatalkan tidak ikut ditampilkan di sana, supaya daftar tidak penuh dengan yang sudah tidak
@@ -37,20 +45,27 @@ perlu dikerjakan lagi. Ketuk tombol tahap kerja mana pun untuk melihat hanya pes
 
 ## 4. Memilih pesanan, dan apa yang diperiksa "Periksa dulu"
 
-Ketuk sebuah kartu pesanan di daftar untuk membuka tiketnya. Selama pesanan belum mulai dikerjakan,
-akan ada bagian **Periksa dulu** dengan beberapa baris bertanda ✓ atau ✕:
+Ketuk sebuah kartu pesanan di daftar untuk membuka tiketnya — tahap kerjanya sekarang juga muncul
+sebagai label kecil di bagian atas tiket, jadi tidak perlu gulir ke bawah untuk tahu di tahap mana
+sebuah pesanan berada. Selama pesanan belum mulai dikerjakan, akan ada bagian **Periksa dulu** dengan
+beberapa baris bertanda ✓ atau ✕:
 
 - Pembayaran sudah diterima (atau DP-nya, untuk pesanan cicil).
 - Harga sudah sesuai — tidak ditandai **Review**.
-- Tanggal pesanan belum lewat, dan waktunya masih cukup untuk dikerjakan.
+- Tanggal pesanan belum lewat.
 - Alamat atau lokasi antar sudah lengkap.
 
 Kalau ada teks kartu ucapan, Anda juga perlu mencentang sendiri **"Teks kartu sudah dibaca ulang"** —
 ini satu-satunya baris yang dicentang manual, sisanya otomatis dari data pesanan.
 
-Tombol **Mulai kerjakan** baru bisa ditekan setelah semua baris di atas ✓ dan sudah dicentang. Kalau
-ada tanda ✕ merah, jangan mulai kerjakan dulu — baca keterangan di bawah baris itu untuk tahu apa yang
-kurang.
+Tombol **Mulai kerjakan** baru bisa ditekan setelah pembayaran, harga, dan alamat semuanya ✓ (dan
+kartu sudah dicentang kalau ada). Kalau ada tanda ✕ merah pada baris-baris itu, jangan mulai kerjakan
+dulu — baca keterangan di bawah baris itu untuk tahu apa yang kurang.
+
+**Tanggal yang sudah lewat tidak mengunci tombol ini.** Kalau satu-satunya masalah adalah tanggal sudah
+lewat, tombolnya tetap bisa ditekan dan berubah nama jadi **Tetap mulai kerjakan** — pesanan yang
+terlambat tetap harus dibuat, jadi Desk memperingatkan tapi tidak menghalangi. Kabari pembeli dulu kalau
+perlu, lalu lanjutkan.
 
 ## 5. Mencentang "Yang dibuat"
 
@@ -59,6 +74,8 @@ kertas pembungkus, atau isi rangkaian custom). Ketuk satu per satu saat sudah se
 di pojok kanan atas bagian ini (misalnya "2/5 item") menunjukkan progres Anda. Ini catatan kerja Anda
 sendiri di ponsel ini, jadi kalau Anda ganti ponsel, centangannya mulai dari kosong lagi — tidak
 memengaruhi data pesanan di sheet.
+
+Pesanan yang belum pernah Anda buka ditandai **Baru** di kartunya — lihat §2.
 
 ## 6. Uang masuk: selalu cek di mutasi rekening
 
@@ -76,13 +93,35 @@ dijelaskan ke pemilik studio.
 Pesanan berjalan lewat tahap: **Belum mulai → Dirangkai dan dikemas → Siap dikirim → Dikirim →
 Selesai**. Ketuk **Lanjut** untuk maju satu tahap. Di setiap tahap setelah "Belum mulai", ada tombol
 **Kirim pesan** yang membuka WhatsApp ke pembeli dengan kabar yang sesuai tahap itu sudah diketik —
-Anda tinggal membaca sekali lalu ketuk kirim.
+Anda tinggal membaca sekali lalu ketuk kirim. Kalau sebuah pesanan ditandai **Selesai**, ia langsung
+pindah keluar dari daftar **Aktif** — akan muncul pesan kecil di bawah layar yang menjelaskan ini,
+jadi kartunya menghilang bukan karena ada yang salah.
 
-Kalau pesanan perlu dibatalkan, ketuk **Batalkan pesanan** — Desk akan meminta konfirmasi dulu supaya
-tidak batal karena tersenggol. Pesanan yang sudah dibatalkan masih bisa diaktifkan kembali lewat tombol
-**Aktifkan lagi**, jadi tidak perlu khawatir kalau ternyata salah batal.
+**Cara pembayaran** (Bayar penuh / DP 50%) ada di bagian Pembayaran, tepat di bawah angka totalnya,
+sebagai dua tombol berdampingan — tombol yang aktif ditandai warna gelap. Setelah pembayaran mulai
+diproses (misalnya sudah ditandai "perlu dicek"), pilihan ini terkunci dan tidak bisa diganti lagi
+dari Desk.
 
-## 8. Kalau ada yang terlihat aneh
+Kalau pesanan perlu dibatalkan, gulir ke bagian paling bawah tiket dan ketuk **Batalkan pesanan** —
+sengaja dipisahkan jauh dari tombol pembayaran supaya tidak tersenggol. Desk akan meminta konfirmasi
+dulu sebelum benar-benar membatalkan.
+
+Pesanan yang sudah dibatalkan bisa diaktifkan kembali. Untuk pesanan **Bayar penuh**, tinggal ketuk
+**Aktifkan lagi**. Untuk pesanan **DP 50%**, Desk menanyakan dulu: kalau DP-nya memang sudah diterima
+sebelum dibatalkan, ketuk **Aktifkan — DP sudah diterima** supaya catatannya tidak hilang dan pembeli
+tidak diminta bayar DP dua kali; kalau belum ada pembayaran sama sekali, ketuk **Aktifkan — belum ada
+pembayaran**.
+
+## 8. Catatan kerja
+
+Kolom **Catatan kerja** di bagian bawah tiket tersimpan otomatis begitu Anda pindah dari kolom itu ke
+bagian lain (tidak perlu tombol simpan terpisah). Selama tersimpan, tidak ada tanda apa-apa di
+sampingnya. Kalau ada perubahan yang belum sempat tersimpan, judul bagian itu menunjukkan **Belum
+tersimpan**; sementara sedang mengirim ke server, ada tulisan kecil **Menyimpan…** di bawah kolomnya.
+Kalau penyimpanan gagal (misalnya koneksi terputus), judulnya berubah jadi **Gagal menyimpan** dan ada
+tombol **Coba lagi** — ketuk untuk mencoba menyimpan ulang catatan yang sama.
+
+## 9. Kalau ada yang terlihat aneh
 
 - **Tag merah "Review"** pada kartu pesanan berarti harga di pesanan itu perlu dicek pemilik studio
   dulu sebelum dikerjakan — jangan mulai kerjakan sebelum itu selesai.

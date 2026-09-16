@@ -239,14 +239,17 @@
     margin-bottom: 10px;
     flex-wrap: wrap;
   }
-  .sort .k {
+  .k {
     font: 600 10.5px/1 var(--sans);
     letter-spacing: .12em;
     text-transform: uppercase;
     color: var(--muted);
+    display: block;
+    margin-bottom: 8px;
   }
-  .sort .seg { display: flex; border: 1px solid var(--rule-strong); border-radius: 7px; overflow: hidden; }
-  .sort .seg button {
+  .sort .k { display: inline; margin-bottom: 0; }
+  .seg { display: flex; border: 1px solid var(--rule-strong); border-radius: 7px; overflow: hidden; width: max-content; }
+  .seg button {
     font: 500 12.5px/1 var(--sans);
     padding: 8px 11px;
     border: 0;
@@ -254,8 +257,9 @@
     color: var(--ink-2);
     cursor: pointer;
   }
-  .sort .seg button + button { border-inline-start: 1px solid var(--rule-strong); }
-  .sort .seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+  .seg button[disabled] { opacity: .55; cursor: not-allowed; }
+  .seg button + button { border-inline-start: 1px solid var(--rule-strong); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
 
   /* ---------- queue ---------- */
   .queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -476,6 +480,15 @@
   }
   .ongkir input[disabled] { opacity: .5; }
   .ongkir .hint { font-size: 12px; color: var(--ink-2); flex: 1 1 160px; }
+  .ongkir .amtwrap { position: relative; display: inline-flex; align-items: center; }
+  .ongkir .amtwrap .prefix {
+    position: absolute;
+    left: 11px;
+    font: 500 15px/1 var(--mono);
+    color: var(--ink-2);
+    pointer-events: none;
+  }
+  .ongkir .amtwrap input { padding-inline-start: 32px; }
   .paystate { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
   .paystate .step {
     font: 600 11px/1 var(--sans);
@@ -679,10 +692,9 @@
     padding: 13px 18px;
     background: var(--surface-2);
     border-top: 1px solid var(--rule);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px 14px;
   }
+  .provenance summary { cursor: pointer; color: var(--ink-2); }
+  .provenance span { display: block; margin-top: 6px; }
 
   /* ---------- save toast ---------- */
   .toast {
@@ -794,8 +806,8 @@
   </div>
 
   <p class="foot">
-    <span><b>Studio Desk.</b> Setiap perubahan di sini langsung tersimpan ke sheet Orders. Nama bunga,
-    ukuran tangkai, warna kertas buket dan isi paket dibaca langsung dari <b>site-content.js</b>.</span>
+    <span><b>Studio Desk.</b> Setiap perubahan di sini langsung tersimpan. Nama bunga,
+    ukuran tangkai, warna kertas buket dan isi paket diambil langsung dari katalog situs Alxanthia.</span>
     <button type="button" class="btn ghost small" id="reloadCatalogBtn">Muat ulang katalog</button>
     <span id="catalogMeta"></span>
   </p>
@@ -927,11 +939,24 @@
   }
 
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  var DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
   function fmtDate(dateStr) {
     var p = String(dateStr || '').split('-');
     if (p.length !== 3) return String(dateStr || '');
     return Number(p[2]) + ' ' + MONTHS[Number(p[1]) - 1];
+  }
+
+  /* Adds the weekday — for a flower studio that's the operative fact for
+     planning, and the compact fmtDate() above drops it. Used where there's
+     room (the ticket header, the top bar); card rows and inline breakdowns
+     keep the compact form. See P3-5 in STUDIO-DESK-UX-REVIEW.md. */
+  function fmtDateLong(dateStr) {
+    var p = String(dateStr || '').split('-');
+    if (p.length !== 3) return String(dateStr || '');
+    var d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return fmtDate(dateStr);
+    return DAYS[d.getDay()] + ', ' + fmtDate(dateStr);
   }
 
   function fmtStamp(stamp) {
@@ -1162,7 +1187,7 @@
   var elSearch = document.getElementById('orderSearch');
 
   function render() {
-    document.getElementById('today').textContent = fmtDate(todayStr()) + ' · Asia/Makassar';
+    document.getElementById('today').textContent = fmtDateLong(todayStr()) + ' · WITA';
 
     if (state.ordersError) {
       elSkeleton.hidden = true;
@@ -1349,6 +1374,21 @@
     }
   }
 
+  /* The most destructive action in the Desk, on its own at the bottom of
+     the ticket instead of sharing an .actions row with routine payment
+     buttons — see P3-6 in STUDIO-DESK-UX-REVIEW.md. The confirm step
+     (unchanged) still guards it. */
+  function cancelBlock(o) {
+    if (o.payment === 'Cancelled') return '';
+    var html = '<div class="block"><button type="button" class="btn ghost" data-askcancel="1">Batalkan pesanan</button>';
+    if (confirming === 'cancel') {
+      html += '<div class="confirm"><p>Batalkan pesanan ' + esc(o.ref) + '? Pesanan akan ditandai dibatalkan.</p>' +
+        '<div class="actions"><button type="button" class="btn" data-pay="Cancelled">Ya, batalkan</button>' +
+        '<button type="button" class="btn ghost" data-cancelconfirm="1">Tidak</button></div></div>';
+    }
+    return html + '</div>';
+  }
+
   function paymentBlock(o) {
     var pay = o.payment;
     if (pay === 'Paid') {
@@ -1386,27 +1426,47 @@
       '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
       '<span>Ongkir ' + (ship === null || ship === undefined || ship === '' ? 'belum diisi' : esc(rupiah(ship))) + '</span></div>';
 
+    /* A segmented toggle, not two same-weight buttons next to Tandai lunas —
+       see P3-2 in STUDIO-DESK-UX-REVIEW.md. Placed right under the total it
+       explains, and locked once a transfer has actually started (mirroring
+       the server's own PAYMENT_STARTED check — a convenience, not the real
+       guard; ground rule 5). */
+    var planLocked = pay !== 'Unpaid';
+    html += '<div style="margin-top:14px"><span class="k">Cara pembayaran</span>' +
+      '<div class="seg" role="group" aria-label="Cara pembayaran">' +
+      '<button type="button" data-plan="Full" aria-pressed="' + (!isDeposit) + '"' +
+        (planLocked || planPending ? ' disabled' : '') + '>Bayar penuh</button>' +
+      '<button type="button" data-plan="Deposit 50%" aria-pressed="' + isDeposit + '"' +
+        (planLocked || planPending || amount === null ? ' disabled' : '') + '>DP 50%</button></div>' +
+      (planLocked ? '<span class="hint" style="display:block;margin-top:6px">Cara pembayaran terkunci setelah pembayaran mulai diproses.</span>' : '') +
+      '</div>';
+
+    if (isDeposit && amount !== null) {
+      html += '<div class="breakdown"><span>DP 50% ' + esc(rupiah(deposit)) + '</span>' +
+        '<span>Sisa pelunasan ' + esc(rupiah(balance)) + '</span></div>';
+    }
+
     if (o.locationType === 'bali') {
       html += '<div class="ongkir"><span class="hint">Ongkir Rp 0 — ' +
         (o.method === 'self_pickup' ? 'diambil sendiri di studio.' : 'Grab/Gojek dibayar langsung ke driver.') +
         '</span></div>';
     } else {
+      /* A bare number input reads ambiguously (45000 vs 450000) for a
+         figure that goes straight onto the customer's bill — a static Rp
+         prefix plus a live formatted echo fix that without fighting the
+         numeric keypad. See P3-4 in STUDIO-DESK-UX-REVIEW.md. */
       html += '<div class="ongkir"><label for="ongkir-' + esc(o.ref) + '">Ongkir</label>' +
+        '<span class="amtwrap"><span class="prefix" aria-hidden="true">Rp</span>' +
         '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
         'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
-        (shippingPending ? ' disabled' : '') + '>' +
+        (shippingPending ? ' disabled' : '') + '></span>' +
+        '<span class="hint" id="ongkirEcho">' + (ship === null || ship === undefined || ship === '' ? '' : ('= ' + esc(rupiah(ship)))) + '</span>' +
         '<span class="hint">Kurir ke ' + esc(o.city) + '. Sisa pelunasan mengikuti total terbaru.</span>' +
         '<span class="hint" id="shippingSaving"' + (shippingPending ? '' : ' hidden') + '>Menyimpan…</span></div>';
+      /* Right under the field it explains, not after the action buttons
+         below it — see P3-3 in STUDIO-DESK-UX-REVIEW.md. */
+      if (amount === null) html += '<p class="why">Isi ongkir dulu supaya totalnya bisa ditagih.</p>';
       if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
-    }
-
-    html += '<div class="actions" role="group" aria-label="Cara pembayaran">' +
-      '<button type="button" class="btn ' + (!isDeposit ? '' : 'ghost') + '" data-plan="Full"' + (planPending ? ' disabled' : '') + '>Bayar penuh</button>' +
-      '<button type="button" class="btn ' + (isDeposit ? '' : 'ghost') + '" data-plan="Deposit 50%"' + (planPending || amount === null ? ' disabled' : '') + '>DP 50%</button></div>';
-
-    if (isDeposit && amount !== null) {
-      html += '<div class="breakdown"><span>DP 50% ' + esc(rupiah(deposit)) + '</span>' +
-        '<span>Sisa pelunasan ' + esc(rupiah(balance)) + '</span></div>';
     }
 
     if (pay === 'Cancelled') {
@@ -1440,22 +1500,16 @@
               '<button type="button" class="btn ghost" data-pay="Checking balance">Tandai perlu dicek</button>' +
               '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>'
             : '<span class="why">Pelunasan diminta saat pesanan Siap dikirim.</span>')) +
-        '<button type="button" class="btn ghost small" data-askcancel="1">Batalkan pesanan</button></div>';
+        '</div>';
     } else {
       html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full"' + (bankReady ? '' : ' disabled') + '>Kirim pesan</button>' +
         '<button type="button" class="btn ghost" data-pay="Checking transfer">Tandai perlu dicek</button>' +
-        '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>' +
-        '<button type="button" class="btn ghost small" data-askcancel="1">Batalkan pesanan</button></div>';
+        '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button></div>';
     }
 
-    if (amount === null) html += '<span class="why">Isi ongkir dulu supaya totalnya bisa ditagih.</span>';
     if (!bankReady) html += '<span class="why">Nomor rekening belum diisi — pesan pembayaran tidak bisa dikirim.</span>';
     if (payErr) html += '<span class="why err">' + esc(payErr) + '</span>';
-    if (confirming === 'cancel') {
-      html += '<div class="confirm"><p>Batalkan pesanan ' + esc(o.ref) + '? Pesanan akan ditandai dibatalkan.</p>' +
-        '<div class="actions"><button type="button" class="btn" data-pay="Cancelled">Ya, batalkan</button>' +
-        '<button type="button" class="btn ghost" data-cancelconfirm="1">Tidak</button></div></div>';
-    } else if (confirming && amount !== null) {
+    if (confirming && confirming !== 'cancel' && amount !== null) {
       var target = confirming === 'Deposit paid' ? deposit : (confirming === 'Paid' && isDeposit ? balance : amount);
       html += '<div class="confirm"><p><b>' + esc(rupiah(target)) + '</b> sudah masuk ke rekening ' +
         esc(bank.bank || '—') + ' ' + esc(bank.number || '') + '?</p>' +
@@ -1490,12 +1544,12 @@
 
     var html = '<button type="button" class="back" data-back="1">← Daftar pesanan</button>' +
       '<div class="ticket-head' + headCls + '">' +
-        '<div class="id"><div class="ref">' + esc(o.ref) + ' · baris ' + o.row + '</div>' +
+        '<div class="id"><div class="ref">' + esc(o.ref) + '</div>' +
           (phaseEntry ? '<span class="tag go" style="margin:5px 0 1px">' + esc(phaseEntry.label) + '</span>' : '') +
           '<h2>' + esc(o.buyer) + '</h2>' +
           '<a class="wa" href="https://wa.me/' + esc(String(o.wa).replace('+', '')) + '" target="_blank" rel="noopener">' + esc(o.wa) + '</a>' +
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span></div>' +
-        '<div class="when"><span class="d">' + esc(fmtDate(o.date)) + '</span>' +
+        '<div class="when"><span class="d">' + esc(fmtDateLong(o.date)) + '</span>' +
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
@@ -1584,19 +1638,31 @@
     }
     html += '</div>';
 
+    /* One story, not three: notes auto-save on blur, and the status line
+       says what's actually true — quiet when saved, honest while saving or
+       failed, with a retry only when there's something to retry. The old
+       explicit Simpan catatan button was usually a no-op (tapping anything
+       else already blurred and saved the field) and taught the opposite of
+       what was happening. See P3-7 in STUDIO-DESK-UX-REVIEW.md. */
     var unsavedNote = noteDrafts[o.ref] !== undefined && noteDrafts[o.ref] !== o.notes;
+    var notesErr = fieldErrors[o.ref + '|notes'];
+    var notesStatusLabel = notesErr ? 'Gagal menyimpan' : (unsavedNote && !notesPending ? 'Belum tersimpan' : '');
     html += '<div class="block"><h3>Catatan kerja' +
-      (unsavedNote ? '<span class="count" style="color:var(--amber);text-transform:none">belum tersimpan</span>' : '') +
+      (notesStatusLabel ? '<span class="count" style="color:' + (notesErr ? 'var(--madder)' : 'var(--amber)') +
+        ';text-transform:none">' + esc(notesStatusLabel) + '</span>' : '') +
       '</h3>' +
       '<textarea class="notes" id="notes-' + esc(o.ref) + '" data-fk="notes" ' +
       (notesPending ? 'disabled ' : '') +
       'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea>' +
       '<span class="why" id="notesSaving"' + (notesPending ? '' : ' hidden') + '>Menyimpan…</span>' +
-      '<div class="actions"><button type="button" class="btn ghost small" data-savenotes="1"' +
-      (notesPending ? ' disabled' : '') + '>Simpan catatan</button></div></div>' +
-      '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
+      (notesErr ? '<div class="actions"><span class="why err">' + esc(notesErr) + '</span>' +
+        '<button type="button" class="btn ghost small" data-retrynotes="1">Coba lagi</button></div>' : '') +
+      '</div>' +
+      cancelBlock(o) +
+      '<details class="provenance"><summary>Info teknis</summary>' +
+      '<span>Orders · baris ' + o.row + '</span>' +
       '<span>Desk menulis: Payment Plan · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
-      '<span>Kolom lain hanya dibaca</span></div>';
+      '<span>Kolom lain hanya dibaca</span></details>';
 
     var scrollY = window.scrollY;
     elTicket.innerHTML = html;
@@ -1667,8 +1733,20 @@
     toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
   }
 
-  function savedToast(column) {
-    toast('Tersimpan ke sheet Orders · <b>' + esc(column) + '</b>');
+  /* Indonesian labels for the five writable fields — keyed by the page-side
+     field name, never the sheet's own column header, so that English column
+     text can never reach a string she actually sees. See P3-1 in
+     STUDIO-DESK-UX-REVIEW.md. */
+  var FIELD_LABELS = {
+    paymentPlan: 'Cara pembayaran',
+    payment: 'Status pembayaran',
+    shipping: 'Ongkir',
+    phase: 'Tahap kerja',
+    notes: 'Catatan kerja'
+  };
+
+  function savedToast(field) {
+    toast((FIELD_LABELS[field] || 'Perubahan') + ' tersimpan.');
   }
 
   /* =====================================================================
@@ -1694,7 +1772,7 @@
     }
   }
 
-  function writeField(ref, field, value, columnLabel, opts) {
+  function writeField(ref, field, value, opts) {
     opts = opts || {};
     var onSaved = opts.onSaved;
     var key = ref + '|' + field;
@@ -1724,7 +1802,7 @@
         if (res && res.ok) {
           var idx = state.orders.findIndex(function (x) { return x.ref === res.order.ref; });
           if (idx !== -1) state.orders[idx] = res.order;
-          savedToast(columnLabel);
+          savedToast(field);
           if (onSaved) onSaved();
         } else {
           order[field] = previous;
@@ -1755,7 +1833,7 @@
       renderTicket();
       return;
     }
-    writeField(o.ref, 'notes', value, 'Internal Notes', {
+    writeField(o.ref, 'notes', value, {
       rerender: false,
       onSaved: function () {
         delete noteDrafts[o.ref];
@@ -1929,13 +2007,13 @@
     var payBtn = e.target.closest('[data-pay]');
     if (payBtn) {
       confirming = false;
-      writeField(o.ref, 'payment', payBtn.dataset.pay, 'Payment Status');
+      writeField(o.ref, 'payment', payBtn.dataset.pay);
       return;
     }
 
     var planBtn = e.target.closest('[data-plan]');
     if (planBtn) {
-      writeField(o.ref, 'paymentPlan', planBtn.dataset.plan, 'Payment Plan');
+      writeField(o.ref, 'paymentPlan', planBtn.dataset.plan);
       return;
     }
 
@@ -1952,7 +2030,7 @@
       }
       if (PHASES[i + 1]) {
         var becomingDelivered = PHASES[i + 1].key === 'Delivered';
-        writeField(o.ref, 'phase', PHASES[i + 1].key, 'Work Phase', becomingDelivered ? {
+        writeField(o.ref, 'phase', PHASES[i + 1].key, becomingDelivered ? {
           onSaved: function () { toast('Pesanan selesai. Dipindahkan ke daftar Selesai.'); }
         } : undefined);
       }
@@ -1961,7 +2039,7 @@
 
     if (e.target.closest('[data-retreat]')) {
       var j = PHASES.findIndex(function (x) { return x.key === o.phase; });
-      if (j > 0) writeField(o.ref, 'phase', PHASES[j - 1].key, 'Work Phase');
+      if (j > 0) writeField(o.ref, 'phase', PHASES[j - 1].key);
       return;
     }
 
@@ -1989,7 +2067,7 @@
       return;
     }
 
-    if (e.target.closest('[data-savenotes]')) {
+    if (e.target.closest('[data-retrynotes]')) {
       saveNotes(o);
       return;
     }
@@ -2006,14 +2084,33 @@
     if (e.target.type !== 'number') return;
     var raw = e.target.value.trim();
     var value = raw === '' ? '' : Math.max(0, Number(raw));
-    writeField(o.ref, 'shipping', value, 'Shipping Fee', { rerender: false });
+    writeField(o.ref, 'shipping', value, { rerender: false });
   });
 
   elTicket.addEventListener('input', function (e) {
-    if (!e.target.classList.contains('notes')) return;
-    noteDrafts[state.selected] = e.target.value;
-    saveNoteDrafts();
+    if (e.target.classList.contains('notes')) {
+      noteDrafts[state.selected] = e.target.value;
+      saveNoteDrafts();
+      return;
+    }
+    if (e.target.matches('.ongkir .amtwrap input')) {
+      updateOngkirEcho(e.target.value);
+      return;
+    }
   });
+
+  /* Live "= Rp 45.000" echo and total, updated as she types — display only,
+     never touches the input's own value or state.orders. See P3-4 in
+     STUDIO-DESK-UX-REVIEW.md. */
+  function updateOngkirEcho(raw) {
+    var n = raw === '' ? NaN : Number(raw);
+    var valid = raw !== '' && isFinite(n) && n >= 0;
+    var echo = document.getElementById('ongkirEcho');
+    if (echo) echo.textContent = valid ? '= ' + rupiah(n) : '';
+    var o = findOrder(state.selected);
+    var bigEl = elTicket.querySelector('.amount .big');
+    if (o && bigEl) bigEl.textContent = valid ? rupiah(o.verified + n) : '—';
+  }
 
   function copyText(text) {
     if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});

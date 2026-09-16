@@ -424,8 +424,9 @@ console.log('--- SUITE 18: an unsaved note survives a trip away from the Desk --
 {
   assert.ok(deskHtml.includes('NOTE_DRAFTS_KEY'), 'note drafts must be persisted, like state.per, not kept only in memory');
   assert.ok(deskHtml.includes('saveNoteDrafts()'), 'a saveNoteDrafts() persistence helper must exist and be called');
-  assert.ok(deskHtml.includes('data-savenotes="1"'), 'an explicit save control must exist beside blur-to-save');
-  assert.ok(deskHtml.includes('belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  assert.ok(deskHtml.includes('Belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  assert.ok(deskHtml.includes('data-retrynotes="1"') && deskHtml.includes('Coba lagi'),
+    'a failed note save must offer an explicit retry, since nothing else will re-trigger the blur-to-save');
   const saveNotesMatch = deskHtml.match(/function saveNotes\(o\) \{[\s\S]*?\n  \}/);
   assert.ok(saveNotesMatch, 'a saveNotes() helper must exist');
   assert.ok(/onSaved: function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
@@ -498,9 +499,9 @@ console.log('--- SUITE 23 (P1-1): a late order is a warning, not a permanent loc
 
 console.log('--- SUITE 24 (P1-2/P1-4): a tap while a field is dirty is never lost to a synchronous re-render ---');
 {
-  assert.ok(/writeField\(o\.ref, 'shipping', value, 'Shipping Fee', \{ rerender: false \}\)/.test(deskHtml),
+  assert.ok(/writeField\(o\.ref, 'shipping', value, \{ rerender: false \}\)/.test(deskHtml),
     'writing the shipping field from the change handler must skip the synchronous full re-render');
-  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', \{[\s\S]*?rerender: false/.test(deskHtml),
+  assert.ok(/writeField\(o\.ref, 'notes', value, \{[\s\S]*?rerender: false/.test(deskHtml),
     'writing notes from the change handler must skip the synchronous full re-render');
   assert.ok(deskHtml.includes('function setControlPending('),
     'a targeted in-place pending indicator must exist for fields written without a full re-render');
@@ -603,6 +604,76 @@ console.log('--- SUITE 30 (P2-3): an unread order is tagged Baru and counted, pe
   console.log('✔ Suite 30 Passed\n');
 }
 
+console.log('--- SUITE 31 (P3-1): developer vocabulary (columns, files, row numbers, timezone IDs) stays off-screen by default ---');
+{
+  const leaks = (deskHtml.match(/Payment Status|Work Phase|Internal Notes|Shipping Fee|Payment Plan|site-content\.js|Asia\/Makassar/g) || []);
+  assert.ok(leaks.length > 0, 'sanity: the sheet vocabulary must still exist somewhere (WRITABLE_FIELDS-equivalent logic, comments)');
+  const detailsStart = deskHtml.indexOf('<details class="provenance">');
+  const detailsEnd = deskHtml.indexOf('</details>', detailsStart);
+  assert.ok(detailsStart !== -1 && detailsEnd !== -1, 'the provenance block must be a collapsed <details>, not a visible-by-default strip');
+  assert.ok(deskHtml.includes('function savedToast(field)') && deskHtml.includes('var FIELD_LABELS ='),
+    'the save toast must map the field key to an Indonesian label, never render the sheet column name');
+  assert.ok(!deskHtml.includes("esc(o.ref) + ' · baris '"),
+    'the visible order reference must not be suffixed with the sheet row number');
+  assert.ok(deskHtml.includes("fmtDateLong(todayStr()) + ' · WITA'"),
+    'the top bar must show a human timezone name, not the Asia/Makassar identifier');
+  assert.ok(!deskHtml.includes('<b>site-content.js</b>'), 'the footer must not name the internal data file');
+  console.log('✔ Suite 31 Passed\n');
+}
+
+console.log('--- SUITE 32 (P3-2/P3-3/P3-4): the payment panel reads as one coherent form ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('class="seg" role="group" aria-label="Cara pembayaran"'),
+    'the plan switcher must reuse the existing segmented-control markup (.seg), not two same-weight buttons');
+  assert.ok(paymentBlockSrc.includes('data-plan="Full" aria-pressed='), 'the plan switcher must use aria-pressed, like the existing Urutkan segmented control');
+  assert.ok(paymentBlockSrc.includes('var planLocked = pay !== \'Unpaid\';') &&
+    paymentBlockSrc.includes('Cara pembayaran terkunci setelah pembayaran mulai diproses.'),
+    'the plan switcher must be disabled with an explanation once payment has started, mirroring the server PAYMENT_STARTED rule');
+  const ongkirIdx = paymentBlockSrc.indexOf('id="ongkir-');
+  const planIdx = paymentBlockSrc.indexOf('data-plan="Full"');
+  assert.ok(planIdx !== -1 && ongkirIdx !== -1 && planIdx < ongkirIdx,
+    'the plan switcher must render before the ongkir field, not inside the same actions row as Tandai lunas');
+  assert.ok(/if \(amount === null\) html \+= '<p class="why">Isi ongkir dulu[\s\S]{0,300}if \(shipErr\)/.test(paymentBlockSrc),
+    'the isi-ongkir hint must render immediately under the ongkir field, not after the action buttons');
+  assert.ok(paymentBlockSrc.includes('class="amtwrap"') && paymentBlockSrc.includes('id="ongkirEcho"'),
+    'the ongkir field must show a Rp prefix and a live formatted echo');
+  assert.ok(deskHtml.includes('function updateOngkirEcho('), 'a live echo/total updater must exist for the ongkir input');
+  console.log('✔ Suite 32 Passed\n');
+}
+
+console.log('--- SUITE 33 (P3-6): the destructive cancel action is separated from routine payment buttons ---');
+{
+  assert.ok(deskHtml.includes('function cancelBlock(o)'), 'a dedicated cancelBlock() must exist, separate from paymentBlock()');
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(!paymentBlockSrc.includes('data-askcancel'),
+    'Batalkan pesanan must no longer live inside the payment .actions row');
+  assert.ok(deskHtml.includes('cancelBlock(o) +'), 'the ticket must render cancelBlock() at the bottom, below the notes block');
+  console.log('✔ Suite 33 Passed\n');
+}
+
+console.log('--- SUITE 35 (P3-5): dates show a weekday where planning actually depends on it ---');
+{
+  assert.ok(deskHtml.includes("var DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];") &&
+    deskHtml.includes('function fmtDateLong('),
+    'a fmtDateLong() helper with Indonesian weekday abbreviations must exist');
+  assert.ok(deskHtml.includes("esc(fmtDateLong(o.date))"), 'the ticket header date must show the weekday');
+  assert.ok(deskHtml.includes("fmtDateLong(todayStr())"), 'the top bar date must show the weekday');
+  console.log('✔ Suite 35 Passed\n');
+}
+
+console.log('--- SUITE 34 (P3-7): notes save status is honest, with retry instead of a mostly-no-op button ---');
+{
+  assert.ok(!deskHtml.includes('data-savenotes'), 'the old explicit Simpan catatan button must be gone — auto-save on blur is the one story now');
+  assert.ok(deskHtml.includes('data-retrynotes="1"'), 'a retry action must exist for a failed note save');
+  assert.ok(deskHtml.includes("notesErr ? 'Gagal menyimpan'"), 'the status label must reflect an actual save failure, not just always read belum tersimpan');
+  console.log('✔ Suite 34 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -695,5 +766,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 36 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 41 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

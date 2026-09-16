@@ -1202,6 +1202,25 @@
     });
   }
 
+  /* Nudges only a horizontally-scrolling strip's own scrollLeft so its
+     active item is visible, never the page's vertical scroll. Runs on
+     every render() (active chip) and every ticket render (current phase),
+     so it must never move window.scrollY — el.scrollIntoView({block:
+     'nearest'}) looked page-scoped but still yanked the whole page back up
+     whenever the strip itself was scrolled out of view (e.g. she'd
+     scrolled down into an open ticket), which read as "the page jumps
+     every time I do something". */
+  function scrollIntoViewHorizontally(container, el) {
+    if (!container || !el) return;
+    // getBoundingClientRect(), not offsetLeft — offsetLeft is relative to
+    // the nearest *positioned* ancestor, which isn't necessarily this
+    // container, so it can silently compute the wrong delta.
+    var containerRect = container.getBoundingClientRect();
+    var elRect = el.getBoundingClientRect();
+    if (elRect.left < containerRect.left) container.scrollLeft += elRect.left - containerRect.left;
+    else if (elRect.right > containerRect.right) container.scrollLeft += elRect.right - containerRect.right;
+  }
+
   var NAME_PREFIXES = ['ni', 'i', 'ibu', 'bu', 'bapak', 'pak', 'mbak', 'mas', 'kak'];
 
   function firstName(full) {
@@ -1551,7 +1570,7 @@
     }).join('');
 
     var activeChip = elChips.querySelector('[aria-pressed="true"]');
-    if (activeChip) activeChip.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    if (activeChip) scrollIntoViewHorizontally(elChips, activeChip);
 
     Array.prototype.forEach.call(elSort.querySelectorAll('button'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.sort === state.sort));
@@ -2081,7 +2100,8 @@
     window.scrollTo(0, scrollY);
 
     var nowPhase = elTicket.querySelector('.phase.now');
-    if (nowPhase) nowPhase.scrollIntoView({ inline: 'center', block: 'nearest' });
+    var phasesEl = elTicket.querySelector('.phases');
+    if (nowPhase && phasesEl) scrollIntoViewHorizontally(phasesEl, nowPhase);
   }
 
   /* Local bench-state toggles (comp ticks, the manual gate tick) never touch

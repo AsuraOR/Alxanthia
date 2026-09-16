@@ -322,14 +322,18 @@ console.log('--- SUITE 10b: an unpaid balance blocks dispatch server-side ---');
   console.log('✔ Suite 10b Passed\n');
 }
 
-console.log('--- SUITE 10c: the payment panel hides only after full settlement ---');
+console.log('--- SUITE 10c: a paid order keeps its money panel, with a paid-confirmation action ---');
 {
   const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
   const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
   const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
   assert.ok(
-    paymentBlockSrc.includes("if (pay === 'Paid') return '';"),
-    'Paid orders must render no payment panel'
+    !paymentBlockSrc.includes("if (pay === 'Paid') return '';"),
+    'a Paid order must not blank its payment panel — the billed total must stay visible'
+  );
+  assert.ok(
+    paymentBlockSrc.includes('data-sendpaid="1"'),
+    'a Paid order must offer a way to send the payment-confirmed message'
   );
   assert.ok(
     !paymentBlockSrc.includes("pay === 'Deposit paid') return ''") &&
@@ -353,6 +357,66 @@ console.log('--- SUITE 10d: order search matches buyer names and order codes ---
   assert.strictEqual(searchSandbox.matchesSearch(order, 'made'), false);
   assert.strictEqual(searchSandbox.matchesSearch(order, ''), true);
   console.log('✔ Suite 10d Passed\n');
+}
+
+console.log('--- SUITE 14: firstName() greets by first name, stripping Balinese/Indonesian honorifics ---');
+{
+  const match = deskHtml.match(/  var NAME_PREFIXES[\s\S]*?\n  function firstName\(full\) \{[\s\S]*?\n  \}/);
+  assert.ok(match, 'the Desk must include its firstName() greeting helper');
+  const nameSandbox = {};
+  vm.createContext(nameSandbox);
+  vm.runInContext(match[0] + '\nthis.firstName = firstName;', nameSandbox);
+  assert.strictEqual(nameSandbox.firstName('Ni Made Ayu Lestari'), 'Made');
+  assert.strictEqual(nameSandbox.firstName('I Wayan Sudiarta'), 'Wayan');
+  assert.strictEqual(nameSandbox.firstName('Budi Santoso'), 'Budi');
+  assert.strictEqual(nameSandbox.firstName('Budi'), 'Budi');
+  assert.strictEqual(nameSandbox.firstName('Ibu Sari'), 'Sari');
+  assert.strictEqual(nameSandbox.firstName('Ni'), 'Ni', 'a lone honorific-looking token must not be stripped down to nothing');
+  assert.strictEqual(nameSandbox.firstName(''), '');
+  assert.strictEqual(nameSandbox.firstName(undefined), '');
+  console.log('✔ Suite 14 Passed\n');
+}
+
+console.log('--- SUITE 15: cancelling an order requires confirmation and can be undone ---');
+{
+  assert.ok(deskHtml.includes('data-askcancel="1"'), 'the cancel button must route through a confirm step, not write directly');
+  assert.ok(!deskHtml.includes('data-pay="Cancelled">Batalkan pesanan'),
+    'the ghost cancel button must no longer write Payment Status directly');
+  assert.ok(deskHtml.includes("confirming = 'cancel'"), 'clicking the cancel button must arm the cancel confirmation');
+  assert.ok(deskHtml.includes('Batalkan pesanan') && deskHtml.includes('Ya, batalkan'),
+    'a confirm dialog with an explicit Ya/Tidak choice must exist for cancellation');
+  assert.ok(deskHtml.includes('data-pay="Unpaid">Aktifkan lagi'),
+    'a cancelled order must offer a way back to Unpaid');
+  console.log('✔ Suite 15 Passed\n');
+}
+
+console.log('--- SUITE 16: a catalogue failure degrades instead of blanking the whole Desk ---');
+{
+  const renderStart = deskHtml.indexOf('function render() {');
+  const renderEnd = deskHtml.indexOf('\n  function renderTop()', renderStart);
+  const renderSrc = deskHtml.slice(renderStart, renderEnd);
+  assert.ok(
+    /if \(state\.ordersError\) \{/.test(renderSrc) && !/if \(state\.ordersError \|\| state\.catalogError\)/.test(renderSrc),
+    'only an orders fetch failure may show the fatal error screen — a catalogue failure must not'
+  );
+  const bootStart = deskHtml.indexOf('function boot() {');
+  const bootEnd = deskHtml.indexOf('\n  function reloadOrders()', bootStart);
+  const bootSrc = deskHtml.slice(bootStart, bootEnd);
+  assert.ok(bootSrc.includes('state.catalogError'), 'boot() must still record the catalogue error for the stale banner');
+  assert.ok(/state\.catalog = \{ stale: true/.test(bootSrc),
+    'boot() must install a safe empty catalogue so rendering can proceed after getCatalog() throws');
+  assert.ok(deskHtml.includes('bankReady'),
+    'payment-send buttons must be guarded when bank details are unavailable, rather than sending a message with undefined in it');
+  console.log('✔ Suite 16 Passed\n');
+}
+
+console.log('--- SUITE 17: the Delivered retention window is named for what it actually measures ---');
+{
+  assert.ok(serverSrc.includes('KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE'),
+    'the retention constant must be named for the date it actually counts from (Preferred Date)');
+  assert.ok(!/\bKEEP_DELIVERED_DAYS\b(?!_PAST_PREFERRED_DATE)/.test(serverSrc),
+    'no reference to the old, misleadingly-named constant may remain');
+  console.log('✔ Suite 17 Passed\n');
 }
 
 // ---------------------------------------------------------------------------

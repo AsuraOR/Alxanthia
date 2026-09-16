@@ -133,7 +133,14 @@ accidental edit if she ever opens the sheet directly.
 var SHEET_NAME = 'Orders';
 var TIMEZONE = 'Asia/Makassar'; // must match CONFIGURE-SUBMISSION-ENDPOINT.md
 var MAX_ROWS = 500;
-var KEEP_DELIVERED_DAYS = 14;
+// Counted from Preferred Date (when the customer wanted the order), NOT from
+// the date the order was actually marked Delivered — the Desk does not
+// record a delivery timestamp. A finished order can therefore drop out of
+// view immediately (if its Preferred Date was already long past when it was
+// marked Delivered) or linger past this window (if Delivered ahead of a
+// future Preferred Date). See Troubleshooting: "A finished order disappears
+// from the queue sooner than expected".
+var KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE = 14;
 
 var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.js';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
@@ -203,7 +210,7 @@ function includeOrder_(order) {
   if (order.phase === 'Cancelled') return false;
   if (order.phase === 'Delivered') {
     var daysPast = daysBetween_(order.date, todayStr_());
-    if (daysPast > KEEP_DELIVERED_DAYS) return false;
+    if (daysPast > KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE) return false;
   }
   return true;
 }
@@ -1496,7 +1503,15 @@ function buildTicketLines_(items, catalog) {
     });
   }
 
-  function firstName(full) { return String(full).split(' ').slice(-1)[0]; }
+  var NAME_PREFIXES = ['ni', 'i', 'ibu', 'bu', 'bapak', 'pak', 'mbak', 'mas', 'kak'];
+
+  function firstName(full) {
+    var parts = String(full || '').trim().split(/\s+/).filter(Boolean);
+    while (parts.length > 1 && NAME_PREFIXES.indexOf(parts[0].toLowerCase().replace(/\.$/, '')) !== -1) {
+      parts.shift();
+    }
+    return parts.length ? parts[0] : '';
+  }
 
   function humanizeKey(key) {
     return String(key || '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
@@ -1585,8 +1600,9 @@ function buildTicketLines_(items, catalog) {
   /* Finished orders are archived out of the working queue the moment
      Work Phase reaches Delivered — the "Aktif" lane is everything still
      in progress. They stay reachable from the Selesai chip and, from the
-     sheet's own side, for KEEP_DELIVERED_DAYS after that (see
-     includeOrder_ in the server code) before listOrders() drops them
+     sheet's own side, for KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE days past
+     their Preferred Date (see includeOrder_ in the server code — this is
+     NOT days since it was marked Delivered) before listOrders() drops them
      entirely. */
   function isActive(order) { return order.phase !== 'Delivered'; }
 
@@ -1658,11 +1674,11 @@ function buildTicketLines_(items, catalog) {
   function render() {
     document.getElementById('today').textContent = fmtDate(todayStr()) + ' · Asia/Makassar';
 
-    if (state.ordersError || state.catalogError) {
+    if (state.ordersError) {
       elSkeleton.hidden = true;
       elApp.hidden = true;
       elErrorScreen.hidden = false;
-      elErrorMessage.textContent = state.ordersError || state.catalogError;
+      elErrorMessage.textContent = state.ordersError;
       return;
     }
     if (state.orders === null || state.catalog === null) {
@@ -1676,7 +1692,10 @@ function buildTicketLines_(items, catalog) {
     elApp.hidden = false;
     elRefreshBtn.hidden = false;
 
-    if (state.catalog.stale) {
+    if (state.catalogError) {
+      elStaleBanner.hidden = false;
+      elStaleBanner.textContent = 'Katalog tidak bisa dimuat — nama bunga tampil apa adanya. Data pesanan dan semua angka tetap akurat.';
+    } else if (state.catalog.stale) {
       elStaleBanner.hidden = false;
       elStaleBanner.textContent = 'Katalog tidak bisa dimuat ulang dari situs — nama bunga/paket di bawah mungkin sudah lama. Data pesanan dan angka tetap akurat.';
     } else {
@@ -1792,7 +1811,18 @@ function buildTicketLines_(items, catalog) {
 
   function paymentBlock(o) {
     var pay = o.payment;
-    if (pay === 'Paid') return '';
+    if (pay === 'Paid') {
+      var paidAmount = billed(o);
+      return '<div class="block"><h3>Pembayaran</h3>' +
+        '<div class="paid-line"><span class="ok">Lunas</span>' +
+        '<span class="amt">' + esc(paidAmount === null ? '—' : rupiah(paidAmount)) + '</span></div>' +
+        '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
+        '<span>Ongkir ' + (o.shipping === null || o.shipping === undefined || o.shipping === ''
+          ? 'belum diisi' : esc(rupiah(o.shipping))) + '</span></div>' +
+        '<div class="actions">' +
+        '<button type="button" class="btn ghost" data-sendpaid="1">Kirim konfirmasi lunas</button>' +
+        '</div></div>';
+    }
 
     var ship = o.shipping;
     var amount = billed(o);
@@ -1804,6 +1834,8 @@ function buildTicketLines_(items, catalog) {
     var planPending = isPending(o.ref, 'paymentPlan');
     var shipErr = fieldErrors[o.ref + '|shipping'];
     var payErr = fieldErrors[o.ref + '|payment'] || fieldErrors[o.ref + '|paymentPlan'];
+    var bank = state.catalog.bank || {};
+    var bankReady = !!bank.number;
 
     var html = '<div class="block pay-open"><h3>Pembayaran</h3>' +
       '<div class="amount"><span class="big">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
@@ -1835,7 +1867,8 @@ function buildTicketLines_(items, catalog) {
 
     if (pay === 'Cancelled') {
       html += '<div class="paid-line"><span class="cancelled">Dibatalkan</span>' +
-        (isDeposit ? '<span class="why">Jika DP sudah diterima, proses pengembalian dicatat manual.</span>' : '') + '</div>';
+        (isDeposit ? '<span class="why">Jika DP sudah diterima, proses pengembalian dicatat manual.</span>' : '') + '</div>' +
+        '<div class="actions"><button type="button" class="btn ghost" data-pay="Unpaid">Aktifkan lagi</button></div>';
     } else if (isDeposit) {
       var depositReceived = pay === 'Deposit paid' || pay === 'Checking balance';
       html += '<div class="paid-line"><span class="' + (depositReceived ? 'ok' : '') + '">' +
@@ -1843,27 +1876,31 @@ function buildTicketLines_(items, catalog) {
         '<span class="amt">' + esc(rupiah(depositReceived ? balance : deposit)) + '</span></div>' +
         '<div class="actions">' +
         (!depositReceived
-          ? '<button type="button" class="btn ghost" data-sendpayment="deposit">Kirim tagihan DP</button>' +
+          ? '<button type="button" class="btn ghost" data-sendpayment="deposit"' + (bankReady ? '' : ' disabled') + '>Kirim tagihan DP</button>' +
             '<button type="button" class="btn ghost" data-pay="Checking deposit">Tandai DP perlu dicek</button>' +
             '<button type="button" class="btn" data-askpaid="Deposit paid">Tandai DP diterima</button>'
           : (o.phase === 'Ready for dispatch'
-            ? '<button type="button" class="btn" data-sendpayment="balance">Kirim pesan pelunasan</button>' +
+            ? '<button type="button" class="btn" data-sendpayment="balance"' + (bankReady ? '' : ' disabled') + '>Kirim pesan pelunasan</button>' +
               '<button type="button" class="btn ghost" data-pay="Checking balance">Tandai perlu dicek</button>' +
               '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>'
             : '<span class="why">Pelunasan diminta saat pesanan Siap dikirim.</span>')) +
-        '<button type="button" class="btn ghost small" data-pay="Cancelled">Batalkan pesanan</button></div>';
+        '<button type="button" class="btn ghost small" data-askcancel="1">Batalkan pesanan</button></div>';
     } else {
-      html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full">Kirim pesan</button>' +
+      html += '<div class="actions"><button type="button" class="btn ghost" data-sendpayment="full"' + (bankReady ? '' : ' disabled') + '>Kirim pesan</button>' +
         '<button type="button" class="btn ghost" data-pay="Checking transfer">Tandai perlu dicek</button>' +
         '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>' +
-        '<button type="button" class="btn ghost small" data-pay="Cancelled">Batalkan pesanan</button></div>';
+        '<button type="button" class="btn ghost small" data-askcancel="1">Batalkan pesanan</button></div>';
     }
 
     if (amount === null) html += '<span class="why">Isi ongkir dulu supaya totalnya bisa ditagih.</span>';
+    if (!bankReady) html += '<span class="why">Nomor rekening belum diisi — pesan pembayaran tidak bisa dikirim.</span>';
     if (payErr) html += '<span class="why err">' + esc(payErr) + '</span>';
-    if (confirming && amount !== null) {
+    if (confirming === 'cancel') {
+      html += '<div class="confirm"><p>Batalkan pesanan ' + esc(o.ref) + '? Pesanan akan ditandai dibatalkan.</p>' +
+        '<div class="actions"><button type="button" class="btn" data-pay="Cancelled">Ya, batalkan</button>' +
+        '<button type="button" class="btn ghost" data-cancelconfirm="1">Tidak</button></div></div>';
+    } else if (confirming && amount !== null) {
       var target = confirming === 'Deposit paid' ? deposit : (confirming === 'Paid' && isDeposit ? balance : amount);
-      var bank = state.catalog.bank || {};
       html += '<div class="confirm"><p><b>' + esc(rupiah(target)) + '</b> sudah masuk ke rekening ' +
         esc(bank.bank || '—') + ' ' + esc(bank.number || '') + '?</p>' +
         '<p class="rule">Cek di mutasi rekening — jangan dari screenshot pembeli.</p>' +
@@ -2080,7 +2117,12 @@ function buildTicketLines_(items, catalog) {
 
     google.script.run
       .withSuccessHandler(function (catalog) { state.catalog = catalog; render(); })
-      .withFailureHandler(function (err) { state.catalogError = String((err && err.message) || err); render(); })
+      .withFailureHandler(function (err) {
+        state.catalogError = String((err && err.message) || err);
+        state.catalog = { stale: true, flowers: {}, pots: {}, additions: {},
+                          packages: [], wraps: {}, minimumLeadDays: 2, bank: {} };
+        render();
+      })
       .getCatalog();
 
     google.script.run
@@ -2202,6 +2244,7 @@ function buildTicketLines_(items, catalog) {
 
     var askPaid = e.target.closest('[data-askpaid]');
     if (askPaid) { confirming = askPaid.dataset.askpaid; renderTicket(); return; }
+    if (e.target.closest('[data-askcancel]')) { confirming = 'cancel'; renderTicket(); return; }
     if (e.target.closest('[data-cancelconfirm]')) { confirming = false; renderTicket(); return; }
 
     if (e.target.closest('[data-advance]')) {
@@ -2452,6 +2495,16 @@ Tap **Muat ulang katalog** in the footer — it clears the six-hour cache and re
 `site-content.js` immediately. If a quiet banner says the catalogue couldn't be reloaded, the site's
 `site-content.js` was unreachable; the Desk keeps working from its last good copy in the meantime, and
 order data and totals are unaffected either way (they come from the sheet, never the catalogue).
+
+### A finished order disappears from the queue sooner than expected
+
+The 14-day window a Delivered order stays visible (`KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE`) is
+counted from **Preferred Date** — when the customer wanted the flowers — not from the day you marked
+it Delivered. If an order's Preferred Date was already weeks ago by the time you finish it, it can
+drop out of the queue almost immediately after you mark it Delivered. This is expected behaviour, not
+a bug: the Desk does not currently record a separate delivery date. If you need finished orders to
+stay visible for a fixed number of days after you actually deliver them, that requires adding a
+`Delivered At` column and is a deliberate, separate change — ask your developer.
 
 ### Money doesn't match what the customer was quoted
 

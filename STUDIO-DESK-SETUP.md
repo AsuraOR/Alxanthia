@@ -1368,7 +1368,7 @@ function buildTicketLines_(items, catalog) {
       <div>
         <div class="search">
           <label for="orderSearch">Cari pesanan</label>
-          <input id="orderSearch" type="search" placeholder="Nama atau kode pesanan" autocomplete="off" aria-controls="queue">
+          <input id="orderSearch" type="search" placeholder="Nama, kode pesanan, atau nomor WA" autocomplete="off" aria-controls="queue">
         </div>
         <div class="sort">
           <span class="k">Urutkan</span>
@@ -1435,7 +1435,7 @@ function buildTicketLines_(items, catalog) {
   var confirming = false;
   var pending = {}; // "ref|field" -> true while a write is in flight
   var fieldErrors = {}; // "ref|field" -> Indonesian error message
-  var noteDrafts = {}; // ref -> unsaved textarea value
+  var noteDrafts = {}; // ref -> unsaved textarea value, persisted so a trip to WhatsApp can't lose it
   var refocus = null;
 
   var PER_KEY = 'alxanthia-desk-per-v1';
@@ -1446,6 +1446,16 @@ function buildTicketLines_(items, catalog) {
 
   function savePer() {
     try { localStorage.setItem(PER_KEY, JSON.stringify(state.per)); } catch (e) {}
+  }
+
+  var NOTE_DRAFTS_KEY = 'alxanthia-desk-notedrafts-v1';
+  try {
+    var savedDrafts = JSON.parse(localStorage.getItem(NOTE_DRAFTS_KEY) || 'null');
+    if (savedDrafts && typeof savedDrafts === 'object') noteDrafts = savedDrafts;
+  } catch (e) { /* private window or blocked storage — defaults are fine */ }
+
+  function saveNoteDrafts() {
+    try { localStorage.setItem(NOTE_DRAFTS_KEY, JSON.stringify(noteDrafts)); } catch (e) {}
   }
 
   function per(ref) {
@@ -1591,8 +1601,11 @@ function buildTicketLines_(items, catalog) {
   function matchesSearch(order, query) {
     var needle = String(query || '').trim().toLowerCase();
     if (!needle) return true;
-    return String(order.buyer || '').toLowerCase().indexOf(needle) !== -1 ||
-      String(order.ref || '').toLowerCase().indexOf(needle) !== -1;
+    if (String(order.buyer || '').toLowerCase().indexOf(needle) !== -1 ||
+        String(order.ref || '').toLowerCase().indexOf(needle) !== -1) return true;
+    var digits = needle.replace(/[^\d]/g, '');
+    if (digits && String(order.wa || '').replace(/[^\d]/g, '').indexOf(digits) !== -1) return true;
+    return false;
   }
 
   function laneOf(order) { return order.phase; }
@@ -1604,7 +1617,29 @@ function buildTicketLines_(items, catalog) {
      their Preferred Date (see includeOrder_ in the server code — this is
      NOT days since it was marked Delivered) before listOrders() drops them
      entirely. */
-  function isActive(order) { return order.phase !== 'Delivered'; }
+  function isActive(order) { return order.phase !== 'Delivered' && order.payment !== 'Cancelled'; }
+
+  /* Shared by the chip counts and the queue itself, so a lane always means
+     the same thing in both places. */
+  function laneMatch(order, laneKey) {
+    if (laneKey === 'all') return isActive(order);
+    if (laneKey === 'pay') return waitingPay(order);
+    if (laneKey === 'cancelled') return order.payment === 'Cancelled';
+    return laneOf(order) === laneKey;
+  }
+
+  /* The filtered, sorted list she is actually looking at — computed once and
+     shared between renderQueue() and the default-selection logic in
+     render(), so the ticket on the right is always the card at the top of
+     the list on the left. */
+  function visibleOrders() {
+    return state.orders.filter(function (o) {
+      return laneMatch(o, state.lane) && matchesSearch(o, state.search);
+    }).sort(function (a, b) {
+      if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+    });
+  }
 
   /* =====================================================================
      The gate: four checks read from the sheet, one she ticks herself.
@@ -1703,7 +1738,10 @@ function buildTicketLines_(items, catalog) {
     }
     elCatalogMeta.textContent = state.catalog.fetchedAt ? ('katalog dimuat ' + fmtStamp(state.catalog.fetchedAt)) : '';
 
-    if (!state.selected && state.orders.length) state.selected = state.orders[0].ref;
+    if (!state.selected) {
+      var visible = visibleOrders();
+      if (visible.length) state.selected = visible[0].ref;
+    }
 
     renderTop();
     renderQueue();
@@ -1727,14 +1765,11 @@ function buildTicketLines_(items, catalog) {
       '<div><b>' + working + '</b><span>sedang dikerjakan</span></div>';
 
     var lanes = [{ key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
-      .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }));
+      .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }))
+      .concat([{ key: 'cancelled', label: 'Dibatalkan' }]);
 
     elChips.innerHTML = lanes.map(function (l) {
-      var n = state.orders.filter(function (o) {
-        if (l.key === 'all') return isActive(o);
-        if (l.key === 'pay') return waitingPay(o);
-        return laneOf(o) === l.key;
-      }).length;
+      var n = state.orders.filter(function (o) { return laneMatch(o, l.key); }).length;
       return '<button type="button" data-lane="' + esc(l.key) + '" aria-pressed="' + (state.lane === l.key) +
         '">' + esc(l.label) + '<span class="n">' + n + '</span></button>';
     }).join('');
@@ -1746,14 +1781,7 @@ function buildTicketLines_(items, catalog) {
 
   function renderQueue() {
     var catalog = state.catalog;
-    var list = state.orders.filter(function (o) {
-      var inLane = state.lane === 'all' ? isActive(o) :
-        (state.lane === 'pay' ? waitingPay(o) : laneOf(o) === state.lane);
-      return inLane && matchesSearch(o, state.search);
-    }).sort(function (a, b) {
-      if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
-      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-    });
+    var list = visibleOrders();
 
     if (!list.length) {
       elQueue.innerHTML = '<li class="queue-empty">' +
@@ -1836,6 +1864,9 @@ function buildTicketLines_(items, catalog) {
     var payErr = fieldErrors[o.ref + '|payment'] || fieldErrors[o.ref + '|paymentPlan'];
     var bank = state.catalog.bank || {};
     var bankReady = !!bank.number;
+    var readyIndex = PHASES.findIndex(function (x) { return x.key === 'Ready for dispatch'; });
+    var phaseIndex = PHASES.findIndex(function (x) { return x.key === o.phase; });
+    var balanceDue = phaseIndex >= readyIndex;
 
     var html = '<div class="block pay-open"><h3>Pembayaran</h3>' +
       '<div class="amount"><span class="big">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
@@ -1879,8 +1910,10 @@ function buildTicketLines_(items, catalog) {
           ? '<button type="button" class="btn ghost" data-sendpayment="deposit"' + (bankReady ? '' : ' disabled') + '>Kirim tagihan DP</button>' +
             '<button type="button" class="btn ghost" data-pay="Checking deposit">Tandai DP perlu dicek</button>' +
             '<button type="button" class="btn" data-askpaid="Deposit paid">Tandai DP diterima</button>'
-          : (o.phase === 'Ready for dispatch'
-            ? '<button type="button" class="btn" data-sendpayment="balance"' + (bankReady ? '' : ' disabled') + '>Kirim pesan pelunasan</button>' +
+          : (balanceDue
+            ? (o.phase === 'Ready for dispatch'
+                ? '<button type="button" class="btn" data-sendpayment="balance"' + (bankReady ? '' : ' disabled') + '>Kirim pesan pelunasan</button>'
+                : '') +
               '<button type="button" class="btn ghost" data-pay="Checking balance">Tandai perlu dicek</button>' +
               '<button type="button" class="btn" data-askpaid="Paid">Tandai lunas</button>'
             : '<span class="why">Pelunasan diminta saat pesanan Siap dikirim.</span>')) +
@@ -2022,10 +2055,15 @@ function buildTicketLines_(items, catalog) {
     }
     html += '</div>';
 
-    html += '<div class="block"><h3>Catatan kerja</h3>' +
+    var unsavedNote = noteDrafts[o.ref] !== undefined && noteDrafts[o.ref] !== o.notes;
+    html += '<div class="block"><h3>Catatan kerja' +
+      (unsavedNote ? '<span class="count" style="color:var(--amber);text-transform:none">belum tersimpan</span>' : '') +
+      '</h3>' +
       '<textarea class="notes" id="notes-' + esc(o.ref) + '" data-fk="notes" ' +
       (notesPending ? 'disabled ' : '') +
-      'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea></div>' +
+      'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea>' +
+      '<div class="actions"><button type="button" class="btn ghost small" data-savenotes="1"' +
+      (notesPending ? ' disabled' : '') + '>Simpan catatan</button></div></div>' +
       '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
       '<span>Desk menulis: Payment Plan · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
       '<span>Kolom lain hanya dibaca</span></div>';
@@ -2071,7 +2109,7 @@ function buildTicketLines_(items, catalog) {
      copy, on failure the previous value comes back and the control
      re-enables so a double-tap can't queue two writes.
      ===================================================================== */
-  function writeField(ref, field, value, columnLabel) {
+  function writeField(ref, field, value, columnLabel, onSaved) {
     var key = ref + '|' + field;
     if (pending[key]) return;
     var order = findOrder(ref);
@@ -2090,6 +2128,7 @@ function buildTicketLines_(items, catalog) {
           var idx = state.orders.findIndex(function (x) { return x.ref === res.order.ref; });
           if (idx !== -1) state.orders[idx] = res.order;
           savedToast(columnLabel);
+          if (onSaved) onSaved();
         } else {
           order[field] = previous;
           fieldErrors[key] = (res && res.message) || 'Gagal menyimpan perubahan.';
@@ -2105,6 +2144,24 @@ function buildTicketLines_(items, catalog) {
         render();
       })
       .updateOrder({ ref: ref, row: order.row, field: field, value: value });
+  }
+
+  /* The draft is cleared only once the server confirms the write — not on
+     blur, and not just because a send button was tapped — so a WhatsApp
+     round trip (or any other navigation away) can never silently drop an
+     unsaved note. */
+  function saveNotes(o) {
+    var value = noteDrafts[o.ref] !== undefined ? noteDrafts[o.ref] : o.notes;
+    if (value === o.notes) {
+      delete noteDrafts[o.ref];
+      saveNoteDrafts();
+      renderTicket();
+      return;
+    }
+    writeField(o.ref, 'notes', value, 'Internal Notes', function () {
+      delete noteDrafts[o.ref];
+      saveNoteDrafts();
+    });
   }
 
   /* =====================================================================
@@ -2191,12 +2248,35 @@ function buildTicketLines_(items, catalog) {
     renderQueue();
   });
 
+  /* Master/detail on mobile is CSS state (body.detail), so the phone's own
+     back gesture would otherwise leave the Desk entirely rather than close
+     the ticket. Push a history entry when one opens and let popstate close
+     it, so the gesture and the in-page back button share one path. The Desk
+     runs inside the Apps Script /exec sandbox iframe, where history
+     manipulation can be restricted — if pushState throws, historyPushed
+     stays false and the in-page button falls back to closing the view
+     directly instead of touching history at all. */
+  var historyPushed = false;
+
+  function closeDetail() {
+    document.body.classList.remove('detail');
+  }
+
+  window.addEventListener('popstate', function () {
+    historyPushed = false;
+    closeDetail();
+  });
+
   elQueue.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-ref]');
     if (!b) return;
     state.selected = b.dataset.ref;
     confirming = false;
     document.body.classList.add('detail');
+    try {
+      history.pushState({ desk: 'detail', ref: state.selected }, '');
+      historyPushed = true;
+    } catch (e) { historyPushed = false; }
     renderQueue();
     renderTicket();
     elTicket.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2207,7 +2287,10 @@ function buildTicketLines_(items, catalog) {
     if (!o) return;
     var p = per(o.ref);
 
-    if (e.target.closest('[data-back]')) { document.body.classList.remove('detail'); return; }
+    if (e.target.closest('[data-back]')) {
+      if (historyPushed) { historyPushed = false; history.back(); } else { closeDetail(); }
+      return;
+    }
 
     var tick = e.target.closest('[data-tick]');
     if (tick) {
@@ -2286,6 +2369,11 @@ function buildTicketLines_(items, catalog) {
       if (msg) openWhatsApp(o, msg);
       return;
     }
+
+    if (e.target.closest('[data-savenotes]')) {
+      saveNotes(o);
+      return;
+    }
   });
 
   elTicket.addEventListener('change', function (e) {
@@ -2293,9 +2381,7 @@ function buildTicketLines_(items, catalog) {
     if (!o) return;
 
     if (e.target.classList.contains('notes')) {
-      var value = noteDrafts[o.ref] !== undefined ? noteDrafts[o.ref] : e.target.value;
-      delete noteDrafts[o.ref];
-      if (value !== o.notes) writeField(o.ref, 'notes', value, 'Internal Notes');
+      saveNotes(o);
       return;
     }
     if (e.target.type !== 'number') return;
@@ -2307,6 +2393,7 @@ function buildTicketLines_(items, catalog) {
   elTicket.addEventListener('input', function (e) {
     if (!e.target.classList.contains('notes')) return;
     noteDrafts[state.selected] = e.target.value;
+    saveNoteDrafts();
   });
 
   function copyText(text) {

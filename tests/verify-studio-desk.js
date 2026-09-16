@@ -350,12 +350,15 @@ console.log('--- SUITE 10d: order search matches buyer names and order codes ---
   const searchSandbox = {};
   vm.createContext(searchSandbox);
   vm.runInContext(match[0] + '\nthis.matchesSearch = matchesSearch;', searchSandbox);
-  const order = { buyer: 'Ni Putu Ayu Lestari', ref: 'ALX-260912-K4T9' };
+  const order = { buyer: 'Ni Putu Ayu Lestari', ref: 'ALX-260912-K4T9', wa: '+62 812-3456-7890' };
   assert.strictEqual(searchSandbox.matchesSearch(order, 'ayu'), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, 'k4t9'), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, '  ALX-260912  '), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, 'made'), false);
   assert.strictEqual(searchSandbox.matchesSearch(order, ''), true);
+  assert.strictEqual(searchSandbox.matchesSearch(order, '812-3456'), true, 'digits-only match must ignore dashes in the query');
+  assert.strictEqual(searchSandbox.matchesSearch(order, '62812345 67890'), true, 'digits-only match must ignore spacing in the query');
+  assert.strictEqual(searchSandbox.matchesSearch(order, '99999'), false);
   console.log('✔ Suite 10d Passed\n');
 }
 
@@ -417,6 +420,57 @@ console.log('--- SUITE 17: the Delivered retention window is named for what it a
   assert.ok(!/\bKEEP_DELIVERED_DAYS\b(?!_PAST_PREFERRED_DATE)/.test(serverSrc),
     'no reference to the old, misleadingly-named constant may remain');
   console.log('✔ Suite 17 Passed\n');
+}
+
+console.log('--- SUITE 18: an unsaved note survives a trip away from the Desk ---');
+{
+  assert.ok(deskHtml.includes('NOTE_DRAFTS_KEY'), 'note drafts must be persisted, like state.per, not kept only in memory');
+  assert.ok(deskHtml.includes('saveNoteDrafts()'), 'a saveNoteDrafts() persistence helper must exist and be called');
+  assert.ok(deskHtml.includes('data-savenotes="1"'), 'an explicit save control must exist beside blur-to-save');
+  assert.ok(deskHtml.includes('belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  const saveNotesMatch = deskHtml.match(/function saveNotes\(o\) \{[\s\S]*?\n  \}/);
+  assert.ok(saveNotesMatch, 'a saveNotes() helper must exist');
+  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
+    'the draft must be cleared only inside the write success callback, not before the server confirms it'
+  );
+  console.log('✔ Suite 18 Passed\n');
+}
+
+console.log('--- SUITE 19: the phone back gesture closes the ticket instead of leaving the Desk ---');
+{
+  assert.ok(deskHtml.includes("history.pushState({ desk: 'detail'"), 'opening a ticket must push a history entry on mobile');
+  assert.ok(deskHtml.includes("addEventListener('popstate'"), 'a popstate listener must close the detail view');
+  assert.ok(/try \{\s*history\.pushState/.test(deskHtml), 'pushState must be guarded — it can be restricted inside the Apps Script iframe');
+  console.log('✔ Suite 19 Passed\n');
+}
+
+console.log('--- SUITE 20: an early balance payment can still be recorded ahead of Ready for dispatch ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('var balanceDue = phaseIndex >= readyIndex;'),
+    'whether the balance can be recorded must be computed from phase order, not string equality alone');
+  assert.ok(paymentBlockSrc.includes("o.phase === 'Ready for dispatch'\n                ? '<button type=\"button\" class=\"btn\" data-sendpayment=\"balance\""),
+    'Kirim pesan pelunasan (asking for money early) must remain gated to exactly Ready for dispatch');
+  assert.ok(paymentBlockSrc.includes("(balanceDue\n            ? "),
+    'Tandai perlu dicek / Tandai lunas must be reachable at or after Ready for dispatch, not only exactly at it');
+  console.log('✔ Suite 20 Passed\n');
+}
+
+console.log('--- SUITE 21: cancelled orders get their own lane and drop out of Aktif ---');
+{
+  assert.ok(deskHtml.includes("{ key: 'cancelled', label: 'Dibatalkan' }"), 'a Dibatalkan lane must exist');
+  assert.ok(deskHtml.includes("order.payment !== 'Cancelled'"), 'isActive must exclude cancelled orders from the Aktif lane');
+  console.log('✔ Suite 21 Passed\n');
+}
+
+console.log('--- SUITE 22: the default-selected ticket matches the top of the visible, sorted list ---');
+{
+  assert.ok(deskHtml.includes('function visibleOrders()'), 'a shared visibleOrders() helper must exist');
+  assert.ok(deskHtml.includes('var visible = visibleOrders();'),
+    'the default selection must be computed from the same filtered/sorted list the queue renders, not raw sheet order');
+  console.log('✔ Suite 22 Passed\n');
 }
 
 // ---------------------------------------------------------------------------

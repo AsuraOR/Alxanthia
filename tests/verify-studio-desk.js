@@ -598,7 +598,7 @@ console.log('--- SUITE 30 (P2-3): an unread order is tagged Baru and counted, pe
     'the last-seen timestamp must be persisted per device, like PER_KEY and NOTE_DRAFTS_KEY');
   assert.ok(deskHtml.includes('function markSeen(') && deskHtml.includes('markSeen(o);'),
     'opening a ticket must advance lastSeenAt for that order');
-  assert.ok(deskHtml.includes("o.submitted > lastSeenAt) tags.push('<span class=\"tag go\">Baru</span>')"),
+  assert.ok(deskHtml.includes("o.submitted > lastSeenAt) tagCandidates.push('<span class=\"tag go\">Baru</span>')"),
     'a card newer than lastSeenAt must be tagged Baru');
   assert.ok(deskHtml.includes('pesanan baru'), 'a pesanan baru counter must appear in the pulse strip');
   console.log('✔ Suite 30 Passed\n');
@@ -672,6 +672,23 @@ console.log('--- SUITE 34 (P3-7): notes save status is honest, with retry instea
   assert.ok(deskHtml.includes('data-retrynotes="1"'), 'a retry action must exist for a failed note save');
   assert.ok(deskHtml.includes("notesErr ? 'Gagal menyimpan'"), 'the status label must reflect an actual save failure, not just always read belum tersimpan');
   console.log('✔ Suite 34 Passed\n');
+}
+
+console.log('--- SUITE 36 (P4-1/P4-2/P4-6): touch targets, contrast, and tag density ---');
+{
+  assert.ok(/\.btn \{[^}]*min-height: 44px;/.test(deskHtml), '.btn must have a 44px minimum tap target');
+  assert.ok(/\.tick \{[^}]*min-height: 44px;/.test(deskHtml), '.tick must have a 44px minimum tap target');
+  assert.ok(/\.comp \{[^}]*min-height: 44px;/.test(deskHtml), '.comp must have a 44px minimum tap target');
+  assert.ok(deskHtml.includes('.chips button::before') && deskHtml.includes('.seg button::before'),
+    'dense rows (chips, segmented controls) must extend their tap target via an invisible overlay rather than growing visually');
+  assert.ok(deskHtml.includes('--muted: #5F6A5D;'), '--muted must be darkened in the light palette for AA contrast');
+  assert.ok(deskHtml.includes('var tagCandidates = []') && deskHtml.includes('var tags = tagCandidates.slice(0, 3);'),
+    'card tags must be capped at three, in priority order');
+  assert.ok(!deskHtml.includes("if (o.card) tags.push('<span class=\"tag\">Kartu</span>')"),
+    'the Kartu tag must be dropped from cards — the ticket itself already shows it');
+  assert.ok(deskHtml.includes("'<span class=\"what\">' + wrapSwatchHtml + esc(summary)"),
+    'the wrap colour must move inline next to the item summary as a bare chip, not a labelled tag');
+  console.log('✔ Suite 36 Passed\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -766,5 +783,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 41 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 42 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

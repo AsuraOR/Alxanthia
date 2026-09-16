@@ -17,7 +17,7 @@
     --surface-2: #EDEFE8;
     --ink: #1B201B;
     --ink-2: #4E564D;
-    --muted: #737B70;
+    --muted: #5F6A5D; /* darkened from #737B70 for AA contrast on --surface/-2 and --ground — see P4-2 in STUDIO-DESK-UX-REVIEW.md */
     --rule: #D9DDD3;
     --rule-strong: #C2C8BA;
     --pine: #33503F;
@@ -125,6 +125,9 @@
   .bar .refresh {
     font: 600 12px/1 var(--sans);
     padding: 8px 11px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     border-radius: 7px;
     border: 1px solid var(--rule-strong);
     background: var(--surface);
@@ -184,6 +187,7 @@
   }
   .chips::-webkit-scrollbar { display: none; }
   .chips button {
+    position: relative;
     flex: 0 0 auto;
     font: 500 13px/1 var(--sans);
     padding: 9px 13px;
@@ -193,6 +197,10 @@
     color: var(--ink-2);
     cursor: pointer;
   }
+  /* The pill itself stays visually compact so the row doesn't get too tall
+     to scan, but the actual tap target grows to the 44px floor via an
+     invisible overlay — see P4-1 in STUDIO-DESK-UX-REVIEW.md. */
+  .chips button::before { content: ''; position: absolute; inset: -6px; }
   .chips button .n {
     font-family: var(--mono);
     font-size: 11.5px;
@@ -248,8 +256,9 @@
     margin-bottom: 8px;
   }
   .sort .k { display: inline; margin-bottom: 0; }
-  .seg { display: flex; border: 1px solid var(--rule-strong); border-radius: 7px; overflow: hidden; width: max-content; }
+  .seg { display: flex; border: 1px solid var(--rule-strong); border-radius: 7px; overflow: visible; width: max-content; }
   .seg button {
+    position: relative;
     font: 500 12.5px/1 var(--sans);
     padding: 8px 11px;
     border: 0;
@@ -257,6 +266,12 @@
     color: var(--ink-2);
     cursor: pointer;
   }
+  .seg button:first-child { border-start-start-radius: 7px; border-end-start-radius: 7px; }
+  .seg button:last-child { border-start-end-radius: 7px; border-end-end-radius: 7px; }
+  /* overflow:hidden on .seg would clip the extended tap target below — see
+     the border-radius rules above, which do the corner-rounding job that
+     overflow:hidden used to. */
+  .seg button::before { content: ''; position: absolute; top: -7px; bottom: -7px; left: 0; right: 0; }
   .seg button[disabled] { opacity: .55; cursor: not-allowed; }
   .seg button + button { border-inline-start: 1px solid var(--rule-strong); }
   .seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
@@ -329,6 +344,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  .card .what .swatch { vertical-align: text-top; margin-inline-end: 5px; }
   .card .in {
     font-family: var(--mono);
     font-size: 11px;
@@ -341,7 +357,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font: 600 10.5px/1 var(--sans);
+    font: 600 11.5px/1 var(--sans);
     letter-spacing: .06em;
     text-transform: uppercase;
     padding: 5px 7px;
@@ -507,6 +523,10 @@
   .btn {
     font: 600 13.5px/1 var(--sans);
     padding: 12px 17px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 7px;
     border: 1px solid var(--pine);
     background: var(--pine);
@@ -562,12 +582,13 @@
     display: grid;
     grid-template-columns: 17px minmax(0, 1fr);
     gap: 9px;
-    align-items: start;
+    align-items: center;
     width: 100%;
+    min-height: 44px;
     text-align: start;
     background: none;
     border: 0;
-    padding: 7px 0;
+    padding: 13px 0;
     font: inherit;
     font-size: 13.5px;
     color: var(--ink);
@@ -596,6 +617,7 @@
     gap: 11px;
     align-items: start;
     width: 100%;
+    min-height: 44px;
     text-align: start;
     background: none;
     border: 0;
@@ -1317,26 +1339,35 @@
         else if (phase !== 'Not started') cls += ' is-working';
       }
 
-      var tags = [];
-      if (o.submitted > lastSeenAt) tags.push('<span class="tag go">Baru</span>');
-      if (o.mismatch) tags.push('<span class="tag stop"><span class="dot"></span>Review</span>');
+      /* Capped at three, in priority order, so Review (the one that means
+         "stop, the price is wrong") never gets lost among five same-weight
+         tags — see P4-6 in STUDIO-DESK-UX-REVIEW.md. Baru ranks first: an
+         order she's never opened is the one thing she'd otherwise miss
+         entirely. The wrap colour moves inline next to the summary as a
+         bare chip, and Kartu is dropped — both are already unmissable once
+         the ticket itself is open. */
+      var tagCandidates = [];
+      if (o.submitted > lastSeenAt) tagCandidates.push('<span class="tag go">Baru</span>');
+      if (o.mismatch) tagCandidates.push('<span class="tag stop"><span class="dot"></span>Review</span>');
       if (waitingPay(o)) {
         var pl = (PAYMENTS.find(function (p) { return p.key === o.payment; }) || {}).label || o.payment;
-        tags.push('<span class="tag warn"><span class="dot"></span>' + esc(pl) + '</span>');
+        tagCandidates.push('<span class="tag warn"><span class="dot"></span>' + esc(pl) + '</span>');
       } else if (o.payment === 'Cancelled') {
-        tags.push('<span class="tag stop"><span class="dot"></span>Dibatalkan</span>');
+        tagCandidates.push('<span class="tag stop"><span class="dot"></span>Dibatalkan</span>');
       }
       var phaseEntry = PHASES.find(function (p) { return p.key === phase; });
       if (phase !== 'Not started' && phaseEntry) {
-        tags.push('<span class="tag go"><span class="dot"></span>' + esc(phaseEntry.label) + '</span>');
+        tagCandidates.push('<span class="tag go"><span class="dot"></span>' + esc(phaseEntry.label) + '</span>');
       } else if (gate(o, catalog).autoOk) {
-        tags.push('<span class="tag go"><span class="dot"></span>Siap dikerjakan</span>');
+        tagCandidates.push('<span class="tag go"><span class="dot"></span>Siap dikerjakan</span>');
       }
+      var tags = tagCandidates.slice(0, 3);
+
+      var wrapSwatchHtml = '';
       if (usesBouquetWrap(o.items)) {
         var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
-        tags.push('<span class="tag"><span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span>');
+        wrapSwatchHtml = '<span class="swatch" style="background:' + esc(w.swatch) + '" title="' + esc(w.name) + '"></span>';
       }
-      if (o.card) tags.push('<span class="tag">Kartu</span>');
 
       var summary = o.items.length
         ? buildList(o, catalog).map(function (r) { return r.qty + '× ' + r.name; }).join(' · ')
@@ -1349,7 +1380,7 @@
           '<span class="row1"><span class="ref">' + esc(o.ref) + '</span>' +
             '<span class="due">' + esc(fmtDate(o.date)) + ' · ' + esc(relDate(o.date)) + '</span></span>' +
           '<span class="who">' + esc(o.buyer) + '</span>' +
-          '<span class="what">' + esc(summary) + '</span>' +
+          '<span class="what">' + wrapSwatchHtml + esc(summary) + '</span>' +
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span>' +
           '<span class="tags">' + tags.join('') + '</span>' +
         '</span></button></li>';

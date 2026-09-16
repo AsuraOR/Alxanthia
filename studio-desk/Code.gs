@@ -40,6 +40,36 @@ var PAYMENT_VALUES = ['Unpaid', 'Checking transfer', 'Checking deposit', 'Deposi
 var PHASE_VALUES = ['Not started', 'Assembly and packing', 'Ready for dispatch', 'Shipped', 'Delivered', 'Cancelled'];
 
 // ============================================================================
+// Desk Ops — additive operational storage beyond the five Orders columns
+// above (see STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md, ground rule 4). Three
+// small sheets, each in the same spreadsheet as Orders, each keyed by Order
+// Reference, each written only through the narrow, validated commands below
+// — never through updateOrder(), which stays limited to WRITABLE_FIELDS.
+// Run deskOpsMigrationApply() once from the Apps Script editor to create
+// them; see "Desk Ops setup" in STUDIO-DESK-SETUP.md.
+// ============================================================================
+var DESK_LEDGER_SHEET = 'Desk Ledger';
+var DESK_LEDGER_HEADERS = ['Event ID', 'Order Reference', 'Type', 'Amount', 'Note', 'Recorded At', 'Recorded By', 'Reverses Event ID', 'Idempotency Key'];
+var DESK_CHECKLIST_SHEET = 'Desk Checklist';
+var DESK_CHECKLIST_HEADERS = ['Order Reference', 'Item Key', 'Content Version', 'Completed', 'Completed At', 'Completed By'];
+var DESK_ACTIVITY_SHEET = 'Desk Activity';
+var DESK_ACTIVITY_HEADERS = ['Event ID', 'Order Reference', 'Action', 'Detail', 'At', 'By', 'Mutation ID'];
+
+// receipt: money in. refund: money out. correction: a signed adjustment for
+// fixing a mistake without silently editing or deleting the row it corrects
+// — pair it with reversesEventId. Never delete or overwrite a ledger row.
+var LEDGER_TYPES = ['receipt', 'refund', 'correction'];
+
+var PHASE_LABELS_ID_ = {
+  'Not started': 'Belum mulai', 'Assembly and packing': 'Dirangkai dan dikemas',
+  'Ready for dispatch': 'Siap dikirim', 'Shipped': 'Dikirim', 'Delivered': 'Selesai', 'Cancelled': 'Dibatalkan'
+};
+var PAYMENT_LABELS_ID_ = {
+  'Unpaid': 'Belum bayar', 'Checking transfer': 'Perlu dicek', 'Checking deposit': 'Periksa DP',
+  'Deposit paid': 'DP diterima', 'Checking balance': 'Periksa pelunasan', 'Paid': 'Lunas', 'Cancelled': 'Dibatalkan'
+};
+
+// ============================================================================
 // Web app entry point
 // ============================================================================
 function doGet(e) {
@@ -76,17 +106,28 @@ function listOrders() {
   var numRows = lastRow - startRow + 1;
   var values = sheet.getRange(startRow, 1, numRows, headers.length).getValues();
 
+  var ledgerSummary = getLedgerSummaryMap_();
+  var reviewedMap = getReviewedMap_();
+
   var orders = [];
   for (var i = 0; i < values.length; i += 1) {
     var order = rowToOrder_(values[i], headers, startRow + i);
-    if (order && includeOrder_(order)) orders.push(order);
+    if (order && includeOrder_(order)) {
+      attachOpsSummary_(order, ledgerSummary, reviewedMap);
+      orders.push(order);
+    }
   }
   return orders;
 }
 
+// A row cancelled by Work Phase (set from the sheet) used to be dropped
+// entirely, while the Desk's own Dibatalkan chip matches Payment Status —
+// two different notions of "cancelled" (see P5-6 in
+// STUDIO-DESK-UX-REVIEW.md). Phase-cancelled rows now age out on the same
+// window as Delivered rows instead of vanishing outright, so they reach
+// laneMatch() and can appear under Dibatalkan.
 function includeOrder_(order) {
-  if (order.phase === 'Cancelled') return false;
-  if (order.phase === 'Delivered') {
+  if (order.phase === 'Cancelled' || order.phase === 'Delivered') {
     var daysPast = daysBetween_(order.date, todayStr_());
     if (daysPast > KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE) return false;
   }
@@ -235,15 +276,52 @@ function updateOrder(payload) {
       if (String(currentPayment) !== 'Paid') {
         return { ok: false, code: 'PAYMENT_DUE', message: 'Pelunasan harus diterima sebelum pesanan dikirim.' };
       }
+      // SD-01: the status string alone is not authoritative once verified
+      // receipts exist — cross-check against the ledger too. An order with
+      // no ledger events at all is a legacy order (or one paid before this
+      // feature existed) and is not newly blocked by this; that gap is
+      // exactly the reconciliation state attachOpsSummary_ surfaces instead
+      // of guessing at it here.
+      var verifiedCol = headers.map['Verified Total'];
+      var shippingCol = headers.map['Shipping Fee'];
+      var verifiedTotal = verifiedCol === undefined ? 0 : Number(sheet.getRange(row, verifiedCol + 1).getValue()) || 0;
+      var shippingFee = shippingCol === undefined ? 0 : Number(sheet.getRange(row, shippingCol + 1).getValue()) || 0;
+      var billedTotal = verifiedTotal + shippingFee;
+      var ledgerCheck = getPaymentSummaryForRef_(ref);
+      if (ledgerCheck.hasLedgerEvents && ledgerCheck.received < billedTotal) {
+        return {
+          ok: false, code: 'PAYMENT_DUE',
+          message: 'Jumlah yang tercatat diterima (' + formatRupiah_(ledgerCheck.received) +
+            ') belum mencapai total tagihan (' + formatRupiah_(billedTotal) + ').'
+        };
+      }
     }
 
     sheet.getRange(row, colIdx + 1).setValue(validated.value);
 
+    // Best-effort activity log entry for the change just made. This is a
+    // second sheet write outside the Orders write above — Apps Script has
+    // no cross-sheet transaction, so logActivity_ never throws and never
+    // rolls back a write that has already succeeded. See SD-03 in
+    // STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md.
+    var activityDetail = updateActivityDetail_(field, validated.value);
+    if (activityDetail) logActivity_(ref, activityDetail.action, activityDetail.detail, '');
+
     var rowValues = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
-    return { ok: true, order: rowToOrder_(rowValues, headers, row) };
+    return { ok: true, order: attachOpsSummaryForSingle_(rowToOrder_(rowValues, headers, row)) };
   } finally {
     lock.releaseLock();
   }
+}
+
+function updateActivityDetail_(field, value) {
+  if (field === 'phase') {
+    return { action: 'phase_changed', detail: 'Tahap kerja: ' + (PHASE_LABELS_ID_[value] || value) };
+  }
+  if (field === 'payment') {
+    return { action: 'payment_status_changed', detail: 'Status pembayaran: ' + (PAYMENT_LABELS_ID_[value] || value) };
+  }
+  return null;
 }
 
 function validateFieldValue_(field, value) {
@@ -309,6 +387,462 @@ function findRowByReference_(sheet, refCol, ref, hintRow) {
 }
 
 // ============================================================================
+// Desk Ops sheet access — a missing sheet throws a clear, actionable error
+// rather than failing obscurely; run deskOpsMigrationApply() first.
+// ============================================================================
+function openOpsSheet_(name) {
+  var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (!id) throw new Error('SPREADSHEET_ID belum diatur di Script Properties.');
+  var spreadsheet = SpreadsheetApp.openById(id);
+  var sheet = spreadsheet.getSheetByName(name);
+  if (!sheet) {
+    throw new Error('Sheet "' + name + '" belum ada. Jalankan deskOpsMigrationApply() dari editor Apps Script ' +
+      '(lihat "Desk Ops setup" di STUDIO-DESK-SETUP.md).');
+  }
+  return sheet;
+}
+
+// ============================================================================
+// Migration — additive and repeatable. Never removes or reorders a column,
+// never touches the Orders sheet, and re-running it is always safe: a sheet
+// or header that already exists is left exactly as it is. Run
+// deskOpsMigrationDryRun() first from the Apps Script editor (View > Logs
+// for the report), then deskOpsMigrationApply() to actually create
+// anything. See "Desk Ops setup" in STUDIO-DESK-SETUP.md.
+// ============================================================================
+function ensureDeskOpsSheets_(apply) {
+  var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (!id) throw new Error('SPREADSHEET_ID belum diatur di Script Properties.');
+  var spreadsheet = SpreadsheetApp.openById(id);
+  var specs = [
+    { name: DESK_LEDGER_SHEET, headers: DESK_LEDGER_HEADERS },
+    { name: DESK_CHECKLIST_SHEET, headers: DESK_CHECKLIST_HEADERS },
+    { name: DESK_ACTIVITY_SHEET, headers: DESK_ACTIVITY_HEADERS }
+  ];
+  var report = [];
+  specs.forEach(function (spec) {
+    var sheet = spreadsheet.getSheetByName(spec.name);
+    if (!sheet) {
+      report.push(spec.name + ': MISSING' + (apply ? ' -> creating' : ' (dry run — would create)'));
+      if (apply) {
+        sheet = spreadsheet.insertSheet(spec.name);
+        sheet.getRange(1, 1, 1, spec.headers.length).setValues([spec.headers]);
+        sheet.setFrozenRows(1);
+      }
+      return;
+    }
+    var lastCol = Math.max(sheet.getLastColumn(), 1);
+    var existing = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (v) { return String(v || '').trim(); });
+    var missing = spec.headers.filter(function (h) { return existing.indexOf(h) === -1; });
+    if (missing.length) {
+      report.push(spec.name + ': present, MISSING HEADERS [' + missing.join(', ') + ']' +
+        (apply ? ' -> appending' : ' (dry run — would append)'));
+      if (apply) {
+        var startCol = existing.length + 1;
+        missing.forEach(function (h, i) { sheet.getRange(1, startCol + i).setValue(h); });
+      }
+    } else {
+      report.push(spec.name + ': OK (' + existing.length + ' columns, all expected headers present)');
+    }
+  });
+  var text = report.join('\n');
+  Logger.log(text);
+  return text;
+}
+
+// Select this function in the Apps Script editor and press Run, then check
+// View > Logs — reports what the migration would do without changing
+// anything.
+function deskOpsMigrationDryRun() {
+  return ensureDeskOpsSheets_(false);
+}
+
+// Select this function in the Apps Script editor and press Run to actually
+// create the three Desk Ops sheets (or add any headers missing from an
+// existing one). Safe to re-run.
+function deskOpsMigrationApply() {
+  return ensureDeskOpsSheets_(true);
+}
+
+// ============================================================================
+// Money formatting for server-composed messages (activity log text, error
+// messages) — no locale API dependency, just thousands separators.
+// ============================================================================
+function formatRupiah_(n) {
+  var neg = n < 0;
+  var s = String(Math.round(Math.abs(Number(n) || 0)));
+  var out = '';
+  while (s.length > 3) { out = '.' + s.slice(-3) + out; s = s.slice(0, -3); }
+  out = s + out;
+  return (neg ? '-' : '') + 'Rp ' + out;
+}
+
+// ============================================================================
+// A stable identity for a line item's own content, independent of its
+// position in the order — reordering items must not invalidate their
+// checklist state (SD-02), but editing an item's content must invalidate
+// only that item's own check. Mirrored exactly in Index.html's own script
+// (client-side rendering cannot call back into this file); keep both in
+// sync if either changes.
+// ============================================================================
+function canonicalJson_(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(canonicalJson_).join(',') + ']';
+  var keys = Object.keys(value).sort();
+  return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + canonicalJson_(value[k]); }).join(',') + '}';
+}
+
+function itemContentKey_(item) {
+  var sig = canonicalJson_(item || {});
+  var hash = 5381;
+  for (var i = 0; i < sig.length; i += 1) {
+    hash = ((hash * 33) ^ sig.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+// Disambiguates identical items (two identical custom bouquets, say) by
+// their order of appearance among items sharing the same content hash —
+// reordering two DIFFERENT items never changes either one's key, and
+// swapping two IDENTICAL items is unobservable by definition.
+function itemChecklistKeys_(items) {
+  var seen = {};
+  return (items || []).map(function (item) {
+    var base = itemContentKey_(item);
+    var n = seen[base] = (seen[base] || 0) + 1;
+    return 'item:' + base + '#' + n;
+  });
+}
+
+// ============================================================================
+// SD-01 — payment ledger. Immutable, append-only events; a correction or
+// refund is its own new event, never an edit to a past one. Idempotent by
+// idempotencyKey: retrying the same command after a lost response, or a
+// double tap, records the receipt once.
+// ============================================================================
+function recordPayment(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var type = String(payload.type || '');
+  var idempotencyKey = String(payload.idempotencyKey || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+  if (LEDGER_TYPES.indexOf(type) === -1) {
+    return { ok: false, code: 'BAD_TYPE', message: 'Jenis catatan pembayaran tidak dikenali.' };
+  }
+  if (!idempotencyKey) {
+    return { ok: false, code: 'BAD_KEY', message: 'Permintaan ini tidak lengkap — coba lagi.' };
+  }
+  var amount = Number(payload.amount);
+  if (!isFinite(amount) || amount === 0) {
+    return { ok: false, code: 'BAD_AMOUNT', message: 'Jumlah harus berupa angka dan tidak nol.' };
+  }
+  if (type !== 'correction' && amount < 0) {
+    return { ok: false, code: 'BAD_AMOUNT', message: 'Jumlah harus lebih dari nol untuk penerimaan atau pengembalian dana.' };
+  }
+  var note = safeText_(String(payload.note || '').slice(0, 500));
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  }
+  try {
+    var sheet = openOpsSheet_(DESK_LEDGER_SHEET);
+    var existing = findLedgerEventByIdempotencyKey_(sheet, idempotencyKey);
+    if (existing) {
+      // The same command, retried after a lost response or a double tap —
+      // return the original event instead of recording the receipt twice.
+      return { ok: true, event: existing, summary: getPaymentSummaryForRef_(ref), idempotentReplay: true };
+    }
+
+    var signedAmount = type === 'refund' ? -Math.abs(amount) : amount;
+    var eventId = 'pay_' + Utilities.getUuid();
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var recordedAt = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var reverses = payload.reversesEventId ? String(payload.reversesEventId) : '';
+    sheet.appendRow([eventId, ref, type, signedAmount, note, recordedAt, by, reverses, idempotencyKey]);
+
+    var actionLabel = type === 'receipt' ? 'Pembayaran diterima' : (type === 'refund' ? 'Dana dikembalikan' : 'Koreksi pembayaran');
+    logActivity_(ref, 'payment_recorded', actionLabel + ': ' + formatRupiah_(Math.abs(signedAmount)) + (note ? ' — ' + note : ''), idempotencyKey);
+
+    return {
+      ok: true,
+      event: { eventId: eventId, ref: ref, type: type, amount: signedAmount, note: note, recordedAt: recordedAt, recordedBy: by },
+      summary: getPaymentSummaryForRef_(ref)
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function findLedgerEventByIdempotencyKey_(sheet, idempotencyKey) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_LEDGER_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][8]) === idempotencyKey) return rowToLedgerEvent_(values[i]);
+  }
+  return null;
+}
+
+function rowToLedgerEvent_(row) {
+  return {
+    eventId: String(row[0]), ref: String(row[1]), type: String(row[2]), amount: Number(row[3]),
+    note: String(row[4] || ''), recordedAt: String(row[5] || ''), recordedBy: String(row[6] || ''),
+    reversesEventId: String(row[7] || '')
+  };
+}
+
+// Single-reference summary — used by updateOrder()'s dispatch check and by
+// recordPayment()'s own return value. Degrades to "no ledger events" if the
+// Desk Ops sheets haven't been migrated yet, exactly like
+// getLedgerSummaryMap_ — an un-migrated shop must not have every dispatch
+// blocked by a missing sheet it doesn't know it needs.
+function getPaymentSummaryForRef_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_LEDGER_SHEET); } catch (e) { return { received: 0, hasLedgerEvents: false }; }
+  var lastRow = sheet.getLastRow();
+  var received = 0;
+  var hasEvents = false;
+  if (lastRow >= 2) {
+    var values = sheet.getRange(2, 1, lastRow - 1, DESK_LEDGER_HEADERS.length).getValues();
+    for (var i = 0; i < values.length; i += 1) {
+      if (String(values[i][1]) !== ref) continue;
+      hasEvents = true;
+      received += Number(values[i][3]) || 0;
+    }
+  }
+  return { received: received, hasLedgerEvents: hasEvents };
+}
+
+// Whole-sheet summary, read once and reused across every order — used by
+// listOrders() so it never scans the ledger once per order.
+function getLedgerSummaryMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_LEDGER_SHEET); } catch (e) { return map; } // ops sheets are optional until migration runs
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_LEDGER_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    var ref = String(values[i][1]);
+    if (!ref) continue;
+    if (!map[ref]) map[ref] = { received: 0, hasLedgerEvents: false };
+    map[ref].received += Number(values[i][3]) || 0;
+    map[ref].hasLedgerEvents = true;
+  }
+  return map;
+}
+
+function getPaymentLedger(ref) {
+  checkAccess_();
+  ref = String(ref || '');
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_LEDGER_SHEET); } catch (e) { return []; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_LEDGER_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) !== ref) continue;
+    out.push(rowToLedgerEvent_(values[i]));
+  }
+  return out;
+}
+
+// Layers the additive Desk Ops records (payment ledger, review completion)
+// onto an order read from the Orders sheet. Never derives a receipt or a
+// review from anything but an explicit Desk Ops record — a legacy order
+// whose Payment Status implies money already changed hands, but which has
+// no ledger events, is surfaced as needing reconciliation rather than
+// being silently treated as freshly unpaid or, worse, as fully received.
+function attachOpsSummary_(order, ledgerSummary, reviewedMap) {
+  var ledger = ledgerSummary[order.ref];
+  order.received = ledger ? ledger.received : 0;
+  order.hasLedgerEvents = !!(ledger && ledger.hasLedgerEvents);
+  var impliesPastPayment = ['Deposit paid', 'Checking balance', 'Paid'].indexOf(order.payment) !== -1;
+  order.paymentReconciliation = (!order.hasLedgerEvents && impliesPastPayment) ? 'legacy_unreconciled' : 'known';
+  var reviewed = reviewedMap[order.ref];
+  order.reviewedAt = reviewed ? reviewed.reviewedAt : '';
+  order.reviewedBy = reviewed ? reviewed.reviewedBy : '';
+}
+
+// Single-order equivalent of attachOpsSummary_, for updateOrder()'s and
+// recordPayment()'s single-order responses, where a fresh bulk scan isn't
+// warranted.
+function attachOpsSummaryForSingle_(order) {
+  if (!order) return order;
+  var ledger = getPaymentSummaryForRef_(order.ref);
+  order.received = ledger.received;
+  order.hasLedgerEvents = ledger.hasLedgerEvents;
+  var impliesPastPayment = ['Deposit paid', 'Checking balance', 'Paid'].indexOf(order.payment) !== -1;
+  order.paymentReconciliation = (!order.hasLedgerEvents && impliesPastPayment) ? 'legacy_unreconciled' : 'known';
+  var reviewed = getReviewedForRef_(order.ref);
+  order.reviewedAt = reviewed.reviewedAt;
+  order.reviewedBy = reviewed.reviewedBy;
+  return order;
+}
+
+// ============================================================================
+// SD-02 — durable checklist. One row per (Order Reference, Item Key),
+// upserted in place — a toggle is idempotent by nature, unlike a payment
+// receipt. Browser-side state is a cache of this, never the saved truth.
+// ============================================================================
+function getChecklist(ref) {
+  checkAccess_();
+  ref = String(ref || '');
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_CHECKLIST_SHEET); } catch (e) { return []; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_CHECKLIST_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][0]) !== ref) continue;
+    out.push({
+      key: String(values[i][1]), contentVersion: String(values[i][2] || ''),
+      completed: values[i][3] === true || String(values[i][3]).toLowerCase() === 'true',
+      completedAt: String(values[i][4] || ''), completedBy: String(values[i][5] || '')
+    });
+  }
+  return out;
+}
+
+function setChecklistItem(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var key = String(payload.key || '');
+  var contentVersion = String(payload.contentVersion || '');
+  var completed = payload.completed === true;
+  if (!ref || !key) return { ok: false, code: 'BAD_KEY', message: 'Referensi atau kunci centang tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  }
+  try {
+    var sheet = openOpsSheet_(DESK_CHECKLIST_SHEET);
+    var lastRow = sheet.getLastRow();
+    var foundRow = 0;
+    if (lastRow >= 2) {
+      var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+      for (var i = 0; i < values.length; i += 1) {
+        if (String(values[i][0]) === ref && String(values[i][1]) === key) { foundRow = i + 2; break; }
+      }
+    }
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var row = [ref, key, contentVersion, completed, completed ? at : '', completed ? by : ''];
+    if (foundRow) {
+      sheet.getRange(foundRow, 1, 1, row.length).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+    }
+    return { ok: true, item: { key: key, contentVersion: contentVersion, completed: completed, completedAt: row[4], completedBy: row[5] } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============================================================================
+// SD-03 — activity log. logActivity_ is the internal, best-effort writer
+// used from inside updateOrder()/recordPayment()/markReviewed(); getActivity
+// is the public read for the Riwayat panel.
+// ============================================================================
+function logActivity_(ref, action, detail, mutationId) {
+  try {
+    var sheet = openOpsSheet_(DESK_ACTIVITY_SHEET);
+    var eventId = 'act_' + Utilities.getUuid();
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    sheet.appendRow([eventId, ref, action, detail, at, by, mutationId || '']);
+  } catch (e) {
+    // Best-effort: whatever this call accompanies (an Orders write, a
+    // ledger event) has already succeeded by the time this runs. Apps
+    // Script cannot write to two sheets in one transaction — losing an
+    // activity log entry must never roll back or mask a real write.
+  }
+}
+
+function getActivity(ref) {
+  checkAccess_();
+  ref = String(ref || '');
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_ACTIVITY_SHEET); } catch (e) { return []; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_ACTIVITY_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) !== ref) continue;
+    out.push({ action: String(values[i][2] || ''), detail: String(values[i][3] || ''), at: String(values[i][4] || ''), by: String(values[i][5] || '') });
+  }
+  out.reverse(); // newest first
+  return out.slice(0, 50);
+}
+
+// ============================================================================
+// SD-04 — explicit review completion. Idempotent: marking an already
+// reviewed order returns the existing record rather than creating a
+// duplicate, so a retried command or a double tap cannot produce two
+// "reviewed" entries.
+// ============================================================================
+function markReviewed(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  }
+  try {
+    var existing = getReviewedForRef_(ref);
+    if (existing.reviewedAt) {
+      return { ok: true, reviewedAt: existing.reviewedAt, reviewedBy: existing.reviewedBy, idempotentReplay: true };
+    }
+    var sheet = openOpsSheet_(DESK_ACTIVITY_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var eventId = 'act_' + Utilities.getUuid();
+    sheet.appendRow([eventId, ref, 'reviewed', 'Pesanan ditinjau', at, by, '']);
+    return { ok: true, reviewedAt: at, reviewedBy: by };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getReviewedForRef_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_ACTIVITY_SHEET); } catch (e) { return { reviewedAt: '', reviewedBy: '' }; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { reviewedAt: '', reviewedBy: '' };
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_ACTIVITY_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) === ref && String(values[i][2]) === 'reviewed') {
+      return { reviewedAt: String(values[i][4] || ''), reviewedBy: String(values[i][5] || '') };
+    }
+  }
+  return { reviewedAt: '', reviewedBy: '' };
+}
+
+function getReviewedMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_ACTIVITY_SHEET); } catch (e) { return map; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_ACTIVITY_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][2]) !== 'reviewed') continue;
+    map[String(values[i][1])] = { reviewedAt: String(values[i][4] || ''), reviewedBy: String(values[i][5] || '') };
+  }
+  return map;
+}
+
+// ============================================================================
 // Sheet helpers — columns are found by header text, never by letter or
 // index, exactly like the order writer.
 // ============================================================================
@@ -342,6 +876,12 @@ function getCatalog() {
   var hit = cache.get(CATALOG_CACHE_KEY);
   var labels = hit ? JSON.parse(hit) : fetchAndCacheCatalog_();
   labels.bank = bankInfo_();
+  // Computed fresh on every call, never cached with the rest of the
+  // catalogue — the client uses this in place of the device clock for its
+  // "hari ini"/"terlambat" math (see P5-7 in STUDIO-DESK-UX-REVIEW.md), so
+  // it must stay accurate across midnight even while the catalogue is
+  // served from a stale cache hit.
+  labels.serverToday = todayStr_();
   return labels;
 }
 
@@ -350,6 +890,7 @@ function refreshCatalog() {
   CacheService.getScriptCache().remove(CATALOG_CACHE_KEY);
   var labels = fetchAndCacheCatalog_();
   labels.bank = bankInfo_();
+  labels.serverToday = todayStr_();
   return labels;
 }
 

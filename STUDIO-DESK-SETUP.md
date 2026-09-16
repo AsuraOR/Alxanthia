@@ -30,6 +30,10 @@ Never paste your Google account password, or any secret from `CONFIGURE-SUBMISSI
 uses — the allow-listed emails and the bank account details — live in this new script's own Script
 Properties, set in Part 5 below.
 
+Parts 1–9 set up the base Desk. **Part 10, near the end, is optional** and adds a verified payment
+ledger, a durable checklist, an activity log, and explicit order review — skip it unless you've been
+asked to enable those.
+
 ---
 
 ## Part 1 — Get the spreadsheet ID
@@ -224,6 +228,74 @@ Then delete the test row from the sheet.
 
 ---
 
+## Part 10 — Desk Ops setup (payment ledger, checklist, activity log, review)
+
+This part is for the additive features layered on top of the base Desk: a verified payment ledger, a
+server-saved production/packing checklist, a plain-Indonesian activity log, and explicit order review
+completion. **Skip this part entirely if you haven't been asked to enable these** — the base Desk
+(Parts 1–9) works exactly as before without it, and every one of these features degrades safely (shows
+zero/nothing, never throws) until you run the migration below.
+
+### What gets added
+
+Three new sheets in the **same spreadsheet** as `Orders`, alongside it, never touching it:
+
+| Sheet | Columns | What it's for |
+| --- | --- | --- |
+| `Desk Ledger` | Event ID, Order Reference, Type, Amount, Note, Recorded At, Recorded By, Reverses Event ID, Idempotency Key | Every verified receipt/refund/correction she records. Append-only — a correction is its own new row, never an edit to an old one. |
+| `Desk Checklist` | Order Reference, Item Key, Content Version, Completed, Completed At, Completed By | Her production and packing checks, saved so they survive a cleared browser cache or a new phone. |
+| `Desk Activity` | Event ID, Order Reference, Action, Detail, At, By, Mutation ID | A plain-Indonesian history: payments recorded, phase changes, order review. |
+
+Nothing here touches `WRITABLE_FIELDS` — the Desk still writes exactly the same five `Orders` columns
+it always has (Part 2). These three sheets are written only through their own narrow, validated
+commands (`recordPayment`, `setChecklistItem`, `markReviewed`), never through `updateOrder`.
+
+### Running the migration
+
+1. Open the Apps Script project from Part 4.
+2. In the function dropdown at the top of the editor, select **`deskOpsMigrationDryRun`** and press
+   **Run**. Open **View → Logs** (or **Executions**) — it reports what it *would* do (e.g.
+   `Desk Ledger: MISSING (dry run — would create)`) without changing anything.
+3. When that looks right, select **`deskOpsMigrationApply`** and press **Run**. It creates any missing
+   sheet with its header row, or adds any header missing from an existing one. It never removes,
+   reorders, or renames a column, and it never touches `Orders`.
+4. Re-running either function later — after an update to this script, say — is always safe: a sheet or
+   header that already exists is left exactly as it is. There is nothing to migrate *from*; these are
+   brand-new sheets, so there is no historical data transformation step.
+5. Redeploy (Part 9, item 1) so the running web app picks up the new server functions.
+
+### Reconciling orders from before the ledger existed
+
+An order marked `Paid`, `Deposit paid`, or `Checking balance` in the `Orders` sheet **before** you ran
+the migration has no `Desk Ledger` events — the Desk will show it in the ticket as needing
+reconciliation (`Riwayat sebelum fitur ini dicatat belum ada di sini…`) rather than silently treating it
+as freshly unpaid. This is deliberate: the Desk will never guess a historical receipt amount or date.
+To reconcile such an order, open it and use **Catat pembayaran** to record what you can verify actually
+happened (check your bank's mutasi, same as always) — a `receipt` event for money already received. Do
+this at your own pace; nothing forces it, and the existing `Payment Status` on the row keeps governing
+dispatch (Part 9, item 2) exactly as it always has, in addition to — not instead of — the ledger check.
+
+### Rollback
+
+Disabling these features doesn't require deleting anything:
+
+- To stop using the ledger/checklist/review UI, redeploy an earlier version of this script (Part 9)
+  that predates this part — the three `Desk Ledger`/`Desk Checklist`/`Desk Activity` sheets simply sit
+  unused; nothing reads or writes them once the older code is live again.
+- If you want the sheets gone entirely, delete them from the spreadsheet directly (right-click the
+  sheet tab → Delete). This is a manual, deliberate step — the migration functions never delete
+  anything, and neither does any part of the Desk itself.
+- Deleting the sheets after rolling back the code loses the ledger/checklist/activity history recorded
+  in them; the `Orders` sheet itself (and everything in Parts 1–9) is completely unaffected either way.
+
+### A note on deployment
+
+Nothing about the code living in this repository's `studio-desk/Code.gs` file updates the deployed Apps
+Script automatically — Apps Script has no connection back to GitHub. Every change here still has to be
+pasted into the Apps Script editor and redeployed, exactly as described throughout this guide.
+
+---
+
 ## Troubleshooting
 
 ### The page shows "Akun ini tidak punya akses ke Studio Desk"
@@ -271,3 +343,10 @@ It can't — the Desk only ever shows `Verified Total` (plus `Shipping Fee` once
 recalculated server-side by the order writer at submission time, never anything from the customer's
 browser or from the Desk itself. If a total looks wrong, check `Price Mismatch` on that row in the
 sheet directly (the Desk's gate surfaces this as "Harga ditandai REVIEW").
+
+### "Sheet ... belum ada" error when recording a payment, ticking a checklist item, or marking reviewed
+
+The Desk Ops sheets (Part 10) haven't been created yet in this spreadsheet, or this deployment is
+running older code that predates them. Run `deskOpsMigrationApply()` from the Apps Script editor (Part
+10) and redeploy. Everything else in the Desk keeps working normally in the meantime — these three
+features are the only things that need the migration.

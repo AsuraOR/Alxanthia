@@ -87,6 +87,52 @@ function makeSheetStub(dataRows) {
   };
 }
 
+// A general-purpose, dynamically-growing sheet stub for the Desk Ops sheets
+// (Desk Ledger/Checklist/Activity) — unlike makeSheetStub above, it isn't
+// pinned to the Orders HEADERS shape, supports appendRow/setValues, and
+// grows as rows are appended, matching how ensureDeskOpsSheets_()/
+// recordPayment()/setChecklistItem()/markReviewed() actually use a sheet.
+function makeOpsSheetStub(rows) {
+  const grid = (rows || []).map((r) => r.slice());
+  return {
+    _grid: grid,
+    getLastRow: () => grid.length,
+    getLastColumn: () => (grid[0] ? grid[0].length : 0),
+    getRange: (row, col, numRows, numCols) => {
+      numRows = numRows || 1;
+      numCols = numCols || 1;
+      return {
+        getValues: () => {
+          const out = [];
+          for (let r = 0; r < numRows; r += 1) {
+            const gRow = grid[row - 1 + r] || [];
+            const rowArr = [];
+            for (let c = 0; c < numCols; c += 1) rowArr.push(gRow[col - 1 + c] !== undefined ? gRow[col - 1 + c] : '');
+            out.push(rowArr);
+          }
+          return out;
+        },
+        getValue: () => {
+          const gRow = grid[row - 1] || [];
+          return gRow[col - 1] !== undefined ? gRow[col - 1] : '';
+        },
+        setValue: (v) => {
+          while (grid.length < row) grid.push([]);
+          grid[row - 1][col - 1] = v;
+        },
+        setValues: (values) => {
+          for (let r = 0; r < values.length; r += 1) {
+            while (grid.length < row + r) grid.push([]);
+            for (let c = 0; c < values[r].length; c += 1) grid[row - 1 + r][col - 1 + c] = values[r][c];
+          }
+        }
+      };
+    },
+    appendRow: (rowValues) => { grid.push(rowValues.slice()); },
+    setFrozenRows: () => {}
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 3. Minimal Apps Script API stubs
 // ---------------------------------------------------------------------------
@@ -112,6 +158,15 @@ function makeSandbox(opts) {
   MockDate.prototype = RealDate.prototype;
   MockDate.now = () => fixedNow.getTime();
 
+  // 'Orders' resolves to opts.sheet (as every existing suite expects); any
+  // Desk Ops sheet name resolves to its stub only if the caller configured
+  // one via opts.opsSheets — otherwise getSheetByName correctly returns
+  // null, exercising the same "not migrated yet" path a real, un-migrated
+  // spreadsheet would.
+  const sheetsByName = Object.assign({ Orders: opts.sheet || null }, opts.opsSheets || {});
+  const insertedSheetNames = [];
+  let uuidCounter = 0;
+
   const sandbox = {
     console,
     Date: MockDate,
@@ -135,11 +190,25 @@ function makeSandbox(opts) {
       formatDate: (date, tz, fmt) => {
         if (fmt === 'yyyy-MM-dd') return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
         return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
-      }
+      },
+      getUuid: () => `uuid-${uuidCounter += 1}`
     },
-    SpreadsheetApp: { openById: () => ({ getSheetByName: () => opts.sheet || null }) }
+    Logger: { log: () => {} },
+    SpreadsheetApp: {
+      openById: () => ({
+        getSheetByName: (name) => (Object.prototype.hasOwnProperty.call(sheetsByName, name) ? sheetsByName[name] : null),
+        insertSheet: (name) => {
+          const created = makeOpsSheetStub([]);
+          sheetsByName[name] = created;
+          insertedSheetNames.push(name);
+          return created;
+        }
+      })
+    }
   };
   sandbox._cachePutCalls = cachePutCalls;
+  sandbox._sheetsByName = sheetsByName;
+  sandbox._insertedSheetNames = insertedSheetNames;
   vm.createContext(sandbox);
   vm.runInContext(serverSrc, sandbox);
   return sandbox;
@@ -198,13 +267,22 @@ console.log('--- SUITE 2: the 14-day Delivered window ---');
 }
 
 // ---------------------------------------------------------------------------
-console.log('--- SUITE 3: Cancelled rows are excluded ---');
+console.log('--- SUITE 3 (P5-6): a phase-cancelled row ages out on the same window as Delivered, not instantly ---');
 {
+  // A row cancelled by Work Phase used to be dropped outright, while the
+  // Desk's own Dibatalkan chip matches Payment Status — two different
+  // notions of "cancelled". A phase-cancelled row must now reach the
+  // client (so it can appear under Dibatalkan) unless it's old enough to
+  // age out under the same KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE window
+  // Delivered rows use. fixedNow is 2026-09-12.
   const sheet = makeSheetStub([
-    rowFor({ 'Order Reference': 'C', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' })
+    rowFor({ 'Order Reference': 'C', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' }),
+    rowFor({ 'Order Reference': 'E', 'Preferred Date': '2026-08-23', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' })
   ]);
   const orders = makeSandbox({ sheet }).listOrders();
-  assert.strictEqual(orders.length, 0);
+  const refs = orders.map((o) => o.ref);
+  assert.ok(refs.includes('C'), 'a recently phase-cancelled row must still reach the client');
+  assert.ok(!refs.includes('E'), 'a phase-cancelled row 20 days past its date must age out, same as Delivered');
   console.log('✔ Suite 3 Passed\n');
 }
 
@@ -424,11 +502,12 @@ console.log('--- SUITE 18: an unsaved note survives a trip away from the Desk --
 {
   assert.ok(deskHtml.includes('NOTE_DRAFTS_KEY'), 'note drafts must be persisted, like state.per, not kept only in memory');
   assert.ok(deskHtml.includes('saveNoteDrafts()'), 'a saveNoteDrafts() persistence helper must exist and be called');
-  assert.ok(deskHtml.includes('data-savenotes="1"'), 'an explicit save control must exist beside blur-to-save');
-  assert.ok(deskHtml.includes('belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  assert.ok(deskHtml.includes('Belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  assert.ok(deskHtml.includes('data-retrynotes="1"') && deskHtml.includes('Coba lagi'),
+    'a failed note save must offer an explicit retry, since nothing else will re-trigger the blur-to-save');
   const saveNotesMatch = deskHtml.match(/function saveNotes\(o\) \{[\s\S]*?\n  \}/);
   assert.ok(saveNotesMatch, 'a saveNotes() helper must exist');
-  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
+  assert.ok(/onSaved: function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
     'the draft must be cleared only inside the write success callback, not before the server confirms it'
   );
   console.log('✔ Suite 18 Passed\n');
@@ -477,6 +556,262 @@ console.log('--- SUITE 22: the default-selected ticket matches the top of the vi
   assert.ok(deskHtml.includes('var visible = visibleOrders();'),
     'the default selection must be computed from the same filtered/sorted list the queue renders, not raw sheet order');
   console.log('✔ Suite 22 Passed\n');
+}
+
+console.log('--- SUITE 23 (P1-1): a late order is a warning, not a permanent lock ---');
+{
+  const gateStart = deskHtml.indexOf('function gate(order, catalog) {');
+  const gateEnd = deskHtml.indexOf('\n  /* =====', gateStart);
+  const gateSrc = deskHtml.slice(gateStart, gateEnd);
+  assert.ok(gateSrc.includes('blocking: false'),
+    'the date check must be marked non-blocking so a past Preferred Date cannot disable Mulai kerjakan forever');
+  assert.ok(/autoOk = auto\.every\(function \(c\) \{ return !c\.blocking \|\| c\.ok; \}\)/.test(gateSrc),
+    'autoOk (which gates the button) must only consider blocking checks');
+  assert.ok(gateSrc.includes('isNaN(d)'), 'an unreadable Preferred Date must be handled explicitly rather than silently failing d >= 0');
+  assert.ok(deskHtml.includes('Tetap mulai kerjakan'),
+    'the button must relabel to make clear she is starting a late order on purpose');
+  assert.ok(deskHtml.includes('Tanggalnya sudah lewat — kabari pembeli dulu kalau perlu.'),
+    'the why line must explain a late-but-startable order in her words, without blocking her');
+  console.log('✔ Suite 23 Passed\n');
+}
+
+console.log('--- SUITE 24 (P1-2/P1-4): a tap while a field is dirty is never lost to a synchronous re-render ---');
+{
+  assert.ok(/writeField\(o\.ref, 'shipping', value, \{ rerender: false \}\)/.test(deskHtml),
+    'writing the shipping field from the change handler must skip the synchronous full re-render');
+  assert.ok(/writeField\(o\.ref, 'notes', value, \{[\s\S]*?rerender: false/.test(deskHtml),
+    'writing notes from the change handler must skip the synchronous full re-render');
+  assert.ok(deskHtml.includes('function setControlPending('),
+    'a targeted in-place pending indicator must exist for fields written without a full re-render');
+  assert.ok(deskHtml.includes("comp.setAttribute('aria-pressed', String(compOn));") &&
+    !/data-comp\][\s\S]{0,400}renderTicket\(\);/.test(deskHtml),
+    'ticking a make-list item must update the DOM in place, not rebuild the whole ticket');
+  assert.ok(deskHtml.includes("tick.setAttribute('aria-pressed', String(tickOn));"),
+    'ticking a manual gate check must update the DOM in place, not rebuild the whole ticket');
+  assert.ok(deskHtml.includes('function updateCompCount()') && deskHtml.includes('function updateAdvanceButtonState()'),
+    'in-place updaters for the item counter and the gate button must exist');
+  assert.ok(/var scrollY = window\.scrollY;\s*elTicket\.innerHTML = html;/.test(deskHtml),
+    'renderTicket must capture and restore scroll position around its innerHTML rebuild');
+  console.log('✔ Suite 24 Passed\n');
+}
+
+console.log('--- SUITE 25 (P1-3): the pulse counters exclude cancelled orders, matching isActive() ---');
+{
+  const topStart = deskHtml.indexOf('function renderTop() {');
+  const topEnd = deskHtml.indexOf('\n  function renderQueue()', topStart);
+  const topSrc = deskHtml.slice(topStart, topEnd);
+  assert.ok(topSrc.includes('if (!isActive(o)) return;'),
+    'renderTop() counters must skip inactive (delivered or cancelled) orders using the same isActive() as the lanes');
+  assert.ok(!topSrc.includes("if (o.phase === 'Delivered') return;"),
+    'the old Delivered-only guard must be gone — it let a cancelled order keep inflating the counters');
+  console.log('✔ Suite 25 Passed\n');
+}
+
+console.log('--- SUITE 26 (P1-5): un-cancelling a deposit order offers to restore the deposit, not erase it ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('data-pay="Deposit paid">Aktifkan — DP sudah diterima'),
+    'a Deposit 50% order must offer a reactivation path that restores Deposit paid, not just Unpaid');
+  assert.ok(paymentBlockSrc.includes('data-pay="Unpaid">Aktifkan — belum ada pembayaran'),
+    'a Deposit 50% order must still offer the belum-ada-pembayaran path back to Unpaid');
+  assert.ok(paymentBlockSrc.includes("if (isDeposit) {") , 'the two reactivation buttons must only apply to Deposit 50% orders');
+  console.log('✔ Suite 26 Passed\n');
+}
+
+console.log('--- SUITE 27 (P2-1): the open ticket is reconciled against the visible list on every change ---');
+{
+  assert.ok(deskHtml.includes('function reconcileSelection()'), 'a reconcileSelection() helper must exist');
+  const renderStart = deskHtml.indexOf('function render() {');
+  const renderEnd = deskHtml.indexOf('\n  function renderTop()', renderStart);
+  const renderSrc = deskHtml.slice(renderStart, renderEnd);
+  assert.ok(renderSrc.includes('reconcileSelection();'), 'render() must call reconcileSelection() before rendering the panes');
+  const chipsStart = deskHtml.indexOf("elChips.addEventListener('click'");
+  const chipsEnd = deskHtml.indexOf('\n  });', chipsStart);
+  assert.ok(deskHtml.slice(chipsStart, chipsEnd).includes('render();'),
+    'switching lanes must re-render the ticket too, not just the queue, so a stale ticket cannot linger');
+  const searchStart = deskHtml.indexOf("elSearch.addEventListener('input'");
+  const searchEnd = deskHtml.indexOf('\n  });', searchStart);
+  assert.ok(deskHtml.slice(searchStart, searchEnd).includes('render();'),
+    'searching must re-render the ticket too, not just the queue, so a stale ticket cannot linger');
+  assert.ok(deskHtml.includes('Pesanan selesai. Dipindahkan ke daftar Selesai.'),
+    'marking an order Delivered must surface a toast explaining why its card disappeared from Aktif');
+  console.log('✔ Suite 27 Passed\n');
+}
+
+console.log('--- SUITE 28 (P2-2): a search with no in-lane hits offers the cross-lane match ---');
+{
+  const queueStart = deskHtml.indexOf('function renderQueue() {');
+  const queueEnd = deskHtml.indexOf('\n  function paymentBlock(', queueStart);
+  const queueSrc = deskHtml.slice(queueStart, queueEnd);
+  assert.ok(queueSrc.includes('matchesSearch(o, state.search)') && queueSrc.includes('data-crosslane='),
+    'the empty-queue state must search across all orders and offer a cross-lane link when it finds a hit');
+  assert.ok(deskHtml.includes("e.target.closest('[data-crosslane]')"),
+    'a click handler for the cross-lane suggestion must exist and switch state.lane, keeping the query');
+  console.log('✔ Suite 28 Passed\n');
+}
+
+console.log('--- SUITE 29 (P2-4/P2-5/P2-6/P2-7): orientation — current phase, chip/phase scroll, tappable counters, date groups ---');
+{
+  assert.ok(/phaseEntry \? '<span class="tag go"/.test(deskHtml),
+    'the ticket header must show the current work phase as a chip, not require scrolling to find it');
+  assert.ok(deskHtml.includes("elTicket.querySelector('.phase.now')") && deskHtml.includes('scrollIntoView'),
+    'the current phase must be scrolled into view within its horizontally-scrolling strip');
+  assert.ok(deskHtml.includes("elChips.querySelector('[aria-pressed=\"true\"]')"),
+    'the active lane chip must be scrolled into view so it cannot end up off-screen');
+  assert.ok(deskHtml.includes("laneKey === 'late'") && deskHtml.includes("laneKey === 'today'"),
+    'laneMatch must support late/today lanes so the pulse counters are reachable by tapping');
+  assert.ok(deskHtml.includes('class="pulse-item"') && deskHtml.includes("elPulse.addEventListener('click'"),
+    'the pulse counters must be buttons wired to switch state.lane');
+  assert.ok(deskHtml.includes('function dateGroupKey(') && deskHtml.includes("state.sort === 'due'") &&
+    deskHtml.includes('queue-group'),
+    'the queue must render date group headers when sorted by deadline');
+  console.log('✔ Suite 29 Passed\n');
+}
+
+console.log('--- SUITE 30 (P2-3): an unread order is tagged Baru and counted, per device ---');
+{
+  assert.ok(deskHtml.includes("var LAST_SEEN_KEY = 'alxanthia-desk-lastseen-v1';"),
+    'the last-seen timestamp must be persisted per device, like PER_KEY and NOTE_DRAFTS_KEY');
+  assert.ok(deskHtml.includes('function markSeen(') && deskHtml.includes('markSeen(o);'),
+    'opening a ticket must advance lastSeenAt for that order');
+  assert.ok(deskHtml.includes("o.submitted > lastSeenAt) tagCandidates.push('<span class=\"tag go\">Baru</span>')"),
+    'a card newer than lastSeenAt must be tagged Baru');
+  assert.ok(deskHtml.includes('pesanan baru'), 'a pesanan baru counter must appear in the pulse strip');
+  console.log('✔ Suite 30 Passed\n');
+}
+
+console.log('--- SUITE 31 (P3-1): developer vocabulary (columns, files, row numbers, timezone IDs) stays off-screen by default ---');
+{
+  const leaks = (deskHtml.match(/Payment Status|Work Phase|Internal Notes|Shipping Fee|Payment Plan|site-content\.js|Asia\/Makassar/g) || []);
+  assert.ok(leaks.length > 0, 'sanity: the sheet vocabulary must still exist somewhere (WRITABLE_FIELDS-equivalent logic, comments)');
+  const detailsStart = deskHtml.indexOf('<details class="provenance">');
+  const detailsEnd = deskHtml.indexOf('</details>', detailsStart);
+  assert.ok(detailsStart !== -1 && detailsEnd !== -1, 'the provenance block must be a collapsed <details>, not a visible-by-default strip');
+  assert.ok(deskHtml.includes('function savedToast(field)') && deskHtml.includes('var FIELD_LABELS ='),
+    'the save toast must map the field key to an Indonesian label, never render the sheet column name');
+  assert.ok(!deskHtml.includes("esc(o.ref) + ' · baris '"),
+    'the visible order reference must not be suffixed with the sheet row number');
+  assert.ok(deskHtml.includes("fmtDateLong(todayStr()) + ' · WITA'"),
+    'the top bar must show a human timezone name, not the Asia/Makassar identifier');
+  assert.ok(!deskHtml.includes('<b>site-content.js</b>'), 'the footer must not name the internal data file');
+  console.log('✔ Suite 31 Passed\n');
+}
+
+console.log('--- SUITE 32 (P3-2/P3-3/P3-4): the payment panel reads as one coherent form ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('class="seg" role="group" aria-label="Cara pembayaran"'),
+    'the plan switcher must reuse the existing segmented-control markup (.seg), not two same-weight buttons');
+  assert.ok(paymentBlockSrc.includes('data-plan="Full" aria-pressed='), 'the plan switcher must use aria-pressed, like the existing Urutkan segmented control');
+  assert.ok(paymentBlockSrc.includes('var planLocked = pay !== \'Unpaid\';') &&
+    paymentBlockSrc.includes('Cara pembayaran terkunci setelah pembayaran mulai diproses.'),
+    'the plan switcher must be disabled with an explanation once payment has started, mirroring the server PAYMENT_STARTED rule');
+  const ongkirIdx = paymentBlockSrc.indexOf('id="ongkir-');
+  const planIdx = paymentBlockSrc.indexOf('data-plan="Full"');
+  assert.ok(planIdx !== -1 && ongkirIdx !== -1 && planIdx < ongkirIdx,
+    'the plan switcher must render before the ongkir field, not inside the same actions row as Tandai lunas');
+  assert.ok(/if \(amount === null\) html \+= '<p class="why">Isi ongkir dulu[\s\S]{0,300}if \(shipErr\)/.test(paymentBlockSrc),
+    'the isi-ongkir hint must render immediately under the ongkir field, not after the action buttons');
+  assert.ok(paymentBlockSrc.includes('class="amtwrap"') && paymentBlockSrc.includes('id="ongkirEcho"'),
+    'the ongkir field must show a Rp prefix and a live formatted echo');
+  assert.ok(deskHtml.includes('function updateOngkirEcho('), 'a live echo/total updater must exist for the ongkir input');
+  console.log('✔ Suite 32 Passed\n');
+}
+
+console.log('--- SUITE 33 (P3-6): the destructive cancel action is separated from routine payment buttons ---');
+{
+  assert.ok(deskHtml.includes('function cancelBlock(o)'), 'a dedicated cancelBlock() must exist, separate from paymentBlock()');
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(!paymentBlockSrc.includes('data-askcancel'),
+    'Batalkan pesanan must no longer live inside the payment .actions row');
+  assert.ok(deskHtml.includes('cancelBlock(o) +'), 'the ticket must render cancelBlock() at the bottom, below the notes block');
+  console.log('✔ Suite 33 Passed\n');
+}
+
+console.log('--- SUITE 35 (P3-5): dates show a weekday where planning actually depends on it ---');
+{
+  assert.ok(deskHtml.includes("var DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];") &&
+    deskHtml.includes('function fmtDateLong('),
+    'a fmtDateLong() helper with Indonesian weekday abbreviations must exist');
+  assert.ok(deskHtml.includes("esc(fmtDateLong(o.date))"), 'the ticket header date must show the weekday');
+  assert.ok(deskHtml.includes("fmtDateLong(todayStr())"), 'the top bar date must show the weekday');
+  console.log('✔ Suite 35 Passed\n');
+}
+
+console.log('--- SUITE 34 (P3-7): notes save status is honest, with retry instead of a mostly-no-op button ---');
+{
+  assert.ok(!deskHtml.includes('data-savenotes'), 'the old explicit Simpan catatan button must be gone — auto-save on blur is the one story now');
+  assert.ok(deskHtml.includes('data-retrynotes="1"'), 'a retry action must exist for a failed note save');
+  assert.ok(deskHtml.includes("notesErr ? 'Gagal menyimpan'"), 'the status label must reflect an actual save failure, not just always read belum tersimpan');
+  console.log('✔ Suite 34 Passed\n');
+}
+
+console.log('--- SUITE 36 (P4-1/P4-2/P4-6): touch targets, contrast, and tag density ---');
+{
+  assert.ok(/\.btn \{[^}]*min-height: 44px;/.test(deskHtml), '.btn must have a 44px minimum tap target');
+  assert.ok(/\.tick \{[^}]*min-height: 44px;/.test(deskHtml), '.tick must have a 44px minimum tap target');
+  assert.ok(/\.comp \{[^}]*min-height: 44px;/.test(deskHtml), '.comp must have a 44px minimum tap target');
+  assert.ok(deskHtml.includes('.chips button::before') && deskHtml.includes('.seg button::before'),
+    'dense rows (chips, segmented controls) must extend their tap target via an invisible overlay rather than growing visually');
+  assert.ok(deskHtml.includes('--muted: #5F6A5D;'), '--muted must be darkened in the light palette for AA contrast');
+  assert.ok(deskHtml.includes('var tagCandidates = []') && deskHtml.includes('var tags = tagCandidates.slice(0, 3);'),
+    'card tags must be capped at three, in priority order');
+  assert.ok(!deskHtml.includes("if (o.card) tags.push('<span class=\"tag\">Kartu</span>')"),
+    'the Kartu tag must be dropped from cards — the ticket itself already shows it');
+  assert.ok(deskHtml.includes("'<span class=\"what\">' + wrapSwatchHtml + esc(summary)"),
+    'the wrap colour must move inline next to the item summary as a bare chip, not a labelled tag');
+  console.log('✔ Suite 36 Passed\n');
+}
+
+console.log('--- SUITE 37 (P4-3/P4-4/P4-5): screen-reader noise, lost focus, and a manual theme switch ---');
+{
+  assert.ok(!deskHtml.includes('<section class="ticket" id="ticket" aria-live="polite">'),
+    'the whole ticket must not be an aria-live region — it announces the entire order on every change');
+  assert.ok(deskHtml.includes('<section class="pulse" id="pulse" aria-live="polite">'),
+    'the short pulse summary should stay a live region');
+  assert.ok(deskHtml.includes("data-fk=\"paymentHeading\"") && deskHtml.includes("data-fk=\"phaseHeading\"") &&
+    deskHtml.includes("data-fk=\"notesHeading\""),
+    'block headings must be focusable fallback targets (tabindex=-1 + data-fk)');
+  assert.ok(deskHtml.includes("refocus = 'paymentHeading';") && deskHtml.includes("refocus = 'phaseHeading';"),
+    'payment and phase actions must claim focus back after their full re-render');
+  assert.ok(deskHtml.includes("elTicket.querySelector('[data-fk=\"' + refocus + '\"]') || elTicket.querySelector('.block > h3[data-fk]')"),
+    'a refocus target that no longer exists after the change must fall back to a block heading, not lose focus to <body>');
+  assert.ok(deskHtml.includes("var THEME_KEY = 'alxanthia-desk-theme-v1';") && deskHtml.includes('function applyTheme('),
+    'a persisted manual theme override must exist, since the stylesheet already supports data-theme in both directions');
+  assert.ok(deskHtml.includes('data-theme-choice="light"') && deskHtml.includes('data-theme-choice="dark"'),
+    'the theme switch must offer explicit Terang/Gelap choices, not just follow the OS');
+  console.log('✔ Suite 37 Passed\n');
+}
+
+console.log('--- SUITE 38 (P5-1/P5-2/P5-3/P5-4): offline indicator, refresh timestamp, desktop history, copy revert ---');
+{
+  assert.ok(deskHtml.includes("document.body.classList.toggle('offline', !navigator.onLine)") &&
+    deskHtml.includes("if (!navigator.onLine) {\n      toast('Tidak ada koneksi"),
+    'writeField must refuse to even attempt an optimistic write while offline, and render() must reflect the offline state');
+  assert.ok(deskHtml.includes('var ordersFetchedAt = null;') && deskHtml.includes('function relTimeFromNow('),
+    'the last successful order refresh must be tracked and shown as a relative time');
+  assert.ok(deskHtml.includes("window.matchMedia('(max-width: 899px)').matches"),
+    'pushing a history entry for the detail view must be guarded to the mobile breakpoint, where it has any effect');
+  assert.ok(/copyCard\.textContent = 'Tersalin';\s*\/\*[\s\S]*?setTimeout\(function \(\) \{\s*if \(document\.body\.contains\(copyCard\)\) copyCard\.textContent = 'Salin teks kartu';/.test(deskHtml),
+    'the copy-card button must revert its label after a timeout, not stay "Tersalin" indefinitely');
+  console.log('✔ Suite 38 Passed\n');
+}
+
+console.log('--- SUITE 39 (P5-6): the client\'s Cancelled definition matches either signal the sheet can set ---');
+{
+  assert.ok(deskHtml.includes("order.phase !== 'Cancelled' && order.payment !== 'Cancelled'"),
+    'isActive() must also exclude a phase-cancelled order, not just a payment-cancelled one');
+  assert.ok(deskHtml.includes("return order.payment === 'Cancelled' || order.phase === 'Cancelled';"),
+    'the Dibatalkan lane must match either Payment Status or Work Phase being Cancelled');
+  assert.ok(serverSrc.includes("if (order.phase === 'Cancelled' || order.phase === 'Delivered') {"),
+    'includeOrder_ must age phase-cancelled rows out on the same window as Delivered, instead of dropping them outright');
+  console.log('✔ Suite 39 Passed\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -570,6 +905,278 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
   console.log('✔ Suite 13 Passed\n');
 }
 
+console.log('--- SUITE 40 (P5-7): the client prefers the server\'s date over the device clock ---');
+{
+  assert.ok(deskHtml.includes('if (state.catalog && state.catalog.serverToday) return state.catalog.serverToday;'),
+    'todayStr() must prefer catalog.serverToday when the catalogue has loaded');
+  assert.ok(serverSrc.includes('labels.serverToday = todayStr_();'),
+    'getCatalog()/refreshCatalog() must return the server\'s own todayStr_(), computed fresh rather than cached with the rest of the catalogue');
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
+  const catalog = sandbox.getCatalog();
+  assert.strictEqual(catalog.serverToday, '2026-09-12', 'serverToday must reflect the server clock (fixedNow), independent of any device clock');
+  console.log('✔ Suite 40 Passed\n');
+}
+
+console.log('--- SUITE 50 (SD-01..SD-04 client): review, ledger, checklist sync, and Riwayat are wired into the ticket ---');
+{
+  assert.ok(deskHtml.includes('function reviewBlock(o)') && deskHtml.includes('data-markreviewed="1"'),
+    'a Tinjau pesanan block with an explicit mark-reviewed action must exist');
+  assert.ok(deskHtml.includes('function markReviewedAction(o)') && deskHtml.includes('.markReviewed({ ref: o.ref });'),
+    'marking reviewed must call the server markReviewed command');
+
+  assert.ok(deskHtml.includes('function ledgerBlock(o)') && deskHtml.includes('<span>Diterima '),
+    'a ledger block showing the verified received amount must exist, separate from the Payment Status workflow');
+  assert.ok(deskHtml.includes("o.paymentReconciliation === 'legacy_unreconciled'"),
+    'a legacy-unreconciled order must be flagged in the ledger block, not silently treated as freshly unpaid');
+  assert.ok(deskHtml.includes('function generateIdempotencyKey()') &&
+    deskHtml.includes('paymentIdempotencyKey = generateIdempotencyKey();'),
+    'opening the Catat pembayaran form must mint an idempotency key');
+  assert.ok(/withFailureHandler\(function \(err\) \{\s*delete pending\[key\];\s*toast\(esc\(String\(\(err && err\.message\) \|\| err\)\), true\);\s*render\(\);\s*\}\)\s*\.recordPayment/.test(deskHtml),
+    'a failed recordPayment call must not clear paymentIdempotencyKey, so a retry reuses the same key');
+  assert.ok(!/paymentIdempotencyKey = null;[\s\S]{0,40}withFailureHandler/.test(deskHtml),
+    'the idempotency key must survive a failure, not be cleared before the retry path');
+
+  assert.ok(deskHtml.includes('function loadTicketExtras(o)') && deskHtml.includes('.getChecklist(o.ref);') && deskHtml.includes('.getActivity(o.ref);'),
+    'opening a ticket must fetch its server checklist and activity extras');
+  assert.ok(deskHtml.includes('function applyServerChecklist(') && deskHtml.includes('extrasLoadedFor === o.ref'),
+    'extras must load once per ticket open, and the server checklist must be merged in as the authoritative state');
+  assert.ok(deskHtml.includes("syncChecklistItem(o.ref, comp.dataset.contentkey"),
+    'ticking a make-list item must also push its state to the server, keyed by content rather than position');
+  assert.ok(deskHtml.includes("data-contentkey=\"' + esc(c.contentKey)"),
+    'each make-list item must carry its content-derived checklist key in the DOM');
+
+  assert.ok(deskHtml.includes('var PACKING_ITEMS =') && deskHtml.includes('function packingComplete(o)'),
+    'a distinct final packing checklist must exist');
+  assert.ok(deskHtml.includes('var packingBlocksAdvance = packingRequired && !packingComplete(o);') &&
+    deskHtml.includes("phasePending || packingBlocksAdvance ? ' disabled' : ''"),
+    'the Lanjut button leaving Dirangkai dan dikemas must be blocked until the packing checklist is complete');
+
+  assert.ok(deskHtml.includes('function riwayatBlock(o)') && deskHtml.includes('state.activity[o.ref]'),
+    'a read-only Riwayat panel sourced from the server activity log must exist');
+
+  assert.ok(deskHtml.includes('function itemContentKey(item)') && deskHtml.includes('function itemChecklistKeys(items)'),
+    'the client must mirror the server\'s itemContentKey_/itemChecklistKeys_ exactly for checklist keys to match');
+  console.log('✔ Suite 50 Passed\n');
+}
+
+// ---------------------------------------------------------------------------
+// 5. Desk Ops suites (SD-01..SD-04 in STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md)
+//    — the additive payment ledger, durable checklist, activity log, and
+//    review-completion storage, each in its own sheet, keyed by Order
+//    Reference, written only through the narrow commands below.
+// ---------------------------------------------------------------------------
+function makeDeskOpsSandbox(orderRows, opsSheets) {
+  const sheet = makeSheetStub(orderRows);
+  return makeSandbox({ sheet, opsSheets: opsSheets || {} });
+}
+
+console.log('--- SUITE 41 (SD-01): recordPayment records a receipt and surfaces it on the order ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '',
+    'Payment Status': 'Unpaid'
+  })];
+  const ledgerSheet = makeOpsSheetStub([[]]);
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Ledger': ledgerSheet, 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const res = sandbox.recordPayment({ ref: 'ALX-LEDGER-1', type: 'receipt', amount: 100000, idempotencyKey: 'idem-1' });
+  assert.strictEqual(res.ok, true, 'a valid receipt must be recorded');
+  assert.strictEqual(res.summary.received, 100000);
+  assert.strictEqual(res.summary.hasLedgerEvents, true);
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 100000, 'listOrders() must surface the received total from the ledger');
+  assert.strictEqual(orders[0].hasLedgerEvents, true);
+  console.log('✔ Suite 41 Passed\n');
+}
+
+console.log('--- SUITE 42 (SD-01): a shipping change after a deposit preserves the received amount and updates the balance ---');
+{
+  // Total Rp200.000, verified DP Rp100.000, new total Rp220.000: received
+  // remains Rp100.000, balance becomes Rp120.000 — the review's own
+  // acceptance example for SD-01.
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-2', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '',
+    'Payment Status': 'Unpaid', 'Payment Plan': 'Deposit 50%'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.recordPayment({ ref: 'ALX-LEDGER-2', type: 'receipt', amount: 100000, idempotencyKey: 'idem-2a' });
+  sandbox.updateOrder({ ref: 'ALX-LEDGER-2', row: 2, field: 'shipping', value: 20000 });
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 100000, 'the verified receipt must not move just because the total changed');
+  assert.strictEqual(orders[0].verified + orders[0].shipping - orders[0].received, 120000, 'the outstanding balance must reflect the new total');
+  console.log('✔ Suite 42 Passed\n');
+}
+
+console.log('--- SUITE 43 (SD-01): a duplicate receipt command (retry after a lost response) records one event, not two ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-3', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  const first = sandbox.recordPayment({ ref: 'ALX-LEDGER-3', type: 'receipt', amount: 100000, idempotencyKey: 'idem-3' });
+  const retry = sandbox.recordPayment({ ref: 'ALX-LEDGER-3', type: 'receipt', amount: 100000, idempotencyKey: 'idem-3' });
+  assert.strictEqual(retry.ok, true);
+  assert.strictEqual(retry.idempotentReplay, true, 'a repeated idempotencyKey must be recognised as a replay');
+  assert.strictEqual(retry.event.eventId, first.event.eventId, 'the replay must return the original event, not a new one');
+  assert.strictEqual(sandbox.listOrders()[0].received, 100000, 'the amount must not be counted twice');
+  console.log('✔ Suite 43 Passed\n');
+}
+
+console.log('--- SUITE 44 (SD-01): a legacy Paid order with no ledger history is flagged for reconciliation, not silently zeroed ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEGACY-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Paid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Ledger': makeOpsSheetStub([[]]) });
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 0);
+  assert.strictEqual(orders[0].paymentReconciliation, 'legacy_unreconciled',
+    'a Paid order with no ledger events must be surfaced as needing reconciliation, not treated as freshly unpaid');
+
+  const freshOrders = [rowFor({
+    'Order Reference': 'ALX-FRESH-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const freshSandbox = makeDeskOpsSandbox(freshOrders, { 'Desk Ledger': makeOpsSheetStub([[]]) });
+  assert.strictEqual(freshSandbox.listOrders()[0].paymentReconciliation, 'known',
+    'an order that was never marked Paid has nothing to reconcile');
+  console.log('✔ Suite 44 Passed\n');
+}
+
+console.log('--- SUITE 45 (SD-01): dispatch is blocked server-side when verified receipts fall short, even if Payment Status says Paid ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-DISPATCH-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Ready for dispatch', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Paid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.recordPayment({ ref: 'ALX-DISPATCH-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-5' });
+  const res = sandbox.updateOrder({ ref: 'ALX-DISPATCH-1', row: 2, field: 'phase', value: 'Shipped' });
+  assert.strictEqual(res.ok, false, 'Shipped must be refused when verified receipts (Rp50.000) fall short of the Rp200.000 total');
+  assert.strictEqual(res.code, 'PAYMENT_DUE');
+
+  sandbox.recordPayment({ ref: 'ALX-DISPATCH-1', type: 'receipt', amount: 150000, idempotencyKey: 'idem-6' });
+  const res2 = sandbox.updateOrder({ ref: 'ALX-DISPATCH-1', row: 2, field: 'phase', value: 'Shipped' });
+  assert.strictEqual(res2.ok, true, 'Shipped must succeed once verified receipts reach the total');
+  console.log('✔ Suite 45 Passed\n');
+}
+
+console.log('--- SUITE 46 (SD-02): checklist state is durable, keyed by content rather than position ---');
+{
+  const sandbox = makeDeskOpsSandbox([], { 'Desk Checklist': makeOpsSheetStub([[]]) });
+  const itemA = { type: 'stem', id: 'Rose', qty: 3, wrapped: true };
+  const itemB = { type: 'pot', id: 'daisy', qty: 1 };
+  const keysBefore = sandbox.itemChecklistKeys_([itemA, itemB]);
+  const keysReordered = sandbox.itemChecklistKeys_([itemB, itemA]);
+  assert.deepStrictEqual(new Set(keysBefore), new Set(keysReordered), 'reordering items must not change their individual keys');
+
+  const setRes = sandbox.setChecklistItem({ ref: 'ALX-CHK-1', key: keysBefore[0], contentVersion: keysBefore[0], completed: true });
+  assert.strictEqual(setRes.ok, true);
+  let state = sandbox.getChecklist('ALX-CHK-1');
+  assert.strictEqual(state.length, 1);
+  assert.strictEqual(state[0].completed, true);
+
+  // Toggling again upserts in place, not a second row.
+  sandbox.setChecklistItem({ ref: 'ALX-CHK-1', key: keysBefore[0], contentVersion: keysBefore[0], completed: false });
+  state = sandbox.getChecklist('ALX-CHK-1');
+  assert.strictEqual(state.length, 1, 'the same (ref, key) must upsert in place, never append a duplicate row');
+  assert.strictEqual(state[0].completed, false);
+
+  const itemAEdited = { type: 'stem', id: 'Rose', qty: 5, wrapped: true };
+  const keysAfterEdit = sandbox.itemChecklistKeys_([itemAEdited, itemB]);
+  assert.notStrictEqual(keysAfterEdit[0], keysBefore[0], 'editing an item\'s content must change its own key, invalidating only its own check');
+  assert.strictEqual(keysAfterEdit[1], keysBefore[1], 'an unrelated, unchanged item must keep its key');
+  console.log('✔ Suite 46 Passed\n');
+}
+
+console.log('--- SUITE 47 (SD-03): phase/payment changes and payment events leave a plain-Indonesian activity trail ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-ACT-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.updateOrder({ ref: 'ALX-ACT-1', row: 2, field: 'phase', value: 'Assembly and packing' });
+  sandbox.recordPayment({ ref: 'ALX-ACT-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-7' });
+
+  const activity = sandbox.getActivity('ALX-ACT-1');
+  assert.strictEqual(activity.length, 2);
+  assert.strictEqual(activity[0].action, 'payment_recorded', 'getActivity() must return newest first');
+  assert.ok(activity[0].detail.includes('Rp 50.000'), 'the activity detail must be a plain-Indonesian description, not a raw field dump');
+  assert.strictEqual(activity[1].action, 'phase_changed');
+  assert.ok(activity[1].detail.includes('Dirangkai dan dikemas'));
+  console.log('✔ Suite 47 Passed\n');
+}
+
+console.log('--- SUITE 48 (SD-04): review completion is explicit, survives reload, and is idempotent ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-REVIEW-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  assert.strictEqual(sandbox.listOrders()[0].reviewedAt, '', 'an order must not start out reviewed');
+
+  const first = sandbox.markReviewed({ ref: 'ALX-REVIEW-1' });
+  assert.strictEqual(first.ok, true);
+  assert.ok(first.reviewedAt);
+
+  const retry = sandbox.markReviewed({ ref: 'ALX-REVIEW-1' });
+  assert.strictEqual(retry.idempotentReplay, true, 'reviewing an already-reviewed order must be idempotent, not create a second record');
+  assert.strictEqual(retry.reviewedAt, first.reviewedAt);
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].reviewedAt, first.reviewedAt, 'listOrders() must surface the reviewed state so it survives a reload');
+  console.log('✔ Suite 48 Passed\n');
+}
+
+console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and reports what it does ---');
+{
+  const sandbox = makeDeskOpsSandbox([], {});
+  const dryRun = sandbox.deskOpsMigrationDryRun();
+  assert.ok(dryRun.includes('Desk Ledger: MISSING') && dryRun.includes('dry run'),
+    'a dry run must report what would happen without creating anything');
+  assert.deepStrictEqual(sandbox._insertedSheetNames, [], 'a dry run must not actually create any sheet');
+
+  const applyReport = sandbox.deskOpsMigrationApply();
+  assert.ok(applyReport.includes('Desk Ledger') && applyReport.includes('creating'));
+  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'all three Desk Ops sheets must be created');
+  // Array.from() re-materialises both sides in this (outer) realm — the vm
+  // sandbox's own arrays are a different realm than this test file's, so a
+  // strict-equal Array constructor check would fail here despite matching
+  // content.
+  assert.deepStrictEqual(
+    Array.from(sandbox._sheetsByName['Desk Ledger'].getRange(1, 1, 1, sandbox.DESK_LEDGER_HEADERS.length).getValues()[0]),
+    Array.from(sandbox.DESK_LEDGER_HEADERS),
+    'the created sheet\'s header row must match the real DESK_LEDGER_HEADERS constant, not a copy that could drift from it'
+  );
+
+  // Re-running after creation must be a no-op, not a duplicate/second sheet.
+  const secondApply = sandbox.deskOpsMigrationApply();
+  assert.ok(secondApply.includes('OK'), 're-running the migration once sheets exist must report OK, not recreate them');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'a second run must not insert any further sheets');
+  console.log('✔ Suite 49 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 28 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 50 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

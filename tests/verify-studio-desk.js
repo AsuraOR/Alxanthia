@@ -87,6 +87,52 @@ function makeSheetStub(dataRows) {
   };
 }
 
+// A general-purpose, dynamically-growing sheet stub for the Desk Ops sheets
+// (Desk Ledger/Checklist/Activity) — unlike makeSheetStub above, it isn't
+// pinned to the Orders HEADERS shape, supports appendRow/setValues, and
+// grows as rows are appended, matching how ensureDeskOpsSheets_()/
+// recordPayment()/setChecklistItem()/markReviewed() actually use a sheet.
+function makeOpsSheetStub(rows) {
+  const grid = (rows || []).map((r) => r.slice());
+  return {
+    _grid: grid,
+    getLastRow: () => grid.length,
+    getLastColumn: () => (grid[0] ? grid[0].length : 0),
+    getRange: (row, col, numRows, numCols) => {
+      numRows = numRows || 1;
+      numCols = numCols || 1;
+      return {
+        getValues: () => {
+          const out = [];
+          for (let r = 0; r < numRows; r += 1) {
+            const gRow = grid[row - 1 + r] || [];
+            const rowArr = [];
+            for (let c = 0; c < numCols; c += 1) rowArr.push(gRow[col - 1 + c] !== undefined ? gRow[col - 1 + c] : '');
+            out.push(rowArr);
+          }
+          return out;
+        },
+        getValue: () => {
+          const gRow = grid[row - 1] || [];
+          return gRow[col - 1] !== undefined ? gRow[col - 1] : '';
+        },
+        setValue: (v) => {
+          while (grid.length < row) grid.push([]);
+          grid[row - 1][col - 1] = v;
+        },
+        setValues: (values) => {
+          for (let r = 0; r < values.length; r += 1) {
+            while (grid.length < row + r) grid.push([]);
+            for (let c = 0; c < values[r].length; c += 1) grid[row - 1 + r][col - 1 + c] = values[r][c];
+          }
+        }
+      };
+    },
+    appendRow: (rowValues) => { grid.push(rowValues.slice()); },
+    setFrozenRows: () => {}
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 3. Minimal Apps Script API stubs
 // ---------------------------------------------------------------------------
@@ -112,6 +158,15 @@ function makeSandbox(opts) {
   MockDate.prototype = RealDate.prototype;
   MockDate.now = () => fixedNow.getTime();
 
+  // 'Orders' resolves to opts.sheet (as every existing suite expects); any
+  // Desk Ops sheet name resolves to its stub only if the caller configured
+  // one via opts.opsSheets — otherwise getSheetByName correctly returns
+  // null, exercising the same "not migrated yet" path a real, un-migrated
+  // spreadsheet would.
+  const sheetsByName = Object.assign({ Orders: opts.sheet || null }, opts.opsSheets || {});
+  const insertedSheetNames = [];
+  let uuidCounter = 0;
+
   const sandbox = {
     console,
     Date: MockDate,
@@ -135,11 +190,25 @@ function makeSandbox(opts) {
       formatDate: (date, tz, fmt) => {
         if (fmt === 'yyyy-MM-dd') return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
         return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
-      }
+      },
+      getUuid: () => `uuid-${uuidCounter += 1}`
     },
-    SpreadsheetApp: { openById: () => ({ getSheetByName: () => opts.sheet || null }) }
+    Logger: { log: () => {} },
+    SpreadsheetApp: {
+      openById: () => ({
+        getSheetByName: (name) => (Object.prototype.hasOwnProperty.call(sheetsByName, name) ? sheetsByName[name] : null),
+        insertSheet: (name) => {
+          const created = makeOpsSheetStub([]);
+          sheetsByName[name] = created;
+          insertedSheetNames.push(name);
+          return created;
+        }
+      })
+    }
   };
   sandbox._cachePutCalls = cachePutCalls;
+  sandbox._sheetsByName = sheetsByName;
+  sandbox._insertedSheetNames = insertedSheetNames;
   vm.createContext(sandbox);
   vm.runInContext(serverSrc, sandbox);
   return sandbox;
@@ -848,6 +917,224 @@ console.log('--- SUITE 40 (P5-7): the client prefers the server\'s date over the
   console.log('✔ Suite 40 Passed\n');
 }
 
+// ---------------------------------------------------------------------------
+// 5. Desk Ops suites (SD-01..SD-04 in STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md)
+//    — the additive payment ledger, durable checklist, activity log, and
+//    review-completion storage, each in its own sheet, keyed by Order
+//    Reference, written only through the narrow commands below.
+// ---------------------------------------------------------------------------
+function makeDeskOpsSandbox(orderRows, opsSheets) {
+  const sheet = makeSheetStub(orderRows);
+  return makeSandbox({ sheet, opsSheets: opsSheets || {} });
+}
+
+console.log('--- SUITE 41 (SD-01): recordPayment records a receipt and surfaces it on the order ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '',
+    'Payment Status': 'Unpaid'
+  })];
+  const ledgerSheet = makeOpsSheetStub([[]]);
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Ledger': ledgerSheet, 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const res = sandbox.recordPayment({ ref: 'ALX-LEDGER-1', type: 'receipt', amount: 100000, idempotencyKey: 'idem-1' });
+  assert.strictEqual(res.ok, true, 'a valid receipt must be recorded');
+  assert.strictEqual(res.summary.received, 100000);
+  assert.strictEqual(res.summary.hasLedgerEvents, true);
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 100000, 'listOrders() must surface the received total from the ledger');
+  assert.strictEqual(orders[0].hasLedgerEvents, true);
+  console.log('✔ Suite 41 Passed\n');
+}
+
+console.log('--- SUITE 42 (SD-01): a shipping change after a deposit preserves the received amount and updates the balance ---');
+{
+  // Total Rp200.000, verified DP Rp100.000, new total Rp220.000: received
+  // remains Rp100.000, balance becomes Rp120.000 — the review's own
+  // acceptance example for SD-01.
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-2', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '',
+    'Payment Status': 'Unpaid', 'Payment Plan': 'Deposit 50%'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.recordPayment({ ref: 'ALX-LEDGER-2', type: 'receipt', amount: 100000, idempotencyKey: 'idem-2a' });
+  sandbox.updateOrder({ ref: 'ALX-LEDGER-2', row: 2, field: 'shipping', value: 20000 });
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 100000, 'the verified receipt must not move just because the total changed');
+  assert.strictEqual(orders[0].verified + orders[0].shipping - orders[0].received, 120000, 'the outstanding balance must reflect the new total');
+  console.log('✔ Suite 42 Passed\n');
+}
+
+console.log('--- SUITE 43 (SD-01): a duplicate receipt command (retry after a lost response) records one event, not two ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEDGER-3', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  const first = sandbox.recordPayment({ ref: 'ALX-LEDGER-3', type: 'receipt', amount: 100000, idempotencyKey: 'idem-3' });
+  const retry = sandbox.recordPayment({ ref: 'ALX-LEDGER-3', type: 'receipt', amount: 100000, idempotencyKey: 'idem-3' });
+  assert.strictEqual(retry.ok, true);
+  assert.strictEqual(retry.idempotentReplay, true, 'a repeated idempotencyKey must be recognised as a replay');
+  assert.strictEqual(retry.event.eventId, first.event.eventId, 'the replay must return the original event, not a new one');
+  assert.strictEqual(sandbox.listOrders()[0].received, 100000, 'the amount must not be counted twice');
+  console.log('✔ Suite 43 Passed\n');
+}
+
+console.log('--- SUITE 44 (SD-01): a legacy Paid order with no ledger history is flagged for reconciliation, not silently zeroed ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-LEGACY-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Paid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Ledger': makeOpsSheetStub([[]]) });
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].received, 0);
+  assert.strictEqual(orders[0].paymentReconciliation, 'legacy_unreconciled',
+    'a Paid order with no ledger events must be surfaced as needing reconciliation, not treated as freshly unpaid');
+
+  const freshOrders = [rowFor({
+    'Order Reference': 'ALX-FRESH-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const freshSandbox = makeDeskOpsSandbox(freshOrders, { 'Desk Ledger': makeOpsSheetStub([[]]) });
+  assert.strictEqual(freshSandbox.listOrders()[0].paymentReconciliation, 'known',
+    'an order that was never marked Paid has nothing to reconcile');
+  console.log('✔ Suite 44 Passed\n');
+}
+
+console.log('--- SUITE 45 (SD-01): dispatch is blocked server-side when verified receipts fall short, even if Payment Status says Paid ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-DISPATCH-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Ready for dispatch', 'Location Type': 'bali', 'Verified Total': 200000, 'Shipping Fee': '', 'Payment Status': 'Paid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.recordPayment({ ref: 'ALX-DISPATCH-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-5' });
+  const res = sandbox.updateOrder({ ref: 'ALX-DISPATCH-1', row: 2, field: 'phase', value: 'Shipped' });
+  assert.strictEqual(res.ok, false, 'Shipped must be refused when verified receipts (Rp50.000) fall short of the Rp200.000 total');
+  assert.strictEqual(res.code, 'PAYMENT_DUE');
+
+  sandbox.recordPayment({ ref: 'ALX-DISPATCH-1', type: 'receipt', amount: 150000, idempotencyKey: 'idem-6' });
+  const res2 = sandbox.updateOrder({ ref: 'ALX-DISPATCH-1', row: 2, field: 'phase', value: 'Shipped' });
+  assert.strictEqual(res2.ok, true, 'Shipped must succeed once verified receipts reach the total');
+  console.log('✔ Suite 45 Passed\n');
+}
+
+console.log('--- SUITE 46 (SD-02): checklist state is durable, keyed by content rather than position ---');
+{
+  const sandbox = makeDeskOpsSandbox([], { 'Desk Checklist': makeOpsSheetStub([[]]) });
+  const itemA = { type: 'stem', id: 'Rose', qty: 3, wrapped: true };
+  const itemB = { type: 'pot', id: 'daisy', qty: 1 };
+  const keysBefore = sandbox.itemChecklistKeys_([itemA, itemB]);
+  const keysReordered = sandbox.itemChecklistKeys_([itemB, itemA]);
+  assert.deepStrictEqual(new Set(keysBefore), new Set(keysReordered), 'reordering items must not change their individual keys');
+
+  const setRes = sandbox.setChecklistItem({ ref: 'ALX-CHK-1', key: keysBefore[0], contentVersion: keysBefore[0], completed: true });
+  assert.strictEqual(setRes.ok, true);
+  let state = sandbox.getChecklist('ALX-CHK-1');
+  assert.strictEqual(state.length, 1);
+  assert.strictEqual(state[0].completed, true);
+
+  // Toggling again upserts in place, not a second row.
+  sandbox.setChecklistItem({ ref: 'ALX-CHK-1', key: keysBefore[0], contentVersion: keysBefore[0], completed: false });
+  state = sandbox.getChecklist('ALX-CHK-1');
+  assert.strictEqual(state.length, 1, 'the same (ref, key) must upsert in place, never append a duplicate row');
+  assert.strictEqual(state[0].completed, false);
+
+  const itemAEdited = { type: 'stem', id: 'Rose', qty: 5, wrapped: true };
+  const keysAfterEdit = sandbox.itemChecklistKeys_([itemAEdited, itemB]);
+  assert.notStrictEqual(keysAfterEdit[0], keysBefore[0], 'editing an item\'s content must change its own key, invalidating only its own check');
+  assert.strictEqual(keysAfterEdit[1], keysBefore[1], 'an unrelated, unchanged item must keep its key');
+  console.log('✔ Suite 46 Passed\n');
+}
+
+console.log('--- SUITE 47 (SD-03): phase/payment changes and payment events leave a plain-Indonesian activity trail ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-ACT-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+  sandbox.updateOrder({ ref: 'ALX-ACT-1', row: 2, field: 'phase', value: 'Assembly and packing' });
+  sandbox.recordPayment({ ref: 'ALX-ACT-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-7' });
+
+  const activity = sandbox.getActivity('ALX-ACT-1');
+  assert.strictEqual(activity.length, 2);
+  assert.strictEqual(activity[0].action, 'payment_recorded', 'getActivity() must return newest first');
+  assert.ok(activity[0].detail.includes('Rp 50.000'), 'the activity detail must be a plain-Indonesian description, not a raw field dump');
+  assert.strictEqual(activity[1].action, 'phase_changed');
+  assert.ok(activity[1].detail.includes('Dirangkai dan dikemas'));
+  console.log('✔ Suite 47 Passed\n');
+}
+
+console.log('--- SUITE 48 (SD-04): review completion is explicit, survives reload, and is idempotent ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-REVIEW-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  assert.strictEqual(sandbox.listOrders()[0].reviewedAt, '', 'an order must not start out reviewed');
+
+  const first = sandbox.markReviewed({ ref: 'ALX-REVIEW-1' });
+  assert.strictEqual(first.ok, true);
+  assert.ok(first.reviewedAt);
+
+  const retry = sandbox.markReviewed({ ref: 'ALX-REVIEW-1' });
+  assert.strictEqual(retry.idempotentReplay, true, 'reviewing an already-reviewed order must be idempotent, not create a second record');
+  assert.strictEqual(retry.reviewedAt, first.reviewedAt);
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].reviewedAt, first.reviewedAt, 'listOrders() must surface the reviewed state so it survives a reload');
+  console.log('✔ Suite 48 Passed\n');
+}
+
+console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and reports what it does ---');
+{
+  const sandbox = makeDeskOpsSandbox([], {});
+  const dryRun = sandbox.deskOpsMigrationDryRun();
+  assert.ok(dryRun.includes('Desk Ledger: MISSING') && dryRun.includes('dry run'),
+    'a dry run must report what would happen without creating anything');
+  assert.deepStrictEqual(sandbox._insertedSheetNames, [], 'a dry run must not actually create any sheet');
+
+  const applyReport = sandbox.deskOpsMigrationApply();
+  assert.ok(applyReport.includes('Desk Ledger') && applyReport.includes('creating'));
+  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'all three Desk Ops sheets must be created');
+  // Array.from() re-materialises both sides in this (outer) realm — the vm
+  // sandbox's own arrays are a different realm than this test file's, so a
+  // strict-equal Array constructor check would fail here despite matching
+  // content.
+  assert.deepStrictEqual(
+    Array.from(sandbox._sheetsByName['Desk Ledger'].getRange(1, 1, 1, sandbox.DESK_LEDGER_HEADERS.length).getValues()[0]),
+    Array.from(sandbox.DESK_LEDGER_HEADERS),
+    'the created sheet\'s header row must match the real DESK_LEDGER_HEADERS constant, not a copy that could drift from it'
+  );
+
+  // Re-running after creation must be a no-op, not a duplicate/second sheet.
+  const secondApply = sandbox.deskOpsMigrationApply();
+  assert.ok(secondApply.includes('OK'), 're-running the migration once sheets exist must report OK, not recreate them');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'a second run must not insert any further sheets');
+  console.log('✔ Suite 49 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 46 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 49 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

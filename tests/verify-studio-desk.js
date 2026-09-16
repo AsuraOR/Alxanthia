@@ -691,6 +691,26 @@ console.log('--- SUITE 36 (P4-1/P4-2/P4-6): touch targets, contrast, and tag den
   console.log('✔ Suite 36 Passed\n');
 }
 
+console.log('--- SUITE 37 (P4-3/P4-4/P4-5): screen-reader noise, lost focus, and a manual theme switch ---');
+{
+  assert.ok(!deskHtml.includes('<section class="ticket" id="ticket" aria-live="polite">'),
+    'the whole ticket must not be an aria-live region — it announces the entire order on every change');
+  assert.ok(deskHtml.includes('<section class="pulse" id="pulse" aria-live="polite">'),
+    'the short pulse summary should stay a live region');
+  assert.ok(deskHtml.includes("data-fk=\"paymentHeading\"") && deskHtml.includes("data-fk=\"phaseHeading\"") &&
+    deskHtml.includes("data-fk=\"notesHeading\""),
+    'block headings must be focusable fallback targets (tabindex=-1 + data-fk)');
+  assert.ok(deskHtml.includes("refocus = 'paymentHeading';") && deskHtml.includes("refocus = 'phaseHeading';"),
+    'payment and phase actions must claim focus back after their full re-render');
+  assert.ok(deskHtml.includes("elTicket.querySelector('[data-fk=\"' + refocus + '\"]') || elTicket.querySelector('.block > h3[data-fk]')"),
+    'a refocus target that no longer exists after the change must fall back to a block heading, not lose focus to <body>');
+  assert.ok(deskHtml.includes("var THEME_KEY = 'alxanthia-desk-theme-v1';") && deskHtml.includes('function applyTheme('),
+    'a persisted manual theme override must exist, since the stylesheet already supports data-theme in both directions');
+  assert.ok(deskHtml.includes('data-theme-choice="light"') && deskHtml.includes('data-theme-choice="dark"'),
+    'the theme switch must offer explicit Terang/Gelap choices, not just follow the OS');
+  console.log('✔ Suite 37 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -783,5 +803,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 42 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 43 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

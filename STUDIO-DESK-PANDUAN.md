@@ -121,7 +121,14 @@ tersimpan**; sementara sedang mengirim ke server, ada tulisan kecil **Menyimpan�
 Kalau penyimpanan gagal (misalnya koneksi terputus), judulnya berubah jadi **Gagal menyimpan** dan ada
 tombol **Coba lagi** — ketuk untuk mencoba menyimpan ulang catatan yang sama.
 
-## 9. Kalau ada yang terlihat aneh
+## 9. Tema terang/gelap
+
+Di bagian paling bawah halaman ada tiga tombol kecil: **Otomatis**, **Terang**, **Gelap**. Bawaannya
+**Otomatis** — Desk mengikuti pengaturan ponsel Anda. Kalau ingin tampilan tetap terang atau tetap
+gelap apa pun pengaturan ponselnya (misalnya supaya lebih jelas di bawah lampu bengkel), ketuk salah
+satu pilihan lain. Pilihan ini diingat di ponsel itu saja.
+
+## 10. Kalau ada yang terlihat aneh
 
 - **Tag merah "Review"** pada kartu pesanan berarti harga di pesanan itu perlu dicek pemilik studio
   dulu sebelum dikerjakan — jangan mulai kerjakan sebelum itu selesai.

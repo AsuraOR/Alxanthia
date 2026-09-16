@@ -823,7 +823,7 @@
         </div>
         <ol class="queue" id="queue"></ol>
       </div>
-      <section class="ticket" id="ticket" aria-live="polite"></section>
+      <section class="ticket" id="ticket"></section>
     </main>
   </div>
 
@@ -832,6 +832,11 @@
     ukuran tangkai, warna kertas buket dan isi paket diambil langsung dari katalog situs Alxanthia.</span>
     <button type="button" class="btn ghost small" id="reloadCatalogBtn">Muat ulang katalog</button>
     <span id="catalogMeta"></span>
+    <span class="seg" id="themeSwitch" role="group" aria-label="Tema tampilan">
+      <button type="button" data-theme-choice="auto" aria-pressed="true">Otomatis</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Terang</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Gelap</button>
+    </span>
   </p>
 </div>
 
@@ -915,6 +920,27 @@
       try { localStorage.setItem(LAST_SEEN_KEY, lastSeenAt); } catch (e) {}
     }
   }
+
+  /* Manual theme override — the stylesheet already fully supports
+     data-theme="light"/"dark" on :root in both directions (see the CSS at
+     the top of this file), nothing ever set it. Applied immediately, before
+     boot(), so there's no flash of the wrong palette. See P4-5 in
+     STUDIO-DESK-UX-REVIEW.md. */
+  var THEME_KEY = 'alxanthia-desk-theme-v1';
+  var themeChoice = 'auto';
+  try { themeChoice = localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) {}
+
+  function applyTheme(choice) {
+    if (choice === 'light' || choice === 'dark') {
+      document.documentElement.setAttribute('data-theme', choice);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#themeSwitch button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.themeChoice === choice));
+    });
+  }
+  applyTheme(themeChoice);
 
   function per(ref) {
     if (!state.per[ref]) state.per[ref] = {};
@@ -1414,7 +1440,7 @@
     var html = '<div class="block"><button type="button" class="btn ghost" data-askcancel="1">Batalkan pesanan</button>';
     if (confirming === 'cancel') {
       html += '<div class="confirm"><p>Batalkan pesanan ' + esc(o.ref) + '? Pesanan akan ditandai dibatalkan.</p>' +
-        '<div class="actions"><button type="button" class="btn" data-pay="Cancelled">Ya, batalkan</button>' +
+        '<div class="actions"><button type="button" class="btn" data-pay="Cancelled" data-fk="confirm-primary">Ya, batalkan</button>' +
         '<button type="button" class="btn ghost" data-cancelconfirm="1">Tidak</button></div></div>';
     }
     return html + '</div>';
@@ -1424,7 +1450,7 @@
     var pay = o.payment;
     if (pay === 'Paid') {
       var paidAmount = billed(o);
-      return '<div class="block"><h3>Pembayaran</h3>' +
+      return '<div class="block"><h3 data-fk="paymentHeading" tabindex="-1">Pembayaran</h3>' +
         '<div class="paid-line"><span class="ok">Lunas</span>' +
         '<span class="amt">' + esc(paidAmount === null ? '—' : rupiah(paidAmount)) + '</span></div>' +
         '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
@@ -1451,7 +1477,7 @@
     var phaseIndex = PHASES.findIndex(function (x) { return x.key === o.phase; });
     var balanceDue = phaseIndex >= readyIndex;
 
-    var html = '<div class="block pay-open"><h3>Pembayaran</h3>' +
+    var html = '<div class="block pay-open"><h3 data-fk="paymentHeading" tabindex="-1">Pembayaran</h3>' +
       '<div class="amount"><span class="big">' + esc(amount === null ? '—' : rupiah(amount)) + '</span>' +
       '<span class="lbl">total yang ditagih ke pembeli</span></div>' +
       '<div class="breakdown"><span>Produk &amp; kartu ' + esc(rupiah(o.verified)) + '</span>' +
@@ -1545,7 +1571,7 @@
       html += '<div class="confirm"><p><b>' + esc(rupiah(target)) + '</b> sudah masuk ke rekening ' +
         esc(bank.bank || '—') + ' ' + esc(bank.number || '') + '?</p>' +
         '<p class="rule">Cek di mutasi rekening — jangan dari screenshot pembeli.</p>' +
-        '<div class="actions"><button type="button" class="btn" data-pay="' + esc(confirming) + '">Ya, sudah masuk</button>' +
+        '<div class="actions"><button type="button" class="btn" data-pay="' + esc(confirming) + '" data-fk="confirm-primary">Ya, sudah masuk</button>' +
         '<button type="button" class="btn ghost" data-cancelconfirm="1">Batal</button></div></div>';
     }
     return html + '</div>';
@@ -1651,7 +1677,7 @@
     html += '<div class="block"><h3>Pengantaran</h3><div style="font-size:14.5px">' + esc(dest) + '</div></div>';
 
     /* Work phase — all five (Cancelled aside) are hers. */
-    html += '<div class="block"><h3>Tahap kerja</h3><div class="phases">' +
+    html += '<div class="block"><h3 data-fk="phaseHeading" tabindex="-1">Tahap kerja</h3><div class="phases">' +
       PHASES.map(function (x, i) {
         var cls = i < pIndex ? 'done' : (i === pIndex ? 'now' : '');
         return '<div class="phase ' + cls + '"><span class="line"></span><span class="t">' + esc(x.label) + '</span></div>';
@@ -1678,7 +1704,7 @@
     var unsavedNote = noteDrafts[o.ref] !== undefined && noteDrafts[o.ref] !== o.notes;
     var notesErr = fieldErrors[o.ref + '|notes'];
     var notesStatusLabel = notesErr ? 'Gagal menyimpan' : (unsavedNote && !notesPending ? 'Belum tersimpan' : '');
-    html += '<div class="block"><h3>Catatan kerja' +
+    html += '<div class="block"><h3 data-fk="notesHeading" tabindex="-1">Catatan kerja' +
       (notesStatusLabel ? '<span class="count" style="color:' + (notesErr ? 'var(--madder)' : 'var(--amber)') +
         ';text-transform:none">' + esc(notesStatusLabel) + '</span>' : '') +
       '</h3>' +
@@ -1700,8 +1726,15 @@
     var notesEl = elTicket.querySelector('.notes');
     notesEl.value = noteDrafts[o.ref] !== undefined ? noteDrafts[o.ref] : o.notes;
 
+    /* A full re-render (payment/phase actions) drops focus to <body> unless
+       something claims it back — the single biggest reason a keyboard or
+       screen-reader user was returned to the top of the document after
+       every action. If the exact control named by `refocus` didn't survive
+       the change (e.g. it advanced past the phase it belonged to), fall
+       back to the nearest block heading rather than losing focus entirely.
+       See P4-4 in STUDIO-DESK-UX-REVIEW.md. */
     if (refocus) {
-      var target = elTicket.querySelector('[data-fk="' + refocus + '"]');
+      var target = elTicket.querySelector('[data-fk="' + refocus + '"]') || elTicket.querySelector('.block > h3[data-fk]');
       if (target) target.focus();
       refocus = null;
     }
@@ -1932,6 +1965,14 @@
       .refreshCatalog();
   });
 
+  document.getElementById('themeSwitch').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-theme-choice]');
+    if (!b) return;
+    themeChoice = b.dataset.themeChoice;
+    try { localStorage.setItem(THEME_KEY, themeChoice); } catch (err) {}
+    applyTheme(themeChoice);
+  });
+
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible' && state.orders !== null) reloadOrders();
   });
@@ -2038,20 +2079,22 @@
     var payBtn = e.target.closest('[data-pay]');
     if (payBtn) {
       confirming = false;
+      refocus = 'paymentHeading';
       writeField(o.ref, 'payment', payBtn.dataset.pay);
       return;
     }
 
     var planBtn = e.target.closest('[data-plan]');
     if (planBtn) {
+      refocus = 'paymentHeading';
       writeField(o.ref, 'paymentPlan', planBtn.dataset.plan);
       return;
     }
 
     var askPaid = e.target.closest('[data-askpaid]');
-    if (askPaid) { confirming = askPaid.dataset.askpaid; renderTicket(); return; }
-    if (e.target.closest('[data-askcancel]')) { confirming = 'cancel'; renderTicket(); return; }
-    if (e.target.closest('[data-cancelconfirm]')) { confirming = false; renderTicket(); return; }
+    if (askPaid) { confirming = askPaid.dataset.askpaid; refocus = 'confirm-primary'; renderTicket(); return; }
+    if (e.target.closest('[data-askcancel]')) { confirming = 'cancel'; refocus = 'confirm-primary'; renderTicket(); return; }
+    if (e.target.closest('[data-cancelconfirm]')) { confirming = false; refocus = 'paymentHeading'; renderTicket(); return; }
 
     if (e.target.closest('[data-advance]')) {
       var i = PHASES.findIndex(function (x) { return x.key === o.phase; });
@@ -2061,6 +2104,7 @@
       }
       if (PHASES[i + 1]) {
         var becomingDelivered = PHASES[i + 1].key === 'Delivered';
+        refocus = 'phaseHeading';
         writeField(o.ref, 'phase', PHASES[i + 1].key, becomingDelivered ? {
           onSaved: function () { toast('Pesanan selesai. Dipindahkan ke daftar Selesai.'); }
         } : undefined);
@@ -2070,7 +2114,7 @@
 
     if (e.target.closest('[data-retreat]')) {
       var j = PHASES.findIndex(function (x) { return x.key === o.phase; });
-      if (j > 0) writeField(o.ref, 'phase', PHASES[j - 1].key);
+      if (j > 0) { refocus = 'phaseHeading'; writeField(o.ref, 'phase', PHASES[j - 1].key); }
       return;
     }
 
@@ -2099,6 +2143,7 @@
     }
 
     if (e.target.closest('[data-retrynotes]')) {
+      refocus = 'notesHeading';
       saveNotes(o);
       return;
     }

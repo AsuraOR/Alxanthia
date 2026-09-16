@@ -573,6 +573,24 @@ console.log('--- SUITE 28 (P2-2): a search with no in-lane hits offers the cross
   console.log('✔ Suite 28 Passed\n');
 }
 
+console.log('--- SUITE 29 (P2-4/P2-5/P2-6/P2-7): orientation — current phase, chip/phase scroll, tappable counters, date groups ---');
+{
+  assert.ok(/phaseEntry \? '<span class="tag go"/.test(deskHtml),
+    'the ticket header must show the current work phase as a chip, not require scrolling to find it');
+  assert.ok(deskHtml.includes("elTicket.querySelector('.phase.now')") && deskHtml.includes('scrollIntoView'),
+    'the current phase must be scrolled into view within its horizontally-scrolling strip');
+  assert.ok(deskHtml.includes("elChips.querySelector('[aria-pressed=\"true\"]')"),
+    'the active lane chip must be scrolled into view so it cannot end up off-screen');
+  assert.ok(deskHtml.includes("laneKey === 'late'") && deskHtml.includes("laneKey === 'today'"),
+    'laneMatch must support late/today lanes so the pulse counters are reachable by tapping');
+  assert.ok(deskHtml.includes('class="pulse-item"') && deskHtml.includes("elPulse.addEventListener('click'"),
+    'the pulse counters must be buttons wired to switch state.lane');
+  assert.ok(deskHtml.includes('function dateGroupKey(') && deskHtml.includes("state.sort === 'due'") &&
+    deskHtml.includes('queue-group'),
+    'the queue must render date group headers when sorted by deadline');
+  console.log('✔ Suite 29 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -665,5 +683,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 34 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 35 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

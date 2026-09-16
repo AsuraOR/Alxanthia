@@ -141,7 +141,20 @@
     padding-block: 14px;
     border-bottom: 1px solid var(--rule);
   }
-  .pulse div { display: flex; align-items: baseline; gap: 8px; }
+  .pulse-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font: inherit;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    color: inherit;
+    cursor: pointer;
+  }
+  .pulse-item[aria-pressed="true"] { background: var(--surface-2); }
   .pulse b {
     font-family: var(--mono);
     font-size: 19px;
@@ -165,6 +178,8 @@
     overflow-x: auto;
     padding-block: 14px;
     scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   }
   .chips::-webkit-scrollbar { display: none; }
   .chips button {
@@ -251,6 +266,15 @@
     color: var(--muted);
     font-size: 13.5px;
   }
+  .queue-empty p { margin: 0 0 10px; }
+  .queue-group {
+    padding: 8px 2px 0;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .queue-group:first-child { padding-top: 0; }
   .card {
     width: 100%;
     display: grid;
@@ -617,7 +641,14 @@
   }
 
   /* ---------- phases ---------- */
-  .phases { display: flex; gap: 0; overflow-x: auto; padding-bottom: 6px; }
+  .phases {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
   .phase { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding-inline-end: 16px; min-width: 108px; }
   .phase .line { height: 3px; border-radius: 2px; background: var(--rule); }
   .phase.done .line { background: var(--rule-strong); }
@@ -869,6 +900,17 @@
     return d + ' hari lagi';
   }
 
+  /* Queue date groups — only meaningful when the list is sorted by
+     deadline. See P2-7 in STUDIO-DESK-UX-REVIEW.md. */
+  var DATE_GROUP_LABELS = { late: 'Terlambat', today: 'Hari ini', tomorrow: 'Besok', week: 'Minggu ini', later: 'Nanti' };
+  function dateGroupKey(d) {
+    if (d < 0) return 'late';
+    if (d === 0) return 'today';
+    if (d === 1) return 'tomorrow';
+    if (d <= 7) return 'week';
+    return 'later';
+  }
+
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
   function fmtDate(dateStr) {
@@ -1002,6 +1044,8 @@
   function laneMatch(order, laneKey) {
     if (laneKey === 'all') return isActive(order);
     if (laneKey === 'pay') return waitingPay(order);
+    if (laneKey === 'late') return isActive(order) && daysUntil(order.date) < 0;
+    if (laneKey === 'today') return isActive(order) && daysUntil(order.date) === 0;
     if (laneKey === 'cancelled') return order.payment === 'Cancelled';
     return laneOf(order) === laneKey;
   }
@@ -1162,21 +1206,34 @@
       if (waitingPay(o)) pay++;
       if (o.phase === 'Assembly and packing') working++;
     });
+    /* Each number is also a button, mapped to a lane — see P2-6 in
+       STUDIO-DESK-UX-REVIEW.md. Terlambat/Jatuh tempo hari ini have no
+       permanent chip of their own; renderTop() adds a temporary one below
+       while either is selected. */
     elPulse.innerHTML =
-      '<div><b>' + today + '</b><span>jatuh tempo hari ini</span></div>' +
-      (late ? '<div class="late"><b>' + late + '</b><span>terlambat</span></div>' : '') +
-      '<div class="pay"><b>' + pay + '</b><span>menunggu bayar</span></div>' +
-      '<div><b>' + working + '</b><span>sedang dikerjakan</span></div>';
+      '<button type="button" class="pulse-item" data-lane="today" aria-pressed="' + (state.lane === 'today') +
+        '"><b>' + today + '</b><span>jatuh tempo hari ini</span></button>' +
+      (late ? '<button type="button" class="pulse-item late" data-lane="late" aria-pressed="' + (state.lane === 'late') +
+        '"><b>' + late + '</b><span>terlambat</span></button>' : '') +
+      '<button type="button" class="pulse-item pay" data-lane="pay" aria-pressed="' + (state.lane === 'pay') +
+        '"><b>' + pay + '</b><span>menunggu bayar</span></button>' +
+      '<button type="button" class="pulse-item" data-lane="Assembly and packing" aria-pressed="' + (state.lane === 'Assembly and packing') +
+        '"><b>' + working + '</b><span>sedang dikerjakan</span></button>';
 
     var lanes = [{ key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
       .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }))
       .concat([{ key: 'cancelled', label: 'Dibatalkan' }]);
+    if (state.lane === 'late') lanes.splice(1, 0, { key: 'late', label: 'Terlambat' });
+    if (state.lane === 'today') lanes.splice(1, 0, { key: 'today', label: 'Jatuh tempo hari ini' });
 
     elChips.innerHTML = lanes.map(function (l) {
       var n = state.orders.filter(function (o) { return laneMatch(o, l.key); }).length;
       return '<button type="button" data-lane="' + esc(l.key) + '" aria-pressed="' + (state.lane === l.key) +
         '">' + esc(l.label) + '<span class="n">' + n + '</span></button>';
     }).join('');
+
+    var activeChip = elChips.querySelector('[aria-pressed="true"]');
+    if (activeChip) activeChip.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 
     Array.prototype.forEach.call(elSort.querySelectorAll('button'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.sort === state.sort));
@@ -1207,7 +1264,7 @@
       return;
     }
 
-    elQueue.innerHTML = list.map(function (o) {
+    function cardLi(o) {
       var d = daysUntil(o.date);
       var phase = o.phase;
       var cls = 'card';
@@ -1252,7 +1309,25 @@
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span>' +
           '<span class="tags">' + tags.join('') + '</span>' +
         '</span></button></li>';
-    }).join('');
+    }
+
+    /* Date-based group headers only make sense when the list is actually
+       sorted by date — see P2-7 in STUDIO-DESK-UX-REVIEW.md. */
+    if (state.sort === 'due') {
+      var lastGroup = null;
+      elQueue.innerHTML = list.map(function (o) {
+        var d = daysUntil(o.date);
+        var g = isNaN(d) ? 'later' : dateGroupKey(d);
+        var headerHtml = '';
+        if (g !== lastGroup) {
+          headerHtml = '<li class="queue-group" role="presentation">' + esc(DATE_GROUP_LABELS[g]) + '</li>';
+          lastGroup = g;
+        }
+        return headerHtml + cardLi(o);
+      }).join('');
+    } else {
+      elQueue.innerHTML = list.map(cardLi).join('');
+    }
   }
 
   function paymentBlock(o) {
@@ -1391,9 +1466,12 @@
     var phaseErr = fieldErrors[o.ref + '|phase'];
     var notesPending = isPending(o.ref, 'notes');
 
+    var phaseEntry = PHASES.find(function (x) { return x.key === phase; });
+
     var html = '<button type="button" class="back" data-back="1">← Daftar pesanan</button>' +
       '<div class="ticket-head' + headCls + '">' +
         '<div class="id"><div class="ref">' + esc(o.ref) + ' · baris ' + o.row + '</div>' +
+          (phaseEntry ? '<span class="tag go" style="margin:5px 0 1px">' + esc(phaseEntry.label) + '</span>' : '') +
           '<h2>' + esc(o.buyer) + '</h2>' +
           '<a class="wa" href="https://wa.me/' + esc(String(o.wa).replace('+', '')) + '" target="_blank" rel="noopener">' + esc(o.wa) + '</a>' +
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span></div>' +
@@ -1511,6 +1589,9 @@
       refocus = null;
     }
     window.scrollTo(0, scrollY);
+
+    var nowPhase = elTicket.querySelector('.phase.now');
+    if (nowPhase) nowPhase.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
   /* Local bench-state toggles (comp ticks, the manual gate tick) never touch
@@ -1727,6 +1808,13 @@
   });
 
   elChips.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-lane]');
+    if (!b) return;
+    state.lane = b.dataset.lane;
+    render();
+  });
+
+  elPulse.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-lane]');
     if (!b) return;
     state.lane = b.dataset.lane;

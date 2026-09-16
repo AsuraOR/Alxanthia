@@ -12,7 +12,8 @@ belum ada ikonnya, minta pemilik studio mengirim ulang tautannya dan memandu car
 layar utama.
 
 Setiap kali dibuka, halaman selalu memuat ulang daftar pesanan yang terbaru — jadi kalau ada pesanan
-baru masuk, cukup tutup dan buka lagi.
+baru masuk, cukup tutup dan buka lagi. Halaman selalu terbuka langsung ke **Perlu ditangani** (§3) —
+daftar pesanan yang benar-benar butuh sesuatu dari Anda sekarang, bukan seluruh daftar aktif.
 
 ## 2. Baris angka di atas
 
@@ -32,17 +33,29 @@ sudah selesai — jadi kalau sebuah pesanan dibatalkan, ia langsung berhenti dih
 
 Lihat baris ini dulu setiap kali membuka Desk — itu ringkasan hari Anda.
 
-## 3. Deretan tombol (chip) dan arti "Aktif"
+## 3. Deretan tombol (chip), "Perlu ditangani", dan arti "Aktif"
 
-Di bawah baris angka ada deretan tombol bulat: **Aktif**, **Menunggu bayar**, lalu satu tombol untuk
-tiap tahap kerja, **Dibatalkan**, dan **Arsip** di paling kanan (lihat §16). Kalau deretannya lebih
-panjang dari layar, geser ke samping — ada bayangan tipis di ujung kanan sebagai tanda masih ada tombol
-lain di sana.
+Di bawah baris angka ada deretan tombol bulat, dalam urutan ini: **Perlu ditangani** (bawaan saat Desk
+dibuka), **Aktif**, **Menunggu bayar**, lalu satu tombol untuk tiap tahap kerja, **Dibatalkan**, dan
+**Arsip** di paling kanan (lihat §16). Kalau deretannya lebih panjang dari layar, geser ke samping — ada
+bayangan tipis di ujung kanan sebagai tanda masih ada tombol lain di sana.
 
-**Aktif** menunjukkan semua pesanan yang masih berjalan — pesanan yang sudah selesai (Selesai) atau
-sudah dibatalkan tidak ikut ditampilkan di sana, supaya daftar tidak penuh dengan yang sudah tidak
-perlu dikerjakan lagi. Ketuk tombol tahap kerja mana pun untuk melihat hanya pesanan di tahap itu, atau
-**Dibatalkan** untuk meninjau pesanan yang batal.
+**Perlu ditangani** mengumpulkan setiap pesanan aktif yang punya sesuatu untuk dikerjakan sekarang:
+belum ditinjau, pembayarannya perlu dicek, ada kendala atau info yang kurang, jadwal produksinya jatuh
+hari ini, sedang dikerjakan, sudah siap diserahkan, atau sudah lewat tanggal. Satu pesanan bisa masuk
+karena lebih dari satu alasan sekaligus — angka di tombol ini menghitung **jumlah pesanan** yang masuk
+ke sini, bukan jumlah alasannya. Kalau daftarnya kosong, itu kabar baik: tidak ada yang butuh tindakan
+Anda saat ini.
+
+**Aktif** menunjukkan semua pesanan yang masih berjalan, termasuk yang tidak (atau belum) butuh
+tindakan apa pun — pesanan yang sudah selesai (Selesai) atau sudah dibatalkan tidak ikut ditampilkan di
+sana, supaya daftar tidak penuh dengan yang sudah tidak perlu dikerjakan lagi. Ketuk tombol tahap kerja
+mana pun untuk melihat hanya pesanan di tahap itu, atau **Dibatalkan** untuk meninjau pesanan yang batal.
+
+Di setiap kartu pesanan, kalau ada sesuatu yang perlu dilakukan, muncul satu baris singkat berwarna
+hijau di bagian bawah kartu — misalnya **Cek DP Rp100.000**, **Tentukan jadwal**, atau **Alamat belum
+lengkap**. Baris yang sama juga muncul di bagian paling atas tiket saat pesanan itu dibuka, supaya
+kartu dan tiketnya selalu memberi tahu hal yang sama.
 
 ## 4. Memilih pesanan, dan apa yang diperiksa "Periksa dulu"
 

@@ -353,6 +353,18 @@
     margin-top: 4px;
   }
   .card .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  /* SD-05 — the one-line next action, shared with the ticket's own banner
+     (see .next-action-banner) so a card and its open ticket never disagree. */
+  .card .next { display: block; font-size: 12.5px; font-weight: 600; color: var(--pine); margin-top: 7px; }
+  .next-action-banner {
+    display: block;
+    font: 600 13px/1.4 var(--sans);
+    color: var(--pine);
+    background: var(--pine-soft);
+    border-radius: var(--r);
+    padding: 11px 14px;
+    margin: 0 0 12px;
+  }
 
   .tag {
     display: inline-flex;
@@ -893,7 +905,10 @@
      keyed by order reference — bench scratch state, not a business record.
      ===================================================================== */
   var state = {
-    lane: 'all',
+    /* SD-05 — Perlu ditangani (everything with an open action item — see
+       orderGroups()) is the default operational view, not the full Aktif
+       list; Aktif and Arsip stay one tap away via the chip row. */
+    lane: 'attention',
     sort: 'due',
     search: '',
     selected: null,
@@ -1428,19 +1443,97 @@
     /* SD-12 — Arsip is server search over the whole sheet, not a filter over
        the orders already loaded into state.orders; see renderQueue(). */
     if (laneKey === 'archive') return false;
+    /* SD-05 — Perlu ditangani: everything with an open action item, per
+       orderGroups() below. */
+    if (laneKey === 'attention') return orderGroups(order).length > 0;
     return laneOf(order) === laneKey;
+  }
+
+  /* SD-08 — once an agreed fulfillment date is on record, it is the
+     operationally relevant one for sorting/urgency; the customer's own
+     Preferred Date (still shown as-is on every card — see cardLi()) is only
+     ever a fallback for an order nobody has scheduled yet. */
+  function operationalDate(o) {
+    return (o.schedule && o.schedule.agreedDate) || o.date;
+  }
+
+  function productionDate(o) {
+    return (o.schedule && o.schedule.productionDeadline) || o.date;
+  }
+
+  /* SD-05 — the seven work groups a mixed queue is derived from. An order
+     can land in more than one; a group's own count is a group count, never
+     implied to sum to a unique order total (see the Perlu ditangani chip,
+     which counts orders in ANY group, not group memberships). */
+  function orderGroups(o) {
+    if (!isActive(o)) return [];
+    var groups = [];
+    var destOk = o.locationType === 'bali' ? !!(o.regency && o.method) : !!(o.address && o.city && o.postal);
+    if (o.blocker || o.mismatch || !destOk) groups.push('missingOrBlocked');
+    if (!o.reviewedAt) groups.push('review');
+    if (o.payment === 'Checking transfer' || o.payment === 'Checking deposit' || o.payment === 'Checking balance') groups.push('paymentCheck');
+    var opDate = operationalDate(o);
+    if (!isNaN(daysUntil(opDate)) && daysUntil(opDate) < 0) groups.push('overdue');
+    var prodDate = productionDate(o);
+    if (!isNaN(daysUntil(prodDate)) && daysUntil(prodDate) === 0 && (o.phase === 'Not started' || o.phase === 'Assembly and packing')) {
+      groups.push('productionToday');
+    }
+    if (o.phase === 'Assembly and packing') groups.push('inProduction');
+    if (o.phase === 'Ready for dispatch') groups.push('readyForHandoff');
+    return groups;
+  }
+
+  /* SD-05 — one shared next-action line, used identically by cardLi() and
+     renderTicket() so the queue and an open ticket never disagree about
+     what she should do next. Priority order: something blocking or wrong
+     with the order itself, then her own outstanding tasks, then money,
+     then timing, then routine production/handoff. Returns null once
+     nothing needs her attention right now. */
+  function nextAction(o) {
+    if (!isActive(o)) return null;
+    if (o.blocker) return 'Kendala: ' + o.blocker.reason;
+    if (o.mismatch) return 'Harga perlu ditinjau';
+    var destOk = o.locationType === 'bali' ? !!(o.regency && o.method) : !!(o.address && o.city && o.postal);
+    if (!destOk) return o.locationType === 'bali' ? 'Tujuan belum lengkap' : 'Alamat belum lengkap';
+    if (!o.reviewedAt) return 'Tinjau pesanan';
+    if (o.payment === 'Checking transfer' || o.payment === 'Checking deposit' || o.payment === 'Checking balance') return 'Cek pembayaran';
+    if (o.paymentReconciliation === 'legacy_unreconciled') return 'Rekonsiliasi pembayaran lama';
+    var total = billed(o);
+    var outstanding = total === null ? null : total - (o.received || 0);
+    if (outstanding !== null && outstanding > 0 && o.payment !== 'Paid') {
+      return (usesDeposit(o) && o.payment !== 'Deposit paid' ? 'Cek DP ' : 'Cek pelunasan ') + rupiah(outstanding);
+    }
+    var opDate = operationalDate(o);
+    if (!isNaN(daysUntil(opDate)) && daysUntil(opDate) < 0) return 'Terlambat ' + (-daysUntil(opDate)) + ' hari';
+    if (o.phase === 'Not started' && !(o.schedule && o.schedule.agreedDate)) return 'Tentukan jadwal';
+    var prodDate = productionDate(o);
+    if (!isNaN(daysUntil(prodDate)) && daysUntil(prodDate) === 0 && (o.phase === 'Not started' || o.phase === 'Assembly and packing')) {
+      return 'Selesaikan produksi hari ini';
+    }
+    if (o.phase === 'Ready for dispatch') return o.method === 'self_pickup' ? 'Tandai siap diambil' : 'Serahkan ke kurir';
+    if (o.phase === 'Assembly and packing') return 'Lanjutkan pengerjaan';
+    return null;
   }
 
   /* The filtered, sorted list she is actually looking at — computed once and
      shared between renderQueue() and the default-selection logic in
      render(), so the ticket on the right is always the card at the top of
-     the list on the left. */
+     the list on the left. Sorted by the operationally relevant deadline
+     (SD-08-aware), with deterministic submission-time then reference
+     tie-breakers so equal-deadline orders never reorder from one render to
+     the next. */
   function visibleOrders() {
     return state.orders.filter(function (o) {
       return laneMatch(o, state.lane) && matchesSearch(o, state.search);
     }).sort(function (a, b) {
-      if (state.sort === 'in') return a.submitted < b.submitted ? -1 : a.submitted > b.submitted ? 1 : 0;
-      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      if (state.sort === 'in') {
+        if (a.submitted !== b.submitted) return a.submitted < b.submitted ? -1 : 1;
+        return a.ref < b.ref ? -1 : (a.ref > b.ref ? 1 : 0);
+      }
+      var da = operationalDate(a), db = operationalDate(b);
+      if (da !== db) return da < db ? -1 : 1;
+      if (a.submitted !== b.submitted) return a.submitted < b.submitted ? -1 : 1;
+      return a.ref < b.ref ? -1 : (a.ref > b.ref ? 1 : 0);
     });
   }
 
@@ -1615,7 +1708,7 @@
         '"><b>' + working + '</b><span>sedang dikerjakan</span></button>' +
       (fresh ? '<div class="pulse-item static"><b>' + fresh + '</b><span>pesanan baru</span></div>' : '');
 
-    var lanes = [{ key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
+    var lanes = [{ key: 'attention', label: 'Perlu ditangani' }, { key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
       .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }))
       .concat([{ key: 'cancelled', label: 'Dibatalkan' }, { key: 'archive', label: 'Arsip' }]);
     if (state.lane === 'late') lanes.splice(1, 0, { key: 'late', label: 'Terlambat' });
@@ -1685,8 +1778,10 @@
             esc(targetLane) + '">Ada ' + allMatches.length + ' pesanan cocok di ' + esc(targetLabel) + ' — lihat</button>';
         }
       }
-      elQueue.innerHTML = '<li class="queue-empty">' +
-        (crossLaneHtml || (state.search ? 'Tidak ada pesanan yang cocok.' : 'Tidak ada pesanan di kelompok ini.')) + '</li>';
+      var emptyText = state.search
+        ? 'Tidak ada pesanan yang cocok.'
+        : (state.lane === 'attention' ? 'Tidak ada yang perlu ditangani sekarang.' : 'Tidak ada pesanan di kelompok ini.');
+      elQueue.innerHTML = '<li class="queue-empty">' + (crossLaneHtml || emptyText) + '</li>';
       return;
     }
 
@@ -1734,6 +1829,10 @@
         ? buildList(o, catalog).map(function (r) { return r.qty + '× ' + r.name; }).join(' · ')
         : o.itemsRaw;
 
+      /* SD-05 — the one concise next-action line, shared with the ticket's
+         own banner via the same nextAction() function. */
+      var action = nextAction(o);
+
       return '<li><button type="button" class="' + cls + '" data-ref="' + esc(o.ref) + '"' +
         (state.selected === o.ref ? ' aria-current="true"' : '') + '>' +
         '<span class="stripe"></span>' +
@@ -1744,15 +1843,18 @@
           '<span class="what">' + wrapSwatchHtml + esc(summary) + '</span>' +
           '<span class="in">masuk ' + esc(fmtStamp(o.submitted)) + '</span>' +
           '<span class="tags">' + tags.join('') + '</span>' +
+          (action ? '<span class="next">' + esc(action) + '</span>' : '') +
         '</span></button></li>';
     }
 
     /* Date-based group headers only make sense when the list is actually
-       sorted by date — see P2-7 in STUDIO-DESK-UX-REVIEW.md. */
+       sorted by date — see P2-7 in STUDIO-DESK-UX-REVIEW.md. Grouped by the
+       same SD-08-aware operational date visibleOrders() already sorted by,
+       so the headers and the order they group never disagree. */
     if (state.sort === 'due') {
       var lastGroup = null;
       elQueue.innerHTML = list.map(function (o) {
-        var d = daysUntil(o.date);
+        var d = daysUntil(operationalDate(o));
         var g = isNaN(d) ? 'later' : dateGroupKey(d);
         var headerHtml = '';
         if (g !== lastGroup) {
@@ -2418,6 +2520,16 @@
         '<div class="when"><span class="d">' + esc(fmtDateLong(o.date)) + '</span>' +
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
+
+    /* SD-05 — the same one-line next action shown on the card, at the top
+       of the ticket too, so opening it never contradicts what the queue
+       already said. Skipped when a blocker is open — blockerBanner() below
+       already says so, with its own resolve action; showing the same
+       "Kendala: ..." text twice would just be noise. */
+    var ticketAction = nextAction(o);
+    if (!o.blocker && ticketAction) {
+      html += '<p class="next-action-banner">' + esc(ticketAction) + '</p>';
+    }
 
     html += blockerBanner(o);
     html += reviewBlock(o);

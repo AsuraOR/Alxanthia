@@ -1540,6 +1540,52 @@ console.log('--- SUITE 60 (SD-12 client): the Arsip lane searches the server ins
   console.log('✔ Suite 60 Passed\n');
 }
 
+console.log('--- SUITE 61 (SD-05 client): Perlu ditangani is the default view, a shared nextAction() drives both cards and the ticket, and sorting is deadline-aware ---');
+{
+  assert.ok(deskHtml.includes("lane: 'attention',"), 'Perlu ditangani (attention) must be the default landing lane, not Aktif');
+  assert.ok(deskHtml.includes("{ key: 'attention', label: 'Perlu ditangani' }"), 'a Perlu ditangani chip must exist');
+  assert.ok(deskHtml.includes("if (laneKey === 'attention') return orderGroups(order).length > 0;"),
+    'the Perlu ditangani lane must be derived from orderGroups(), not a bespoke filter that can drift from it');
+
+  assert.ok(deskHtml.includes('function orderGroups(o)'), 'a shared orderGroups() function must exist');
+  ['missingOrBlocked', 'review', 'paymentCheck', 'overdue', 'productionToday', 'inProduction', 'readyForHandoff'].forEach(function (g) {
+    assert.ok(deskHtml.includes("groups.push('" + g + "')"), 'orderGroups() must derive the "' + g + '" work group from actual order records');
+  });
+
+  assert.ok(deskHtml.includes('function nextAction(o)'), 'a single shared next-action derivation function must exist');
+  const cardUsesNextAction = /var action = nextAction\(o\);[\s\S]{0,1200}class="next">/.test(deskHtml);
+  assert.ok(cardUsesNextAction, 'cardLi() must render nextAction()\'s own text, not a separately maintained label');
+  assert.ok(deskHtml.includes('var ticketAction = nextAction(o);') && deskHtml.includes("class=\"next-action-banner\">"),
+    'renderTicket() must show the same nextAction() text at the top of an open ticket');
+  assert.ok(deskHtml.includes('if (!o.blocker && ticketAction)'),
+    'the ticket banner must not duplicate blockerBanner()\'s own "Kendala: ..." message when a blocker is already open');
+
+  // Priority: something wrong with the order itself outranks routine
+  // production/handoff status, so a blocked/mismatched/incomplete order is
+  // never masked by "Lanjutkan pengerjaan" or similar.
+  const blockedIdx = deskHtml.indexOf("if (o.blocker) return 'Kendala: ' + o.blocker.reason;");
+  const reviewIdx = deskHtml.indexOf("if (!o.reviewedAt) return 'Tinjau pesanan';");
+  const readyIdx = deskHtml.indexOf("if (o.phase === 'Ready for dispatch') return o.method === 'self_pickup' ? 'Tandai siap diambil' : 'Serahkan ke kurir';");
+  assert.ok(blockedIdx !== -1 && reviewIdx !== -1 && readyIdx !== -1 && blockedIdx < reviewIdx && reviewIdx < readyIdx,
+    'nextAction() must check a blocker and review status before routine phase-based actions, in that priority order');
+  assert.ok(deskHtml.includes("'Tentukan jadwal'") && deskHtml.includes("'Alamat belum lengkap'") &&
+    deskHtml.includes("(usesDeposit(o) && o.payment !== 'Deposit paid' ? 'Cek DP ' : 'Cek pelunasan ') + rupiah(outstanding)"),
+    'nextAction() must produce the documented example phrasings (Cek DP <amount>, Tentukan jadwal, Alamat belum lengkap)');
+
+  assert.ok(deskHtml.includes('function operationalDate(o)') &&
+    deskHtml.includes('return (o.schedule && o.schedule.agreedDate) || o.date;'),
+    'sorting/grouping must prefer the SD-08 agreed date once one exists, falling back to the original Preferred Date');
+  assert.ok(deskHtml.includes('var da = operationalDate(a), db = operationalDate(b);') &&
+    deskHtml.includes("return a.ref < b.ref ? -1 : (a.ref > b.ref ? 1 : 0);"),
+    'visibleOrders() must sort by the operational deadline with a deterministic reference tie-breaker, per SD-05');
+  assert.ok(deskHtml.includes('var d = daysUntil(operationalDate(o));'),
+    'the date-group headers must group by the same operational date the list is sorted by');
+
+  assert.ok(deskHtml.includes("'Tidak ada yang perlu ditangani sekarang.'"),
+    'an empty Perlu ditangani queue must read as a positive result, not the generic "no orders in this group" message');
+  console.log('✔ Suite 61 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 60 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 61 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -4,11 +4,13 @@
  * =============================================================================
  * Run with: node tests/verify-studio-desk.js
  *
- * Modelled on tests/verify-server-pricing.js: extracts the exact Apps Script
- * code block from STUDIO-DESK-SETUP.md (the same text an owner pastes into a
- * new, standalone Apps Script project) and exercises it in a sandbox with
+ * Modelled on tests/verify-server-pricing.js: reads the Desk's source directly
+ * from studio-desk/Code.gs and studio-desk/Index.html — the exact files an
+ * owner copies into a new, standalone Apps Script project (see Part 4 of
+ * STUDIO-DESK-SETUP.md) — and exercises the server file in a sandbox with
  * minimal Apps Script API stubs, so the actual documented server code is
- * what gets tested — not a reimplementation that could drift from it.
+ * what gets tested — not a reimplementation, or a copy in the tests, that
+ * could drift from it.
  * =============================================================================
  */
 const assert = require('assert');
@@ -21,16 +23,12 @@ console.log('ALXANTHIA STUDIO DESK — SERVER TEST SUITE');
 console.log('======================================================================\n');
 
 // ---------------------------------------------------------------------------
-// 1. Extract the Apps Script code block from the setup guide
+// 1. Read the Desk's source straight from the files an owner pastes in.
 // ---------------------------------------------------------------------------
-const guidePath = path.join(__dirname, '..', 'STUDIO-DESK-SETUP.md');
-const guideSrc = fs.readFileSync(guidePath, 'utf8');
-const jsBlocks = [...guideSrc.matchAll(/```javascript\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
-const serverSrc = jsBlocks.find((block) => block.includes('function doGet'));
-assert(serverSrc, 'Could not locate the Apps Script code block in STUDIO-DESK-SETUP.md');
-const htmlBlocks = [...guideSrc.matchAll(/```html\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
-const deskHtml = htmlBlocks.find((block) => block.includes('function paymentBlock'));
-assert(deskHtml, 'Could not locate the Studio Desk HTML block in STUDIO-DESK-SETUP.md');
+const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'studio-desk', 'Code.gs'), 'utf8');
+assert(serverSrc.includes('function doGet'), 'studio-desk/Code.gs does not look like the Apps Script server code');
+const deskHtml = fs.readFileSync(path.join(__dirname, '..', 'studio-desk', 'Index.html'), 'utf8');
+assert(deskHtml.includes('function paymentBlock'), 'studio-desk/Index.html does not look like the Studio Desk page');
 
 // ---------------------------------------------------------------------------
 // 2. A fake Orders sheet — an in-memory grid plus a write log, standing in

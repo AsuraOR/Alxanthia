@@ -1279,7 +1279,8 @@
         '<input id="ongkir-' + esc(o.ref) + '" type="number" inputmode="numeric" min="0" step="1000" ' +
         'value="' + (ship === null || ship === undefined ? '' : esc(ship)) + '" placeholder="0"' +
         (shippingPending ? ' disabled' : '') + '>' +
-        '<span class="hint">Kurir ke ' + esc(o.city) + '. Sisa pelunasan mengikuti total terbaru.</span></div>';
+        '<span class="hint">Kurir ke ' + esc(o.city) + '. Sisa pelunasan mengikuti total terbaru.</span>' +
+        '<span class="hint" id="shippingSaving"' + (shippingPending ? '' : ' hidden') + '>Menyimpan…</span></div>';
       if (shipErr) html += '<p class="why err">' + esc(shipErr) + '</p>';
     }
 
@@ -1393,7 +1394,7 @@
     }
 
     /* What to make — one tick per line item. */
-    html += '<div class="block"><h3>Yang dibuat<span class="count">' + doneComps + '/' + comps.length + ' item</span></h3>' +
+    html += '<div class="block"><h3>Yang dibuat<span class="count" id="compCount">' + doneComps + '/' + comps.length + ' item</span></h3>' +
       (comps.length
         ? '<ul class="make">' + comps.map(function (c) {
             var on = !!compState[c.key];
@@ -1460,12 +1461,14 @@
       '<textarea class="notes" id="notes-' + esc(o.ref) + '" data-fk="notes" ' +
       (notesPending ? 'disabled ' : '') +
       'placeholder="Catat kalau ada bahan kurang, warna diganti, atau pesan dari pembeli…"></textarea>' +
+      '<span class="why" id="notesSaving"' + (notesPending ? '' : ' hidden') + '>Menyimpan…</span>' +
       '<div class="actions"><button type="button" class="btn ghost small" data-savenotes="1"' +
       (notesPending ? ' disabled' : '') + '>Simpan catatan</button></div></div>' +
       '<div class="provenance"><span>Orders · baris ' + o.row + '</span>' +
       '<span>Desk menulis: Payment Plan · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
       '<span>Kolom lain hanya dibaca</span></div>';
 
+    var scrollY = window.scrollY;
     elTicket.innerHTML = html;
     var notesEl = elTicket.querySelector('.notes');
     notesEl.value = noteDrafts[o.ref] !== undefined ? noteDrafts[o.ref] : o.notes;
@@ -1474,6 +1477,40 @@
       var target = elTicket.querySelector('[data-fk="' + refocus + '"]');
       if (target) target.focus();
       refocus = null;
+    }
+    window.scrollTo(0, scrollY);
+  }
+
+  /* Local bench-state toggles (comp ticks, the manual gate tick) never touch
+     the server, so they update the DOM in place instead of tearing down and
+     rebuilding the whole ticket for one checkbox — see P1-4 in
+     STUDIO-DESK-UX-REVIEW.md. */
+  function updateCompCount() {
+    var o = findOrder(state.selected);
+    if (!o) return;
+    var comps = buildList(o, state.catalog);
+    var compState = per(o.ref).comps || {};
+    var doneComps = comps.filter(function (c) { return compState[c.key]; }).length;
+    var countEl = document.getElementById('compCount');
+    if (countEl) countEl.textContent = doneComps + '/' + comps.length + ' item';
+  }
+
+  function updateAdvanceButtonState() {
+    var o = findOrder(state.selected);
+    if (!o) return;
+    var btn = elTicket.querySelector('[data-advance]');
+    if (!btn) return;
+    var g = gate(o, state.catalog);
+    var phasePending = isPending(o.ref, 'phase');
+    btn.disabled = !(g.ready && !phasePending);
+    btn.textContent = (g.ready && !g.allOk) ? 'Tetap mulai kerjakan' : 'Mulai kerjakan';
+    var why = btn.nextElementSibling;
+    if (why && why.classList.contains('why')) {
+      var phaseErr = fieldErrors[o.ref + '|phase'];
+      why.classList.toggle('err', !!phaseErr);
+      why.textContent = phaseErr || (g.ready
+        ? (g.allOk ? '' : 'Tanggalnya sudah lewat — kabari pembeli dulu kalau perlu.')
+        : (g.autoOk ? 'Centang baris di atas dulu.' : 'Belum bisa dimulai — lihat tanda merah di atas.'));
     }
   }
 
@@ -1507,7 +1544,26 @@
      copy, on failure the previous value comes back and the control
      re-enables so a double-tap can't queue two writes.
      ===================================================================== */
-  function writeField(ref, field, value, columnLabel, onSaved) {
+  /* Reflects an in-flight write on a single control without rebuilding the
+     ticket — used for fields written from a 'change' handler (see
+     writeField's rerender:false path). */
+  function setControlPending(field, isPending) {
+    if (field === 'shipping') {
+      var input = elTicket.querySelector('.ongkir input[type="number"]');
+      var marker = document.getElementById('shippingSaving');
+      if (input) input.disabled = isPending;
+      if (marker) marker.hidden = !isPending;
+    } else if (field === 'notes') {
+      var textarea = elTicket.querySelector('.notes');
+      var marker = document.getElementById('notesSaving');
+      if (textarea) textarea.disabled = isPending;
+      if (marker) marker.hidden = !isPending;
+    }
+  }
+
+  function writeField(ref, field, value, columnLabel, opts) {
+    opts = opts || {};
+    var onSaved = opts.onSaved;
     var key = ref + '|' + field;
     if (pending[key]) return;
     var order = findOrder(ref);
@@ -1517,7 +1573,17 @@
     pending[key] = true;
     delete fieldErrors[key];
     order[field] = value;
-    render();
+    /* A field reached via the 'change' event (shipping, notes) fires on
+       blur, which on a touch device races the next tap. Tearing the ticket
+       down with a full render() here would detach the button she is mid-tap
+       on. Update just that one control in place instead; the server
+       response re-renders the whole ticket anyway, long after the tap has
+       resolved. */
+    if (opts.rerender === false) {
+      setControlPending(field, true);
+    } else {
+      render();
+    }
 
     google.script.run
       .withSuccessHandler(function (res) {
@@ -1556,9 +1622,12 @@
       renderTicket();
       return;
     }
-    writeField(o.ref, 'notes', value, 'Internal Notes', function () {
-      delete noteDrafts[o.ref];
-      saveNoteDrafts();
+    writeField(o.ref, 'notes', value, 'Internal Notes', {
+      rerender: false,
+      onSaved: function () {
+        delete noteDrafts[o.ref];
+        saveNoteDrafts();
+      }
     });
   }
 
@@ -1693,20 +1762,22 @@
     var tick = e.target.closest('[data-tick]');
     if (tick) {
       p.ticks = p.ticks || {};
-      p.ticks[tick.dataset.tick] = !p.ticks[tick.dataset.tick];
-      refocus = 'tick-' + tick.dataset.tick;
+      var tickOn = !p.ticks[tick.dataset.tick];
+      p.ticks[tick.dataset.tick] = tickOn;
       savePer();
-      renderTicket();
+      tick.setAttribute('aria-pressed', String(tickOn));
+      updateAdvanceButtonState();
       return;
     }
 
     var comp = e.target.closest('[data-comp]');
     if (comp) {
       p.comps = p.comps || {};
-      p.comps[comp.dataset.comp] = !p.comps[comp.dataset.comp];
-      refocus = 'comp-' + comp.dataset.comp;
+      var compOn = !p.comps[comp.dataset.comp];
+      p.comps[comp.dataset.comp] = compOn;
       savePer();
-      renderTicket();
+      comp.setAttribute('aria-pressed', String(compOn));
+      updateCompCount();
       return;
     }
 
@@ -1785,7 +1856,7 @@
     if (e.target.type !== 'number') return;
     var raw = e.target.value.trim();
     var value = raw === '' ? '' : Math.max(0, Number(raw));
-    writeField(o.ref, 'shipping', value, 'Shipping Fee');
+    writeField(o.ref, 'shipping', value, 'Shipping Fee', { rerender: false });
   });
 
   elTicket.addEventListener('input', function (e) {

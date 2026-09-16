@@ -428,7 +428,7 @@ console.log('--- SUITE 18: an unsaved note survives a trip away from the Desk --
   assert.ok(deskHtml.includes('belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
   const saveNotesMatch = deskHtml.match(/function saveNotes\(o\) \{[\s\S]*?\n  \}/);
   assert.ok(saveNotesMatch, 'a saveNotes() helper must exist');
-  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
+  assert.ok(/onSaved: function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
     'the draft must be cleared only inside the write success callback, not before the server confirms it'
   );
   console.log('✔ Suite 18 Passed\n');
@@ -477,6 +477,55 @@ console.log('--- SUITE 22: the default-selected ticket matches the top of the vi
   assert.ok(deskHtml.includes('var visible = visibleOrders();'),
     'the default selection must be computed from the same filtered/sorted list the queue renders, not raw sheet order');
   console.log('✔ Suite 22 Passed\n');
+}
+
+console.log('--- SUITE 23 (P1-1): a late order is a warning, not a permanent lock ---');
+{
+  const gateStart = deskHtml.indexOf('function gate(order, catalog) {');
+  const gateEnd = deskHtml.indexOf('\n  /* =====', gateStart);
+  const gateSrc = deskHtml.slice(gateStart, gateEnd);
+  assert.ok(gateSrc.includes('blocking: false'),
+    'the date check must be marked non-blocking so a past Preferred Date cannot disable Mulai kerjakan forever');
+  assert.ok(/autoOk = auto\.every\(function \(c\) \{ return !c\.blocking \|\| c\.ok; \}\)/.test(gateSrc),
+    'autoOk (which gates the button) must only consider blocking checks');
+  assert.ok(gateSrc.includes('isNaN(d)'), 'an unreadable Preferred Date must be handled explicitly rather than silently failing d >= 0');
+  assert.ok(deskHtml.includes('Tetap mulai kerjakan'),
+    'the button must relabel to make clear she is starting a late order on purpose');
+  assert.ok(deskHtml.includes('Tanggalnya sudah lewat — kabari pembeli dulu kalau perlu.'),
+    'the why line must explain a late-but-startable order in her words, without blocking her');
+  console.log('✔ Suite 23 Passed\n');
+}
+
+console.log('--- SUITE 24 (P1-2/P1-4): a tap while a field is dirty is never lost to a synchronous re-render ---');
+{
+  assert.ok(/writeField\(o\.ref, 'shipping', value, 'Shipping Fee', \{ rerender: false \}\)/.test(deskHtml),
+    'writing the shipping field from the change handler must skip the synchronous full re-render');
+  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', \{[\s\S]*?rerender: false/.test(deskHtml),
+    'writing notes from the change handler must skip the synchronous full re-render');
+  assert.ok(deskHtml.includes('function setControlPending('),
+    'a targeted in-place pending indicator must exist for fields written without a full re-render');
+  assert.ok(deskHtml.includes("comp.setAttribute('aria-pressed', String(compOn));") &&
+    !/data-comp\][\s\S]{0,400}renderTicket\(\);/.test(deskHtml),
+    'ticking a make-list item must update the DOM in place, not rebuild the whole ticket');
+  assert.ok(deskHtml.includes("tick.setAttribute('aria-pressed', String(tickOn));"),
+    'ticking a manual gate check must update the DOM in place, not rebuild the whole ticket');
+  assert.ok(deskHtml.includes('function updateCompCount()') && deskHtml.includes('function updateAdvanceButtonState()'),
+    'in-place updaters for the item counter and the gate button must exist');
+  assert.ok(/var scrollY = window\.scrollY;\s*elTicket\.innerHTML = html;/.test(deskHtml),
+    'renderTicket must capture and restore scroll position around its innerHTML rebuild');
+  console.log('✔ Suite 24 Passed\n');
+}
+
+console.log('--- SUITE 25 (P1-3): the pulse counters exclude cancelled orders, matching isActive() ---');
+{
+  const topStart = deskHtml.indexOf('function renderTop() {');
+  const topEnd = deskHtml.indexOf('\n  function renderQueue()', topStart);
+  const topSrc = deskHtml.slice(topStart, topEnd);
+  assert.ok(topSrc.includes('if (!isActive(o)) return;'),
+    'renderTop() counters must skip inactive (delivered or cancelled) orders using the same isActive() as the lanes');
+  assert.ok(!topSrc.includes("if (o.phase === 'Delivered') return;"),
+    'the old Delivered-only guard must be gone — it let a cancelled order keep inflating the counters');
+  console.log('✔ Suite 25 Passed\n');
 }
 
 // ---------------------------------------------------------------------------

@@ -541,6 +541,38 @@ console.log('--- SUITE 26 (P1-5): un-cancelling a deposit order offers to restor
   console.log('✔ Suite 26 Passed\n');
 }
 
+console.log('--- SUITE 27 (P2-1): the open ticket is reconciled against the visible list on every change ---');
+{
+  assert.ok(deskHtml.includes('function reconcileSelection()'), 'a reconcileSelection() helper must exist');
+  const renderStart = deskHtml.indexOf('function render() {');
+  const renderEnd = deskHtml.indexOf('\n  function renderTop()', renderStart);
+  const renderSrc = deskHtml.slice(renderStart, renderEnd);
+  assert.ok(renderSrc.includes('reconcileSelection();'), 'render() must call reconcileSelection() before rendering the panes');
+  const chipsStart = deskHtml.indexOf("elChips.addEventListener('click'");
+  const chipsEnd = deskHtml.indexOf('\n  });', chipsStart);
+  assert.ok(deskHtml.slice(chipsStart, chipsEnd).includes('render();'),
+    'switching lanes must re-render the ticket too, not just the queue, so a stale ticket cannot linger');
+  const searchStart = deskHtml.indexOf("elSearch.addEventListener('input'");
+  const searchEnd = deskHtml.indexOf('\n  });', searchStart);
+  assert.ok(deskHtml.slice(searchStart, searchEnd).includes('render();'),
+    'searching must re-render the ticket too, not just the queue, so a stale ticket cannot linger');
+  assert.ok(deskHtml.includes('Pesanan selesai. Dipindahkan ke daftar Selesai.'),
+    'marking an order Delivered must surface a toast explaining why its card disappeared from Aktif');
+  console.log('✔ Suite 27 Passed\n');
+}
+
+console.log('--- SUITE 28 (P2-2): a search with no in-lane hits offers the cross-lane match ---');
+{
+  const queueStart = deskHtml.indexOf('function renderQueue() {');
+  const queueEnd = deskHtml.indexOf('\n  function paymentBlock(', queueStart);
+  const queueSrc = deskHtml.slice(queueStart, queueEnd);
+  assert.ok(queueSrc.includes('matchesSearch(o, state.search)') && queueSrc.includes('data-crosslane='),
+    'the empty-queue state must search across all orders and offer a cross-lane link when it finds a hit');
+  assert.ok(deskHtml.includes("e.target.closest('[data-crosslane]')"),
+    'a click handler for the cross-lane suggestion must exist and switch state.lane, keeping the query');
+  console.log('✔ Suite 28 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -633,5 +665,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 28 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 34 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

@@ -1134,14 +1134,22 @@
     }
     elCatalogMeta.textContent = state.catalog.fetchedAt ? ('katalog dimuat ' + fmtStamp(state.catalog.fetchedAt)) : '';
 
-    if (!state.selected) {
-      var visible = visibleOrders();
-      if (visible.length) state.selected = visible[0].ref;
-    }
+    reconcileSelection();
 
     renderTop();
     renderQueue();
     renderTicket();
+  }
+
+  /* Keeps the open ticket in sync with whatever the left-hand list is
+     currently showing — a lane switch, a search, or an order leaving the
+     visible set (e.g. marked Selesai) must never leave the ticket pointing
+     at a card that isn't there any more. See P2-1 in
+     STUDIO-DESK-UX-REVIEW.md. */
+  function reconcileSelection() {
+    var visible = visibleOrders();
+    var stillVisible = state.selected && visible.some(function (o) { return o.ref === state.selected; });
+    if (!stillVisible) state.selected = visible.length ? visible[0].ref : null;
   }
 
   function renderTop() {
@@ -1180,8 +1188,22 @@
     var list = visibleOrders();
 
     if (!list.length) {
+      var crossLaneHtml = '';
+      if (state.search) {
+        var allMatches = state.orders.filter(function (o) { return matchesSearch(o, state.search); });
+        if (allMatches.length) {
+          var laneKeys = {};
+          allMatches.forEach(function (o) { laneKeys[o.payment === 'Cancelled' ? 'cancelled' : o.phase] = true; });
+          var laneKeyList = Object.keys(laneKeys);
+          var targetLane = laneKeyList.length === 1 ? laneKeyList[0] : 'all';
+          var targetLabel = targetLane === 'cancelled' ? 'Dibatalkan' :
+            ((PHASES.find(function (p) { return p.key === targetLane; }) || {}).label || 'Aktif');
+          crossLaneHtml = '<p>Tidak ada di daftar ini.</p><button type="button" class="btn ghost small" data-crosslane="' +
+            esc(targetLane) + '">Ada ' + allMatches.length + ' pesanan cocok di ' + esc(targetLabel) + ' — lihat</button>';
+        }
+      }
       elQueue.innerHTML = '<li class="queue-empty">' +
-        (state.search ? 'Tidak ada pesanan yang cocok.' : 'Tidak ada pesanan di kelompok ini.') + '</li>';
+        (crossLaneHtml || (state.search ? 'Tidak ada pesanan yang cocok.' : 'Tidak ada pesanan di kelompok ini.')) + '</li>';
       return;
     }
 
@@ -1708,21 +1730,19 @@
     var b = e.target.closest('button[data-lane]');
     if (!b) return;
     state.lane = b.dataset.lane;
-    renderTop();
-    renderQueue();
+    render();
   });
 
   elSort.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-sort]');
     if (!b) return;
     state.sort = b.dataset.sort;
-    renderTop();
-    renderQueue();
+    render();
   });
 
   elSearch.addEventListener('input', function () {
     state.search = elSearch.value;
-    renderQueue();
+    render();
   });
 
   /* Master/detail on mobile is CSS state (body.detail), so the phone's own
@@ -1745,6 +1765,13 @@
   });
 
   elQueue.addEventListener('click', function (e) {
+    var cross = e.target.closest('[data-crosslane]');
+    if (cross) {
+      state.lane = cross.dataset.crosslane;
+      render();
+      return;
+    }
+
     var b = e.target.closest('button[data-ref]');
     if (!b) return;
     state.selected = b.dataset.ref;
@@ -1815,7 +1842,12 @@
         toast('Pelunasan harus diterima sebelum pesanan dikirim.', true);
         return;
       }
-      if (PHASES[i + 1]) writeField(o.ref, 'phase', PHASES[i + 1].key, 'Work Phase');
+      if (PHASES[i + 1]) {
+        var becomingDelivered = PHASES[i + 1].key === 'Delivered';
+        writeField(o.ref, 'phase', PHASES[i + 1].key, 'Work Phase', becomingDelivered ? {
+          onSaved: function () { toast('Pesanan selesai. Dipindahkan ke daftar Selesai.'); }
+        } : undefined);
+      }
       return;
     }
 

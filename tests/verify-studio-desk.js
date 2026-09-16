@@ -948,7 +948,7 @@ console.log('--- SUITE 50 (SD-01..SD-04 client): review, ledger, checklist sync,
   assert.ok(deskHtml.includes('var PACKING_ITEMS =') && deskHtml.includes('function packingComplete(o)'),
     'a distinct final packing checklist must exist');
   assert.ok(deskHtml.includes('var packingBlocksAdvance = packingRequired && !packingComplete(o);') &&
-    deskHtml.includes("phasePending || packingBlocksAdvance ? ' disabled' : ''"),
+    deskHtml.includes("phasePending || packingBlocksAdvance || blockerBlocksAdvance ? ' disabled' : ''"),
     'the Lanjut button leaving Dirangkai dan dikemas must be blocked until the packing checklist is complete');
 
   assert.ok(deskHtml.includes('function riwayatBlock(o)') && deskHtml.includes('state.activity[o.ref]'),
@@ -1374,6 +1374,54 @@ console.log('--- SUITE 54 (SD-11): a blocker holds forward phase progress only, 
   console.log('✔ Suite 54 Passed\n');
 }
 
+console.log('--- SUITE 55 (SD-08..SD-11 client): schedule, delivery/handoff, blocker banner, and composition editor are wired into the ticket ---');
+{
+  assert.ok(deskHtml.includes('function scheduleBlock(o)') && deskHtml.includes('.setSchedule({'),
+    'a Jadwal block calling the server setSchedule command must exist');
+  assert.ok(deskHtml.includes('data-openscheduleform') && deskHtml.includes('data-submitschedule'),
+    'the schedule form must be reachable and submittable from the ticket');
+
+  assert.ok(deskHtml.includes('function deliveryBlock(o)') && deskHtml.includes('.setDeliveryInfo({'),
+    'a delivery block calling the server setDeliveryInfo command must exist, replacing the old static Pengantaran block');
+  assert.ok(deskHtml.includes('function markHandoffAction(o)') && deskHtml.includes('.markHandoff({ ref: o.ref });'),
+    'a handoff action calling the server markHandoff command must exist');
+  assert.ok(deskHtml.includes('function markDeliveryCompleteAction(o)') && deskHtml.includes('.markDeliveryComplete({ ref: o.ref });'),
+    'a delivery-completion action calling the server markDeliveryComplete command must exist');
+  assert.ok(deskHtml.includes("isPickup ? 'Tandai siap diambil' : 'Tandai diserahkan ke kurir'") &&
+    deskHtml.includes("isPickup ? 'Tandai sudah diambil' : 'Tandai sudah diterima'"),
+    'the handoff/completion action labels must read correctly for both self-pickup and courier delivery');
+
+  assert.ok(deskHtml.includes('function blockerBanner(o)') && deskHtml.includes("if (!o.blocker) return ''"),
+    'a blocker banner must exist and only render while a blocker is open');
+  assert.ok(deskHtml.includes('function blockerActionBlock(o)') && deskHtml.includes('data-openblockerform'),
+    'an Ada kendala action to open a new blocker must exist');
+  assert.ok(deskHtml.includes('function submitBlockerForm(o)') && deskHtml.includes('.setBlocker({ ref: o.ref, reason: blockerForm.reason, note: note });'),
+    'submitting the blocker form must call the server setBlocker command with the chosen reason');
+  assert.ok(deskHtml.includes('function resolveBlockerAction(o)') && deskHtml.includes('.resolveBlocker({ ref: o.ref });'),
+    'a resolve action calling the server resolveBlocker command must exist');
+  assert.ok(deskHtml.includes('var blockerBlocksAdvance = !!o.blocker;') &&
+    deskHtml.includes("phasePending || packingBlocksAdvance || blockerBlocksAdvance ? ' disabled' : ''"),
+    'an open blocker must also disable the Lanjut button, on top of the existing packing-checklist gate');
+  assert.ok(deskHtml.includes("var BLOCKER_REASONS = [") && deskHtml.includes("key: 'bahan belum tersedia'"),
+    'the client must mirror the server BLOCKER_REASONS values exactly so a chosen reason round-trips');
+
+  assert.ok(deskHtml.includes('function compositionFor(ref, lineKey)') && deskHtml.includes('.getComposition(o.ref);'),
+    'opening a ticket must fetch its server composition rows, keyed like the checklist');
+  assert.ok(deskHtml.includes('function compositionEditorHtml(o, c)') && deskHtml.includes('.setComposition({ ref: o.ref, lineKey: lineKey, packageIndex: packageIndex, stems: stems, additions: additions });'),
+    'a composition editor for package-type lines must exist and call the server setComposition command');
+  assert.ok(deskHtml.includes('if (c.isPackage) li += compositionEditorHtml(o, c);'),
+    'the composition editor must only be offered on package-type make-list lines, not stems/pots/custom');
+  assert.ok(deskHtml.includes('applyServerChecklist(o.ref, o.items, rows2 || []);'),
+    'saving a composition change must refetch the checklist so an invalidated tick from the server is reflected locally');
+
+  // The pre-existing generic number-input change handler used to key off
+  // e.target.type alone, which would have mistaken any of the new number
+  // inputs (stem/addition quantities) for the shipping-fee field.
+  assert.ok(deskHtml.includes("e.target.type !== 'number' || e.target.id.indexOf('ongkir-') !== 0"),
+    'the shipping-fee change handler must be scoped to its own input, not any number input on the ticket');
+  console.log('✔ Suite 55 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 54 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 55 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

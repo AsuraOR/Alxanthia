@@ -873,6 +873,15 @@
     { key: 'Cancelled',         label: 'Dibatalkan' }
   ];
 
+  /* SD-11 — mirrors BLOCKER_REASONS in Code.gs exactly; the stored value is
+     already plain Indonesian text, so key and label only differ in casing. */
+  var BLOCKER_REASONS = [
+    { key: 'bahan belum tersedia', label: 'Bahan belum tersedia' },
+    { key: 'menunggu jawaban pembeli', label: 'Menunggu jawaban pembeli' },
+    { key: 'masalah pengiriman', label: 'Masalah pengiriman' },
+    { key: 'lainnya', label: 'Lainnya' }
+  ];
+
   /* =====================================================================
      State. Orders and the catalogue arrive from the server; only the
      build-list ticks and the card-read tick are kept locally, per device,
@@ -889,16 +898,23 @@
     catalogError: null,
     per: {},
     checklist: {}, // ref -> array of server checklist rows (SD-02), loaded per ticket
-    activity: {} // ref -> array of server activity rows (SD-03), loaded per ticket
+    activity: {}, // ref -> array of server activity rows (SD-03), loaded per ticket
+    composition: {} // ref -> array of {lineKey, composition, updatedAt, updatedBy} (SD-09), loaded per ticket
   };
   var confirming = false;
   var pending = {}; // "ref|field" -> true while a write is in flight
   var fieldErrors = {}; // "ref|field" -> Indonesian error message
   var noteDrafts = {}; // ref -> unsaved textarea value, persisted so a trip to WhatsApp can't lose it
   var refocus = null;
-  var extrasLoadedFor = null; // ref whose Desk Ops extras (checklist/activity) have been fetched
+  var extrasLoadedFor = null; // ref whose Desk Ops extras (checklist/activity/composition) have been fetched
   var recordingPayment = false; // false | { type: 'receipt'|'refund'|'correction' } — the inline Catat pembayaran form
   var paymentIdempotencyKey = null; // minted once per open attempt, reused across retries of the same submit
+  var schedulingForm = false; // false | { agreedDate, agreedTime, productionDeadline, rescheduleReason } — SD-08
+  var deliveryForm = false; // false | { recipientName, recipientContact, destinationDetail, courier, tracking } — SD-10
+  var blockerForm = false; // false | { reason, note } — the inline Ada kendala form, SD-11
+  var editingComposition = null; // lineKey currently open for editing, or null — SD-09
+  var compositionDraft = null; // { stems: {key: qty}, additions: {key: qty} } for the line above
+  var compositionRequiredStems = null; // the open package line's own stem spec, for the live total
 
   var PER_KEY = 'alxanthia-desk-per-v1';
   try {
@@ -1000,6 +1016,23 @@
       })
       .withFailureHandler(function () {})
       .getActivity(o.ref);
+    google.script.run
+      .withSuccessHandler(function (rows) {
+        state.composition[o.ref] = rows || [];
+        if (state.selected === o.ref) renderTicket();
+      })
+      .withFailureHandler(function () {})
+      .getComposition(o.ref);
+  }
+
+  /* SD-09 — the studio's own choice of flowers for a package-type line,
+     looked up by the same content-derived key the checklist uses so the
+     composition and its make-list tick always agree on which physical
+     line they describe. */
+  function compositionFor(ref, lineKey) {
+    var rows = state.composition[ref] || [];
+    var row = rows.find(function (r) { return r.lineKey === lineKey; });
+    return row ? row.composition : null;
   }
 
   /* Pushes one checklist toggle to the server in the background — the DOM
@@ -1287,7 +1320,18 @@
       if (item.type === 'package') {
         var pkg = (catalog.packages || [])[Number(item.id)];
         var stems = pkg ? pkg.stems : '?';
-        return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: 'Paket ' + stems + ' tangkai', lines: [{ v: 'pilihan bunga studio' }] };
+        var comp = compositionFor(order.ref, contentKeys[i]);
+        var compLines = [{ v: 'pilihan bunga studio' }];
+        if (comp) {
+          var stemText = (comp.stems || []).map(function (s) { return s.qty + '× ' + s.name; }).join(', ');
+          var addText = (comp.additions || []).map(function (a) { return a.qty + '× ' + a.name; }).join(', ');
+          compLines = [{ k: 'komposisi', v: stemText || '—' }];
+          if (addText) compLines.push({ k: 'tambahan', v: addText });
+        }
+        return {
+          key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: 'Paket ' + stems + ' tangkai', lines: compLines,
+          isPackage: true, packageIndex: Number(item.id), requiredStems: pkg ? pkg.stems : null, composition: comp
+        };
       }
       if (item.type === 'custom') {
         var each = [], total = [];
@@ -1738,6 +1782,402 @@
       '</div></div>';
   }
 
+  /* SD-08 — the agreed date/time and a separate production deadline, kept
+     apart from the buyer's own Preferred Date above (which stays their
+     original, provisional request). */
+  function scheduleBlock(o) {
+    var sch = o.schedule;
+    var html = '<div class="block"><h3>Jadwal</h3>';
+    if (sch && (sch.agreedDate || sch.productionDeadline)) {
+      html += '<div class="pair"><span class="k">Tanggal disepakati</span><span class="v">' +
+        esc(sch.agreedDate ? fmtDate(sch.agreedDate) + (sch.agreedTime ? ' ' + sch.agreedTime : '') : '—') + '</span></div>' +
+        '<div class="pair"><span class="k">Target produksi</span><span class="v">' +
+        esc(sch.productionDeadline ? fmtDate(sch.productionDeadline) : '—') + '</span></div>';
+      if (sch.rescheduleReason) html += '<p class="why">Alasan ubah jadwal: ' + esc(sch.rescheduleReason) + '</p>';
+    } else {
+      html += '<p class="why">Belum ada tanggal yang disepakati secara terpisah dari tanggal pesanan.</p>';
+    }
+    return html + scheduleFormHtml(o) + '</div>';
+  }
+
+  function scheduleFormHtml(o) {
+    if (!schedulingForm) {
+      return '<div class="actions"><button type="button" class="btn ghost small" data-openscheduleform="1">' +
+        (o.schedule && o.schedule.agreedDate ? 'Ubah jadwal' : 'Atur jadwal') + '</button></div>';
+    }
+    var schedPending = isPending(o.ref, 'schedule');
+    return '<div class="confirm">' +
+      '<div class="ongkir"><label for="schedAgreedDate">Tanggal disepakati</label>' +
+      '<input id="schedAgreedDate" type="date" value="' + esc(schedulingForm.agreedDate || '') + '"' + (schedPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="schedAgreedTime">Jam (opsional)</label>' +
+      '<input id="schedAgreedTime" type="time" value="' + esc(schedulingForm.agreedTime || '') + '"' + (schedPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="schedDeadline">Target produksi (opsional)</label>' +
+      '<input id="schedDeadline" type="date" value="' + esc(schedulingForm.productionDeadline || '') + '"' + (schedPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="schedReason">Alasan ubah jadwal (opsional)</label>' +
+      '<input id="schedReason" type="text" maxlength="300" value="' + esc(schedulingForm.rescheduleReason || '') + '"' + (schedPending ? ' disabled' : '') + '></div>' +
+      '<div class="actions">' +
+      '<button type="button" class="btn" data-submitschedule="1"' + (schedPending ? ' disabled' : '') + '>Simpan</button>' +
+      '<button type="button" class="btn ghost" data-cancelscheduleform="1"' + (schedPending ? ' disabled' : '') + '>Batal</button>' +
+      '</div></div>';
+  }
+
+  function submitScheduleForm(o) {
+    var agreedDate = (document.getElementById('schedAgreedDate') || {}).value || '';
+    var agreedTime = (document.getElementById('schedAgreedTime') || {}).value || '';
+    var productionDeadline = (document.getElementById('schedDeadline') || {}).value || '';
+    var rescheduleReason = (document.getElementById('schedReason') || {}).value || '';
+    var key = o.ref + '|schedule';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.schedule = res.schedule;
+          schedulingForm = false;
+          toast('Jadwal tersimpan.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal menyimpan jadwal.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .setSchedule({
+        ref: o.ref, agreedDate: agreedDate, agreedTime: agreedTime,
+        productionDeadline: productionDeadline, rescheduleReason: rescheduleReason
+      });
+  }
+
+  /* SD-10 — delivery/pickup details and their handoff/completion timestamps,
+     distinct from Work Phase. Handoff and completion are each gated on full
+     payment and on there being no open blocker, mirroring updateOrder()'s
+     own Shipped/Delivered check so self-pickup can't bypass the same rule
+     shipping is held to — see requirePaymentComplete_ in Code.gs. */
+  function deliveryBlock(o) {
+    var dest = o.locationType === 'bali'
+      ? (o.method === 'self_pickup' ? 'Ambil sendiri di studio' : 'Grab / Gojek') + ' · ' + o.regency
+      : 'Kurir ke luar Bali · ' + o.address + ', ' + o.city + ' ' + o.postal;
+    var delivery = o.delivery || {};
+    var isPickup = o.method === 'self_pickup';
+    var html = '<div class="block"><h3>Pengantaran</h3><div style="font-size:14.5px">' + esc(dest) + '</div>';
+
+    if (delivery.recipientName || delivery.recipientContact || delivery.destinationDetail || delivery.courier || delivery.tracking) {
+      html += '<div class="breakdown" style="margin-top:10px">';
+      if (delivery.recipientName) html += '<span>Penerima ' + esc(delivery.recipientName) + '</span>';
+      if (delivery.recipientContact) html += '<span>Kontak ' + esc(delivery.recipientContact) + '</span>';
+      if (delivery.destinationDetail) html += '<span>Detail ' + esc(delivery.destinationDetail) + '</span>';
+      if (delivery.courier) html += '<span>Kurir ' + esc(delivery.courier) + '</span>';
+      if (delivery.tracking) html += '<span>Lacak ' + esc(delivery.tracking) + '</span>';
+      html += '</div>';
+    }
+
+    html += deliveryFormHtml(o, delivery);
+
+    if (delivery.handoffAt) {
+      html += '<p class="why">' + (isPickup ? 'Siap diambil' : 'Diserahkan ke kurir') + ' ' + esc(fmtStamp(delivery.handoffAt)) + '.</p>';
+    }
+    if (delivery.completedAt) {
+      html += '<p class="why">' + (isPickup ? 'Sudah diambil' : 'Sudah diterima') + ' ' + esc(fmtStamp(delivery.completedAt)) + '.</p>';
+    }
+
+    var deliveryPending = isPending(o.ref, 'delivery');
+    var readyIdx = PHASES.findIndex(function (x) { return x.key === 'Ready for dispatch'; });
+    var phaseIdx = PHASES.findIndex(function (x) { return x.key === o.phase; });
+    if (o.payment !== 'Cancelled' && phaseIdx >= readyIdx && !o.blocker) {
+      if (!delivery.handoffAt) {
+        html += '<div class="actions"><button type="button" class="btn ghost small" data-markhandoff="1"' +
+          (deliveryPending ? ' disabled' : '') + '>' +
+          (isPickup ? 'Tandai siap diambil' : 'Tandai diserahkan ke kurir') + '</button></div>';
+      } else if (!delivery.completedAt) {
+        html += '<div class="actions"><button type="button" class="btn ghost small" data-markdeliverycomplete="1"' +
+          (deliveryPending ? ' disabled' : '') + '>' +
+          (isPickup ? 'Tandai sudah diambil' : 'Tandai sudah diterima') + '</button></div>';
+      }
+    }
+    return html + '</div>';
+  }
+
+  function deliveryFormHtml(o, delivery) {
+    if (!deliveryForm) {
+      return '<div class="actions"><button type="button" class="btn ghost small" data-opendeliveryform="1">Lengkapi info pengantaran</button></div>';
+    }
+    var deliveryPending = isPending(o.ref, 'delivery');
+    return '<div class="confirm">' +
+      '<div class="ongkir"><label for="delivRecipient">Nama penerima</label>' +
+      '<input id="delivRecipient" type="text" maxlength="200" value="' + esc(deliveryForm.recipientName || '') + '"' + (deliveryPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="delivContact">Kontak penerima</label>' +
+      '<input id="delivContact" type="text" maxlength="200" value="' + esc(deliveryForm.recipientContact || '') + '"' + (deliveryPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="delivDetail">Detail lokasi</label>' +
+      '<input id="delivDetail" type="text" maxlength="500" value="' + esc(deliveryForm.destinationDetail || '') + '"' + (deliveryPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="delivCourier">Kurir</label>' +
+      '<input id="delivCourier" type="text" maxlength="200" value="' + esc(deliveryForm.courier || '') + '"' + (deliveryPending ? ' disabled' : '') + '></div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="delivTracking">Nomor/tautan lacak</label>' +
+      '<input id="delivTracking" type="text" maxlength="500" value="' + esc(deliveryForm.tracking || '') + '"' + (deliveryPending ? ' disabled' : '') + '></div>' +
+      '<div class="actions">' +
+      '<button type="button" class="btn" data-submitdelivery="1"' + (deliveryPending ? ' disabled' : '') + '>Simpan</button>' +
+      '<button type="button" class="btn ghost" data-canceldeliveryform="1"' + (deliveryPending ? ' disabled' : '') + '>Batal</button>' +
+      '</div></div>';
+  }
+
+  function submitDeliveryForm(o) {
+    var recipientName = (document.getElementById('delivRecipient') || {}).value || '';
+    var recipientContact = (document.getElementById('delivContact') || {}).value || '';
+    var destinationDetail = (document.getElementById('delivDetail') || {}).value || '';
+    var courier = (document.getElementById('delivCourier') || {}).value || '';
+    var tracking = (document.getElementById('delivTracking') || {}).value || '';
+    var key = o.ref + '|delivery';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.delivery = res.delivery;
+          deliveryForm = false;
+          toast('Info pengantaran tersimpan.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal menyimpan info pengantaran.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .setDeliveryInfo({
+        ref: o.ref, recipientName: recipientName, recipientContact: recipientContact,
+        destinationDetail: destinationDetail, courier: courier, tracking: tracking
+      });
+  }
+
+  function markHandoffAction(o) {
+    var key = o.ref + '|delivery';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) { o.delivery = res.delivery; toast('Pengantaran ditandai.'); }
+        else toast(esc((res && res.message) || 'Gagal menandai.'), true);
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .markHandoff({ ref: o.ref });
+  }
+
+  function markDeliveryCompleteAction(o) {
+    var key = o.ref + '|delivery';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) { o.delivery = res.delivery; toast('Pesanan ditandai selesai diterima.'); }
+        else toast(esc((res && res.message) || 'Gagal menandai.'), true);
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .markDeliveryComplete({ ref: o.ref });
+  }
+
+  /* SD-11 — a blocker that holds forward phase movement and handoff but
+     never payment, notes, or moving backward — see updateOrder()'s own
+     "moving forward" check in Code.gs, which this banner surfaces. */
+  function blockerBanner(o) {
+    if (!o.blocker) return '';
+    var blockerPending = isPending(o.ref, 'blocker');
+    return '<div class="block" style="border-color:var(--madder)"><h3 style="color:var(--madder)">Ada kendala</h3>' +
+      '<p class="why">' + esc(o.blocker.reason) + (o.blocker.note ? ' — ' + esc(o.blocker.note) : '') + '</p>' +
+      '<p class="why">Sejak ' + esc(fmtStamp(o.blocker.openedAt)) + '</p>' +
+      '<div class="actions"><button type="button" class="btn" data-resolveblocker="1"' +
+      (blockerPending ? ' disabled' : '') + '>Kendala selesai</button></div></div>';
+  }
+
+  function blockerActionBlock(o) {
+    if (o.blocker) return '';
+    if (!blockerForm) {
+      return '<div class="block"><button type="button" class="btn ghost" data-openblockerform="1">Ada kendala</button></div>';
+    }
+    var blockerPending = isPending(o.ref, 'blocker');
+    return '<div class="block"><h3>Ada kendala</h3><div class="confirm">' +
+      '<span class="k">Alasan</span>' +
+      '<div class="seg" role="group" aria-label="Alasan kendala" style="flex-wrap:wrap">' +
+      BLOCKER_REASONS.map(function (r) {
+        return '<button type="button" data-blockerreason="' + esc(r.key) + '" aria-pressed="' + (blockerForm.reason === r.key) +
+          '"' + (blockerPending ? ' disabled' : '') + '>' + esc(r.label) + '</button>';
+      }).join('') + '</div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="blockerNote">Catatan (opsional)</label>' +
+      '<input id="blockerNote" type="text" maxlength="500" value="' + esc(blockerForm.note || '') + '"' + (blockerPending ? ' disabled' : '') + '></div>' +
+      '<div class="actions">' +
+      '<button type="button" class="btn" data-submitblocker="1"' + (blockerPending || !blockerForm.reason ? ' disabled' : '') + '>Simpan</button>' +
+      '<button type="button" class="btn ghost" data-cancelblockerform="1"' + (blockerPending ? ' disabled' : '') + '>Batal</button>' +
+      '</div></div></div>';
+  }
+
+  function submitBlockerForm(o) {
+    if (!blockerForm || !blockerForm.reason) return;
+    var note = (document.getElementById('blockerNote') || {}).value || '';
+    var key = o.ref + '|blocker';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.blocker = res.blocker;
+          blockerForm = false;
+          toast('Kendala dicatat.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal mencatat kendala.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .setBlocker({ ref: o.ref, reason: blockerForm.reason, note: note });
+  }
+
+  function resolveBlockerAction(o) {
+    var key = o.ref + '|blocker';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.blocker = res.blocker;
+          toast('Kendala ditandai selesai.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal menandai kendala selesai.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .resolveBlocker({ ref: o.ref });
+  }
+
+  /* SD-09 — the composition editor for a package-type line ("pilihan bunga
+     studio"): the buyer only picked a stem-count tier, so the studio
+     records which specific flowers filled it. lineKey is the same
+     content-derived key the checklist uses for this line. */
+  function compositionEditorHtml(o, c) {
+    var compPending = isPending(o.ref, 'composition:' + c.contentKey);
+    if (editingComposition !== c.contentKey) {
+      return '<div class="actions" style="margin-top:6px">' +
+        '<button type="button" class="btn ghost small" data-opencomposition="' + esc(c.contentKey) +
+        '" data-packageindex="' + c.packageIndex + '">' +
+        (c.composition ? 'Ubah komposisi' : 'Atur komposisi') + '</button></div>';
+    }
+    var draft = compositionDraft || { stems: {}, additions: {} };
+    var flowers = state.catalog.flowers || {};
+    var additions = state.catalog.additions || {};
+    var total = Object.keys(draft.stems).reduce(function (sum, k) { return sum + (Number(draft.stems[k]) || 0); }, 0);
+    var html = '<div class="confirm" style="margin-top:6px">' +
+      '<span class="k" id="compositionTotal">Komposisi (' + total + '/' + (c.requiredStems || '?') + ' tangkai)</span>';
+    Object.keys(flowers).forEach(function (k) {
+      html += '<div class="ongkir" style="margin-top:6px"><label for="stem-' + esc(k) + '">' + esc(flowers[k].name || k) + '</label>' +
+        '<input id="stem-' + esc(k) + '" type="number" inputmode="numeric" min="0" step="1" data-stemkey="' + esc(k) +
+        '" value="' + (draft.stems[k] || '') + '"' + (compPending ? ' disabled' : '') + '></div>';
+    });
+    if (Object.keys(additions).length) {
+      html += '<span class="k" style="display:block;margin-top:10px">Tambahan</span>';
+      Object.keys(additions).forEach(function (k) {
+        html += '<div class="ongkir" style="margin-top:6px"><label for="add-' + esc(k) + '">' + esc(additions[k].name || k) + '</label>' +
+          '<input id="add-' + esc(k) + '" type="number" inputmode="numeric" min="0" step="1" data-additionkey="' + esc(k) +
+          '" value="' + (draft.additions[k] || '') + '"' + (compPending ? ' disabled' : '') + '></div>';
+      });
+    }
+    html += '<div class="actions">' +
+      '<button type="button" class="btn" data-submitcomposition="' + esc(c.contentKey) + '" data-packageindex="' + c.packageIndex +
+      '"' + (compPending ? ' disabled' : '') + '>Simpan</button>' +
+      '<button type="button" class="btn ghost" data-cancelcomposition="1"' + (compPending ? ' disabled' : '') + '>Batal</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  function updateCompositionTotal() {
+    var el = document.getElementById('compositionTotal');
+    if (!el || !compositionDraft) return;
+    var total = Object.keys(compositionDraft.stems || {}).reduce(function (sum, k) { return sum + (Number(compositionDraft.stems[k]) || 0); }, 0);
+    el.textContent = 'Komposisi (' + total + '/' + (compositionRequiredStems || '?') + ' tangkai)';
+  }
+
+  function submitCompositionForm(o, lineKey, packageIndex) {
+    var stems = {};
+    Object.keys((compositionDraft && compositionDraft.stems) || {}).forEach(function (k) {
+      var n = Number(compositionDraft.stems[k]);
+      if (isFinite(n) && n > 0) stems[k] = n;
+    });
+    var additions = {};
+    Object.keys((compositionDraft && compositionDraft.additions) || {}).forEach(function (k) {
+      var n = Number(compositionDraft.additions[k]);
+      if (isFinite(n) && n > 0) additions[k] = n;
+    });
+    var key = o.ref + '|composition:' + lineKey;
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          var rows = state.composition[o.ref] || [];
+          var idx = rows.findIndex(function (r) { return r.lineKey === lineKey; });
+          var entry = { lineKey: lineKey, composition: res.composition, updatedAt: '', updatedBy: '' };
+          if (idx !== -1) rows[idx] = entry; else rows.push(entry);
+          state.composition[o.ref] = rows;
+          editingComposition = null;
+          compositionDraft = null;
+          toast('Komposisi tersimpan.');
+          /* A composition change invalidates this same line's checklist tick
+             server-side (see setComposition() in Code.gs) — refetch so the
+             local cache doesn't keep showing a stale, already-ticked box. */
+          google.script.run
+            .withSuccessHandler(function (rows2) {
+              applyServerChecklist(o.ref, o.items, rows2 || []);
+              if (state.selected === o.ref) renderTicket();
+            })
+            .withFailureHandler(function () {})
+            .getChecklist(o.ref);
+        } else {
+          toast(esc((res && res.message) || 'Gagal menyimpan komposisi.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .setComposition({ ref: o.ref, lineKey: lineKey, packageIndex: packageIndex, stems: stems, additions: additions });
+  }
+
   /* SD-03 — read-only activity feed, collapsed like the provenance block
      since it's reference material, not something she needs open by
      default. */
@@ -1934,9 +2374,11 @@
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
+    html += blockerBanner(o);
     html += reviewBlock(o);
     html += paymentBlock(o);
     html += ledgerBlock(o);
+    html += scheduleBlock(o);
 
     var isCancelled = o.payment === 'Cancelled';
     if (isCancelled) {
@@ -1976,14 +2418,16 @@
         (comps.length
           ? '<ul class="make">' + comps.map(function (c) {
               var on = !!compState[c.key];
-              return '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-contentkey="' + esc(c.contentKey) +
+              var li = '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-contentkey="' + esc(c.contentKey) +
                 '" data-fk="comp-' + esc(c.key) +
                 '" aria-pressed="' + on + '"><span class="box" aria-hidden="true">✓</span>' +
                 '<span class="qty">' + c.qty + '×</span><span><span class="name">' + esc(c.name) + '</span>' +
                 c.lines.map(function (l) {
                   return '<span class="spec">' + (l.k ? '<span class="k">' + esc(l.k) + ':</span> ' : '') + esc(l.v) + '</span>';
                 }).join('') +
-                '</span></button></li>';
+                '</span></button>';
+              if (c.isPackage) li += compositionEditorHtml(o, c);
+              return li + '</li>';
             }).join('') + '</ul>'
           : '<p class="why">' + esc(o.itemsRaw || 'Tidak ada rincian item.') + '</p>') + '</div>';
 
@@ -2011,10 +2455,7 @@
 
     /* Delivery — kept visible even when cancelled; it's information, not a
        working control. */
-    var dest = o.locationType === 'bali'
-      ? (o.method === 'self_pickup' ? 'Ambil sendiri di studio' : 'Grab / Gojek') + ' · ' + o.regency
-      : 'Kurir ke luar Bali · ' + o.address + ', ' + o.city + ' ' + o.postal;
-    html += '<div class="block"><h3>Pengantaran</h3><div style="font-size:14.5px">' + esc(dest) + '</div></div>';
+    html += deliveryBlock(o);
 
     var packingRequired = !isCancelled && phase === 'Assembly and packing';
     if (packingRequired) {
@@ -2040,17 +2481,20 @@
 
       var next = PHASES[pIndex + 1];
       var packingBlocksAdvance = packingRequired && !packingComplete(o);
+      var blockerBlocksAdvance = !!o.blocker;
       if (pIndex > 0 || !next) {
         html += '<div class="actions">' +
-          (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending || packingBlocksAdvance ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
+          (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending || packingBlocksAdvance || blockerBlocksAdvance ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
                 : '<span class="why">Pesanan selesai.</span>') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
           (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' :
-            (packingBlocksAdvance ? '<span class="why">Centang dulu semua item pengecekan kemasan di atas.</span>' : '')) +
+            (packingBlocksAdvance ? '<span class="why">Centang dulu semua item pengecekan kemasan di atas.</span>' :
+              (blockerBlocksAdvance ? '<span class="why">Selesaikan kendala di atas dulu sebelum melanjutkan.</span>' : ''))) +
           '</div>';
       }
       html += '</div>';
+      html += blockerActionBlock(o);
     }
 
     /* One story, not three: notes auto-save on blur, and the status line
@@ -2589,6 +3033,69 @@
       saveNotes(o);
       return;
     }
+
+    if (e.target.closest('[data-openscheduleform]')) {
+      var sch0 = o.schedule || {};
+      schedulingForm = { agreedDate: sch0.agreedDate || '', agreedTime: sch0.agreedTime || '', productionDeadline: sch0.productionDeadline || '', rescheduleReason: '' };
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-cancelscheduleform]')) { schedulingForm = false; renderTicket(); return; }
+    if (e.target.closest('[data-submitschedule]')) { submitScheduleForm(o); return; }
+
+    if (e.target.closest('[data-opendeliveryform]')) {
+      var d0 = o.delivery || {};
+      deliveryForm = {
+        recipientName: d0.recipientName || '', recipientContact: d0.recipientContact || '',
+        destinationDetail: d0.destinationDetail || '', courier: d0.courier || '', tracking: d0.tracking || ''
+      };
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-canceldeliveryform]')) { deliveryForm = false; renderTicket(); return; }
+    if (e.target.closest('[data-submitdelivery]')) { submitDeliveryForm(o); return; }
+    if (e.target.closest('[data-markhandoff]')) { markHandoffAction(o); return; }
+    if (e.target.closest('[data-markdeliverycomplete]')) { markDeliveryCompleteAction(o); return; }
+
+    if (e.target.closest('[data-openblockerform]')) { blockerForm = { reason: '', note: '' }; renderTicket(); return; }
+    if (e.target.closest('[data-cancelblockerform]')) { blockerForm = false; renderTicket(); return; }
+    var blockerReasonBtn = e.target.closest('[data-blockerreason]');
+    if (blockerReasonBtn && blockerForm) {
+      var noteInput = document.getElementById('blockerNote');
+      if (noteInput) blockerForm.note = noteInput.value;
+      blockerForm.reason = blockerReasonBtn.dataset.blockerreason;
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-submitblocker]')) { submitBlockerForm(o); return; }
+    if (e.target.closest('[data-resolveblocker]')) { resolveBlockerAction(o); return; }
+
+    var openComp = e.target.closest('[data-opencomposition]');
+    if (openComp) {
+      editingComposition = openComp.dataset.opencomposition;
+      var pkgIdxForOpen = Number(openComp.dataset.packageindex);
+      var pkgSpec = (state.catalog.packages || [])[pkgIdxForOpen];
+      compositionRequiredStems = pkgSpec ? pkgSpec.stems : null;
+      var existingComp = compositionFor(o.ref, editingComposition);
+      compositionDraft = { stems: {}, additions: {} };
+      if (existingComp) {
+        (existingComp.stems || []).forEach(function (s) { compositionDraft.stems[s.key] = s.qty; });
+        (existingComp.additions || []).forEach(function (a) { compositionDraft.additions[a.key] = a.qty; });
+      }
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-cancelcomposition]')) {
+      editingComposition = null;
+      compositionDraft = null;
+      renderTicket();
+      return;
+    }
+    var submitComp = e.target.closest('[data-submitcomposition]');
+    if (submitComp) {
+      submitCompositionForm(o, submitComp.dataset.submitcomposition, Number(submitComp.dataset.packageindex));
+      return;
+    }
   });
 
   elTicket.addEventListener('change', function (e) {
@@ -2599,7 +3106,7 @@
       saveNotes(o);
       return;
     }
-    if (e.target.type !== 'number') return;
+    if (e.target.type !== 'number' || e.target.id.indexOf('ongkir-') !== 0) return;
     var raw = e.target.value.trim();
     var value = raw === '' ? '' : Math.max(0, Number(raw));
     writeField(o.ref, 'shipping', value, { rerender: false });
@@ -2613,6 +3120,17 @@
     }
     if (e.target.matches('.ongkir .amtwrap input')) {
       updateOngkirEcho(e.target.value);
+      return;
+    }
+    var stemInput = e.target.closest('[data-stemkey]');
+    if (stemInput && compositionDraft) {
+      compositionDraft.stems[stemInput.dataset.stemkey] = stemInput.value;
+      updateCompositionTotal();
+      return;
+    }
+    var additionInput = e.target.closest('[data-additionkey]');
+    if (additionInput && compositionDraft) {
+      compositionDraft.additions[additionInput.dataset.additionkey] = additionInput.value;
       return;
     }
   });

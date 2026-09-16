@@ -178,6 +178,9 @@ from Part 6. She will see the same "hasn't verified this app" warning and the sa
 to … → Allow** path. If her email is not yet in `DESK_ALLOWED_EMAILS`, the page will load but show
 "Akun ini tidak punya akses ke Studio Desk" instead of the order queue — double-check Part 5.
 
+Also send her [`STUDIO-DESK-PANDUAN.md`](STUDIO-DESK-PANDUAN.md) — a one-page guide in Indonesian
+written for her, covering how to use the Desk day to day rather than how to install it.
+
 ---
 
 ## Part 8 — Check it works

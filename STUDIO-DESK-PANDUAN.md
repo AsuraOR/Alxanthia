@@ -135,6 +135,9 @@ satu pilihan lain. Pilihan ini diingat di ponsel itu saja.
 - **Pita kuning di atas** yang bilang katalog tidak bisa dimuat berarti nama bunga/paket mungkin
   tampil apa adanya (bukan nama cantiknya) untuk sementara — ini tidak memengaruhi uang atau data
   pesanan sama sekali, keduanya tetap akurat.
+- **Pita kuning yang bilang "Tidak ada koneksi"** berarti ponsel Anda sedang tidak tersambung
+  internet — perubahan yang Anda buat sekarang tidak akan tersimpan sampai koneksinya kembali.
+  Tunggu sampai pita itu hilang sebelum mengetuk tombol yang menyimpan sesuatu.
 - **Kalau sebuah perubahan gagal disimpan**, akan muncul pesan kecil di bawah layar yang menjelaskan
   kenapa, dan tampilannya kembali seperti semula — coba lagi sebentar kemudian. Kalau pesannya bilang
   sheet sedang sibuk, itu normal, tunggu beberapa detik saja.

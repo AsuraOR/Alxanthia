@@ -198,13 +198,22 @@ console.log('--- SUITE 2: the 14-day Delivered window ---');
 }
 
 // ---------------------------------------------------------------------------
-console.log('--- SUITE 3: Cancelled rows are excluded ---');
+console.log('--- SUITE 3 (P5-6): a phase-cancelled row ages out on the same window as Delivered, not instantly ---');
 {
+  // A row cancelled by Work Phase used to be dropped outright, while the
+  // Desk's own Dibatalkan chip matches Payment Status — two different
+  // notions of "cancelled". A phase-cancelled row must now reach the
+  // client (so it can appear under Dibatalkan) unless it's old enough to
+  // age out under the same KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE window
+  // Delivered rows use. fixedNow is 2026-09-12.
   const sheet = makeSheetStub([
-    rowFor({ 'Order Reference': 'C', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' })
+    rowFor({ 'Order Reference': 'C', 'Preferred Date': '2026-09-14', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' }),
+    rowFor({ 'Order Reference': 'E', 'Preferred Date': '2026-08-23', 'Item Data': '[]', 'Order Summary': 'x', 'Work Phase': 'Cancelled', 'Location Type': 'bali' })
   ]);
   const orders = makeSandbox({ sheet }).listOrders();
-  assert.strictEqual(orders.length, 0);
+  const refs = orders.map((o) => o.ref);
+  assert.ok(refs.includes('C'), 'a recently phase-cancelled row must still reach the client');
+  assert.ok(!refs.includes('E'), 'a phase-cancelled row 20 days past its date must age out, same as Delivered');
   console.log('✔ Suite 3 Passed\n');
 }
 
@@ -711,6 +720,31 @@ console.log('--- SUITE 37 (P4-3/P4-4/P4-5): screen-reader noise, lost focus, and
   console.log('✔ Suite 37 Passed\n');
 }
 
+console.log('--- SUITE 38 (P5-1/P5-2/P5-3/P5-4): offline indicator, refresh timestamp, desktop history, copy revert ---');
+{
+  assert.ok(deskHtml.includes("document.body.classList.toggle('offline', !navigator.onLine)") &&
+    deskHtml.includes("if (!navigator.onLine) {\n      toast('Tidak ada koneksi"),
+    'writeField must refuse to even attempt an optimistic write while offline, and render() must reflect the offline state');
+  assert.ok(deskHtml.includes('var ordersFetchedAt = null;') && deskHtml.includes('function relTimeFromNow('),
+    'the last successful order refresh must be tracked and shown as a relative time');
+  assert.ok(deskHtml.includes("window.matchMedia('(max-width: 899px)').matches"),
+    'pushing a history entry for the detail view must be guarded to the mobile breakpoint, where it has any effect');
+  assert.ok(/copyCard\.textContent = 'Tersalin';\s*\/\*[\s\S]*?setTimeout\(function \(\) \{\s*if \(document\.body\.contains\(copyCard\)\) copyCard\.textContent = 'Salin teks kartu';/.test(deskHtml),
+    'the copy-card button must revert its label after a timeout, not stay "Tersalin" indefinitely');
+  console.log('✔ Suite 38 Passed\n');
+}
+
+console.log('--- SUITE 39 (P5-6): the client\'s Cancelled definition matches either signal the sheet can set ---');
+{
+  assert.ok(deskHtml.includes("order.phase !== 'Cancelled' && order.payment !== 'Cancelled'"),
+    'isActive() must also exclude a phase-cancelled order, not just a payment-cancelled one');
+  assert.ok(deskHtml.includes("return order.payment === 'Cancelled' || order.phase === 'Cancelled';"),
+    'the Dibatalkan lane must match either Payment Status or Work Phase being Cancelled');
+  assert.ok(serverSrc.includes("if (order.phase === 'Cancelled' || order.phase === 'Delivered') {"),
+    'includeOrder_ must age phase-cancelled rows out on the same window as Delivered, instead of dropping them outright');
+  console.log('✔ Suite 39 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
@@ -802,6 +836,18 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
   console.log('✔ Suite 13 Passed\n');
 }
 
+console.log('--- SUITE 40 (P5-7): the client prefers the server\'s date over the device clock ---');
+{
+  assert.ok(deskHtml.includes('if (state.catalog && state.catalog.serverToday) return state.catalog.serverToday;'),
+    'todayStr() must prefer catalog.serverToday when the catalogue has loaded');
+  assert.ok(serverSrc.includes('labels.serverToday = todayStr_();'),
+    'getCatalog()/refreshCatalog() must return the server\'s own todayStr_(), computed fresh rather than cached with the rest of the catalogue');
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
+  const catalog = sandbox.getCatalog();
+  assert.strictEqual(catalog.serverToday, '2026-09-12', 'serverToday must reflect the server clock (fixedNow), independent of any device clock');
+  console.log('✔ Suite 40 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 43 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 46 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

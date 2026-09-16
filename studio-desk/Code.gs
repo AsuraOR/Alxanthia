@@ -84,9 +84,14 @@ function listOrders() {
   return orders;
 }
 
+// A row cancelled by Work Phase (set from the sheet) used to be dropped
+// entirely, while the Desk's own Dibatalkan chip matches Payment Status —
+// two different notions of "cancelled" (see P5-6 in
+// STUDIO-DESK-UX-REVIEW.md). Phase-cancelled rows now age out on the same
+// window as Delivered rows instead of vanishing outright, so they reach
+// laneMatch() and can appear under Dibatalkan.
 function includeOrder_(order) {
-  if (order.phase === 'Cancelled') return false;
-  if (order.phase === 'Delivered') {
+  if (order.phase === 'Cancelled' || order.phase === 'Delivered') {
     var daysPast = daysBetween_(order.date, todayStr_());
     if (daysPast > KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE) return false;
   }
@@ -342,6 +347,12 @@ function getCatalog() {
   var hit = cache.get(CATALOG_CACHE_KEY);
   var labels = hit ? JSON.parse(hit) : fetchAndCacheCatalog_();
   labels.bank = bankInfo_();
+  // Computed fresh on every call, never cached with the rest of the
+  // catalogue — the client uses this in place of the device clock for its
+  // "hari ini"/"terlambat" math (see P5-7 in STUDIO-DESK-UX-REVIEW.md), so
+  // it must stay accurate across midnight even while the catalogue is
+  // served from a stale cache hit.
+  labels.serverToday = todayStr_();
   return labels;
 }
 
@@ -350,6 +361,7 @@ function refreshCatalog() {
   CacheService.getScriptCache().remove(CATALOG_CACHE_KEY);
   var labels = fetchAndCacheCatalog_();
   labels.bank = bankInfo_();
+  labels.serverToday = todayStr_();
   return labels;
 }
 

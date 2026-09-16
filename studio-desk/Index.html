@@ -122,6 +122,7 @@
     color: var(--ink-2);
     margin-inline-start: auto;
   }
+  .bar .orders-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
   .bar .refresh {
     font: 600 12px/1 var(--sans);
     padding: 8px 11px;
@@ -786,12 +787,19 @@
     border-radius: 7px;
     font-size: 12.5px;
   }
+
+  /* A visible cue that writes won't go through right now — writeField()
+     itself also refuses the write with a toast, this is the ambient
+     signal. See P5-1 in STUDIO-DESK-UX-REVIEW.md. */
+  body.offline .btn:not(.ghost), body.offline .seg button[data-plan],
+  body.offline .ongkir input, body.offline .notes { opacity: .7; }
 </style>
 
 <div class="shell" id="shell">
   <header class="bar">
     <h1><small>Alxanthia</small>Studio Desk</h1>
     <button type="button" class="refresh" id="refreshBtn" hidden>Muat ulang pesanan</button>
+    <span class="orders-meta" id="ordersMeta"></span>
     <div class="today" id="today"></div>
   </header>
 
@@ -956,7 +964,13 @@
   /* =====================================================================
      Helpers shared with the layout — dates, currency, escaping.
      ===================================================================== */
+  /* Prefer the server's own date (Asia/Makassar) over the device clock — a
+     phone on the wrong timezone would otherwise silently shift every
+     "hari ini"/"terlambat" calculation. Falls back to device time before
+     the catalogue has loaded, or if it loaded degraded. See P5-7 in
+     STUDIO-DESK-UX-REVIEW.md. */
   function todayStr() {
+    if (state.catalog && state.catalog.serverToday) return state.catalog.serverToday;
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
@@ -1014,6 +1028,21 @@
   }
 
   function rupiah(n) { return 'Rp ' + Number(n).toLocaleString('id-ID'); }
+
+  /* When the order list itself was last refreshed — the catalogue already
+     showed this, the orders never did, though they matter far more for her
+     day. See P5-2 in STUDIO-DESK-UX-REVIEW.md. */
+  var ordersFetchedAt = null;
+  function relTimeFromNow(d) {
+    if (!d) return '';
+    var diffSec = Math.round((Date.now() - d.getTime()) / 1000);
+    if (diffSec < 60) return 'baru saja';
+    var diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return diffMin + ' menit lalu';
+    var diffHour = Math.round(diffMin / 60);
+    if (diffHour < 24) return diffHour + ' jam lalu';
+    return Math.round(diffHour / 24) + ' hari lalu';
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -1103,7 +1132,8 @@
   }
 
   function waitingPay(order) {
-    return order.payment !== 'Paid' && order.payment !== 'Cancelled' && order.phase !== 'Delivered';
+    return order.payment !== 'Paid' && order.payment !== 'Cancelled' &&
+      order.phase !== 'Delivered' && order.phase !== 'Cancelled';
   }
 
   function matchesSearch(order, query) {
@@ -1125,16 +1155,21 @@
      their Preferred Date (see includeOrder_ in the server code — this is
      NOT days since it was marked Delivered) before listOrders() drops them
      entirely. */
-  function isActive(order) { return order.phase !== 'Delivered' && order.payment !== 'Cancelled'; }
+  function isActive(order) {
+    return order.phase !== 'Delivered' && order.phase !== 'Cancelled' && order.payment !== 'Cancelled';
+  }
 
   /* Shared by the chip counts and the queue itself, so a lane always means
-     the same thing in both places. */
+     the same thing in both places. "Cancelled" has two possible signals —
+     Payment Status (set from the Desk) or Work Phase (set from the sheet) —
+     see P5-6 in STUDIO-DESK-UX-REVIEW.md; the Dibatalkan lane matches
+     either. */
   function laneMatch(order, laneKey) {
     if (laneKey === 'all') return isActive(order);
     if (laneKey === 'pay') return waitingPay(order);
     if (laneKey === 'late') return isActive(order) && daysUntil(order.date) < 0;
     if (laneKey === 'today') return isActive(order) && daysUntil(order.date) === 0;
-    if (laneKey === 'cancelled') return order.payment === 'Cancelled';
+    if (laneKey === 'cancelled') return order.payment === 'Cancelled' || order.phase === 'Cancelled';
     return laneOf(order) === laneKey;
   }
 
@@ -1227,6 +1262,7 @@
   var elStaleBanner = document.getElementById('staleBanner');
   var elReloadCatalogBtn = document.getElementById('reloadCatalogBtn');
   var elCatalogMeta = document.getElementById('catalogMeta');
+  var elOrdersMeta = document.getElementById('ordersMeta');
   var elQueue = document.getElementById('queue');
   var elTicket = document.getElementById('ticket');
   var elChips = document.getElementById('chips');
@@ -1255,7 +1291,14 @@
     elApp.hidden = false;
     elRefreshBtn.hidden = false;
 
-    if (state.catalogError) {
+    /* Offline takes priority over the catalogue banners — a dropped
+       connection otherwise only surfaced as a red toast after she'd already
+       tapped something. See P5-1 in STUDIO-DESK-UX-REVIEW.md. */
+    document.body.classList.toggle('offline', !navigator.onLine);
+    if (!navigator.onLine) {
+      elStaleBanner.hidden = false;
+      elStaleBanner.textContent = 'Tidak ada koneksi — perubahan belum tersimpan.';
+    } else if (state.catalogError) {
       elStaleBanner.hidden = false;
       elStaleBanner.textContent = 'Katalog tidak bisa dimuat — nama bunga tampil apa adanya. Data pesanan dan semua angka tetap akurat.';
     } else if (state.catalog.stale) {
@@ -1265,6 +1308,9 @@
       elStaleBanner.hidden = true;
     }
     elCatalogMeta.textContent = state.catalog.fetchedAt ? ('katalog dimuat ' + fmtStamp(state.catalog.fetchedAt)) : '';
+    /* The catalogue already showed when it was fetched; the orders — which
+       matter far more for her day — never did. See P5-2. */
+    elOrdersMeta.textContent = ordersFetchedAt ? ('diperbarui ' + relTimeFromNow(ordersFetchedAt)) : '';
 
     reconcileSelection();
 
@@ -1612,8 +1658,18 @@
 
     html += paymentBlock(o);
 
+    var isCancelled = o.payment === 'Cancelled';
+    if (isCancelled) {
+      /* A cancelled order can still show working controls (start, tick
+         items, advance phase) that make no sense once it's cancelled — see
+         P5-5 in STUDIO-DESK-UX-REVIEW.md. Collapse make/finishing/phase
+         behind one line; the reactivation path stays in paymentBlock(). */
+      html += '<div class="block"><p class="why">Pesanan ini dibatalkan — detail pembuatan dan tahap kerja' +
+        ' disembunyikan. Aktifkan kembali di atas untuk melanjutkan.</p></div>';
+    }
+
     /* Verification gate — only while the work has not started. */
-    if (pIndex <= 0) {
+    if (!isCancelled && pIndex <= 0) {
       html += '<div class="block"><h3>Periksa dulu</h3><ul class="checks">' +
         g.auto.map(function (c) {
           return '<li class="' + (c.ok ? 'pass' : 'fail') + '"><span class="mark" aria-hidden="true">' +
@@ -1634,66 +1690,71 @@
         '</span></div></div>';
     }
 
-    /* What to make — one tick per line item. */
-    html += '<div class="block"><h3>Yang dibuat<span class="count" id="compCount">' + doneComps + '/' + comps.length + ' item</span></h3>' +
-      (comps.length
-        ? '<ul class="make">' + comps.map(function (c) {
-            var on = !!compState[c.key];
-            return '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-fk="comp-' + esc(c.key) +
-              '" aria-pressed="' + on + '"><span class="box" aria-hidden="true">✓</span>' +
-              '<span class="qty">' + c.qty + '×</span><span><span class="name">' + esc(c.name) + '</span>' +
-              c.lines.map(function (l) {
-                return '<span class="spec">' + (l.k ? '<span class="k">' + esc(l.k) + ':</span> ' : '') + esc(l.v) + '</span>';
-              }).join('') +
-              '</span></button></li>';
-          }).join('') + '</ul>'
-        : '<p class="why">' + esc(o.itemsRaw || 'Tidak ada rincian item.') + '</p>') + '</div>';
+    if (!isCancelled) {
+      /* What to make — one tick per line item. */
+      html += '<div class="block"><h3>Yang dibuat<span class="count" id="compCount">' + doneComps + '/' + comps.length + ' item</span></h3>' +
+        (comps.length
+          ? '<ul class="make">' + comps.map(function (c) {
+              var on = !!compState[c.key];
+              return '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-fk="comp-' + esc(c.key) +
+                '" aria-pressed="' + on + '"><span class="box" aria-hidden="true">✓</span>' +
+                '<span class="qty">' + c.qty + '×</span><span><span class="name">' + esc(c.name) + '</span>' +
+                c.lines.map(function (l) {
+                  return '<span class="spec">' + (l.k ? '<span class="k">' + esc(l.k) + ':</span> ' : '') + esc(l.v) + '</span>';
+                }).join('') +
+                '</span></button></li>';
+            }).join('') + '</ul>'
+          : '<p class="why">' + esc(o.itemsRaw || 'Tidak ada rincian item.') + '</p>') + '</div>';
 
-    /* Finishing — bouquet colour (when relevant) and the card. Individual
-       flower wrapping is shown on its own item line above. */
-    html += '<div class="block"><h3>Penyelesaian</h3>';
-    if (usesBouquetWrap(o.items)) {
-      var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
-      html += '<div class="pair"><span class="k">Warna kertas buket</span><span class="v">' +
-        '<span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span></div>';
+      /* Finishing — bouquet colour (when relevant) and the card. Individual
+         flower wrapping is shown on its own item line above. */
+      html += '<div class="block"><h3>Penyelesaian</h3>';
+      if (usesBouquetWrap(o.items)) {
+        var w = catalog.wraps[o.wrap] || { name: humanizeKey(o.wrap), swatch: '#999' };
+        html += '<div class="pair"><span class="k">Warna kertas buket</span><span class="v">' +
+          '<span class="swatch" style="background:' + esc(w.swatch) + '"></span>' + esc(w.name) + '</span></div>';
+      }
+
+      if (o.card) {
+        html += '<div style="margin-top:15px"><span class="k" style="display:block;font:600 10.5px/1 var(--sans);' +
+          'letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Kartu ucapan — tulis apa adanya</span>' +
+          '<div class="cardnote"><p>' + esc(o.card.text) + '</p>' +
+          '<div class="meta"><span>Untuk: ' + esc(o.card.to) + '</span><span>Dari: ' + esc(o.card.from) + '</span></div>' +
+          '<div class="actions"><button type="button" class="btn ghost small" data-copycard="1">Salin teks kartu</button></div>' +
+          '</div></div>';
+      } else {
+        html += '<p style="margin:14px 0 0;font-size:13px;color:var(--muted)">Tanpa kartu ucapan.</p>';
+      }
+      html += '</div>';
     }
 
-    if (o.card) {
-      html += '<div style="margin-top:15px"><span class="k" style="display:block;font:600 10.5px/1 var(--sans);' +
-        'letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Kartu ucapan — tulis apa adanya</span>' +
-        '<div class="cardnote"><p>' + esc(o.card.text) + '</p>' +
-        '<div class="meta"><span>Untuk: ' + esc(o.card.to) + '</span><span>Dari: ' + esc(o.card.from) + '</span></div>' +
-        '<div class="actions"><button type="button" class="btn ghost small" data-copycard="1">Salin teks kartu</button></div>' +
-        '</div></div>';
-    } else {
-      html += '<p style="margin:14px 0 0;font-size:13px;color:var(--muted)">Tanpa kartu ucapan.</p>';
-    }
-    html += '</div>';
-
-    /* Delivery */
+    /* Delivery — kept visible even when cancelled; it's information, not a
+       working control. */
     var dest = o.locationType === 'bali'
       ? (o.method === 'self_pickup' ? 'Ambil sendiri di studio' : 'Grab / Gojek') + ' · ' + o.regency
       : 'Kurir ke luar Bali · ' + o.address + ', ' + o.city + ' ' + o.postal;
     html += '<div class="block"><h3>Pengantaran</h3><div style="font-size:14.5px">' + esc(dest) + '</div></div>';
 
-    /* Work phase — all five (Cancelled aside) are hers. */
-    html += '<div class="block"><h3 data-fk="phaseHeading" tabindex="-1">Tahap kerja</h3><div class="phases">' +
-      PHASES.map(function (x, i) {
-        var cls = i < pIndex ? 'done' : (i === pIndex ? 'now' : '');
-        return '<div class="phase ' + cls + '"><span class="line"></span><span class="t">' + esc(x.label) + '</span></div>';
-      }).join('') + '</div>';
+    if (!isCancelled) {
+      /* Work phase — all five (Cancelled aside) are hers. */
+      html += '<div class="block"><h3 data-fk="phaseHeading" tabindex="-1">Tahap kerja</h3><div class="phases">' +
+        PHASES.map(function (x, i) {
+          var cls = i < pIndex ? 'done' : (i === pIndex ? 'now' : '');
+          return '<div class="phase ' + cls + '"><span class="line"></span><span class="t">' + esc(x.label) + '</span></div>';
+        }).join('') + '</div>';
 
-    var next = PHASES[pIndex + 1];
-    if (pIndex > 0 || !next) {
-      html += '<div class="actions">' +
-        (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
-              : '<span class="why">Pesanan selesai.</span>') +
-        (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
-        (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
-        (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' : '') +
-        '</div>';
+      var next = PHASES[pIndex + 1];
+      if (pIndex > 0 || !next) {
+        html += '<div class="actions">' +
+          (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
+                : '<span class="why">Pesanan selesai.</span>') +
+          (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
+          (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
+          (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' : '') +
+          '</div>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
 
     /* One story, not three: notes auto-save on blur, and the status line
        says what's actually true — quiet when saved, honest while saving or
@@ -1841,6 +1902,13 @@
     var onSaved = opts.onSaved;
     var key = ref + '|' + field;
     if (pending[key]) return;
+    /* Never even attempt an optimistic write while offline — better a
+       clear "not saved" message now than a change that quietly never
+       reaches the server. See P5-1 in STUDIO-DESK-UX-REVIEW.md. */
+    if (!navigator.onLine) {
+      toast('Tidak ada koneksi — perubahan belum tersimpan.', true);
+      return;
+    }
     var order = findOrder(ref);
     if (!order) return;
     var previous = order[field];
@@ -1925,7 +1993,7 @@
       .getCatalog();
 
     google.script.run
-      .withSuccessHandler(function (orders) { state.orders = orders; render(); })
+      .withSuccessHandler(function (orders) { state.orders = orders; ordersFetchedAt = new Date(); render(); })
       .withFailureHandler(function (err) { state.ordersError = String((err && err.message) || err); render(); })
       .listOrders();
   }
@@ -1936,6 +2004,7 @@
       .withSuccessHandler(function (orders) {
         elRefreshBtn.disabled = false;
         state.orders = orders;
+        ordersFetchedAt = new Date();
         render();
       })
       .withFailureHandler(function (err) {
@@ -1976,6 +2045,9 @@
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible' && state.orders !== null) reloadOrders();
   });
+
+  window.addEventListener('online', function () { if (state.orders !== null) render(); });
+  window.addEventListener('offline', function () { if (state.orders !== null) render(); });
 
   elChips.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-lane]');
@@ -2035,10 +2107,15 @@
     state.selected = b.dataset.ref;
     confirming = false;
     document.body.classList.add('detail');
-    try {
-      history.pushState({ desk: 'detail', ref: state.selected }, '');
-      historyPushed = true;
-    } catch (e) { historyPushed = false; }
+    /* body.detail only changes anything below the 900px master/detail
+       breakpoint — above it, pushing history on every card tap left a Back
+       press that visibly did nothing. See P5-3 in STUDIO-DESK-UX-REVIEW.md. */
+    if (window.matchMedia('(max-width: 899px)').matches) {
+      try {
+        history.pushState({ desk: 'detail', ref: state.selected }, '');
+        historyPushed = true;
+      } catch (e) { historyPushed = false; }
+    }
     renderQueue();
     renderTicket();
     elTicket.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2122,6 +2199,12 @@
     if (copyCard && o.card) {
       copyText(o.card.text + '\n— ' + o.card.from);
       copyCard.textContent = 'Tersalin';
+      /* Revert after a couple of seconds, matching the toast's own timing —
+         otherwise the button can keep reading "Tersalin" long after she's
+         scrolled past this order. See P5-4 in STUDIO-DESK-UX-REVIEW.md. */
+      setTimeout(function () {
+        if (document.body.contains(copyCard)) copyCard.textContent = 'Salin teks kartu';
+      }, 2600);
       return;
     }
 

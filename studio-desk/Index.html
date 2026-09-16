@@ -887,13 +887,18 @@
     catalog: null,
     ordersError: null,
     catalogError: null,
-    per: {}
+    per: {},
+    checklist: {}, // ref -> array of server checklist rows (SD-02), loaded per ticket
+    activity: {} // ref -> array of server activity rows (SD-03), loaded per ticket
   };
   var confirming = false;
   var pending = {}; // "ref|field" -> true while a write is in flight
   var fieldErrors = {}; // "ref|field" -> Indonesian error message
   var noteDrafts = {}; // ref -> unsaved textarea value, persisted so a trip to WhatsApp can't lose it
   var refocus = null;
+  var extrasLoadedFor = null; // ref whose Desk Ops extras (checklist/activity) have been fetched
+  var recordingPayment = false; // false | { type: 'receipt'|'refund'|'correction' } — the inline Catat pembayaran form
+  var paymentIdempotencyKey = null; // minted once per open attempt, reused across retries of the same submit
 
   var PER_KEY = 'alxanthia-desk-per-v1';
   try {
@@ -927,6 +932,153 @@
       lastSeenAt = o.submitted;
       try { localStorage.setItem(LAST_SEEN_KEY, lastSeenAt); } catch (e) {}
     }
+  }
+
+  /* SD-02 — the final packing checklist, distinct from the per-item make
+     list above it. Required (client-side; ground rule 5 — a convenience,
+     not the real guard) before advancing out of Dirangkai dan dikemas. */
+  var PACKING_ITEMS = [
+    { key: 'items', label: 'Jumlah dan jenis barang sudah sesuai pesanan' },
+    { key: 'wrap', label: 'Pembungkus/kemasan sudah benar' },
+    { key: 'card', label: 'Kartu ucapan sudah dicek', cardOnly: true },
+    { key: 'secure', label: 'Paket sudah dikemas rapat dan aman' }
+  ];
+
+  function packingItemsFor(o) {
+    return PACKING_ITEMS.filter(function (item) { return !item.cardOnly || o.card; });
+  }
+
+  function packingComplete(o) {
+    var packingState = per(o.ref).packing || {};
+    return packingItemsFor(o).every(function (item) { return !!packingState[item.key]; });
+  }
+
+  /* Server Desk Checklist rows are the saved truth; local per(ref).comps/
+     ticks/packing is a cache that renders instantly and gets corrected the
+     moment the server's own state is known — see SD-02 in
+     STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md. Reordering items keeps their
+     checks (matched by content, not position); editing an item's content
+     drops only that item's own check. */
+  function applyServerChecklist(ref, items, rows) {
+    var contentKeys = itemChecklistKeys(items);
+    var byKey = {};
+    rows.forEach(function (r) { byKey[r.key] = r; });
+    var p = per(ref);
+    p.comps = p.comps || {};
+    p.ticks = p.ticks || {};
+    p.packing = p.packing || {};
+    contentKeys.forEach(function (ck, i) {
+      var row = byKey[ck];
+      if (row) p.comps['i' + i] = row.completed;
+    });
+    var gateRow = byKey['gate:card-read'];
+    if (gateRow) p.ticks.card = gateRow.completed;
+    PACKING_ITEMS.forEach(function (item) {
+      var row = byKey['packing:' + item.key];
+      if (row) p.packing[item.key] = row.completed;
+    });
+    savePer();
+  }
+
+  /* Fires once per ticket open, not on every re-render — renderTicket()
+     calls this and it no-ops if extras for this ref are already loaded or
+     loading. */
+  function loadTicketExtras(o) {
+    if (extrasLoadedFor === o.ref) return;
+    extrasLoadedFor = o.ref;
+    google.script.run
+      .withSuccessHandler(function (rows) {
+        applyServerChecklist(o.ref, o.items, rows || []);
+        if (state.selected === o.ref) renderTicket();
+      })
+      .withFailureHandler(function () { /* keep the local cache; try again next open */ })
+      .getChecklist(o.ref);
+    google.script.run
+      .withSuccessHandler(function (rows) {
+        state.activity[o.ref] = rows || [];
+        if (state.selected === o.ref) renderTicket();
+      })
+      .withFailureHandler(function () {})
+      .getActivity(o.ref);
+  }
+
+  /* Pushes one checklist toggle to the server in the background — the DOM
+     is already updated optimistically by the caller (P1-4 in-place
+     toggle); a failure here only shows a toast, it never reverts the tap. */
+  function syncChecklistItem(ref, key, contentVersion, completed) {
+    google.script.run
+      .withSuccessHandler(function () {})
+      .withFailureHandler(function (err) {
+        toast('Centang belum tersimpan ke server: ' + esc(String((err && err.message) || err)), true);
+      })
+      .setChecklistItem({ ref: ref, key: key, contentVersion: contentVersion, completed: completed });
+  }
+
+  /* SD-04 — idempotent on the server; a double tap or a retry just returns
+     the existing reviewed record. */
+  function markReviewedAction(o) {
+    var key = o.ref + '|review';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.reviewedAt = res.reviewedAt;
+          o.reviewedBy = res.reviewedBy;
+          toast('Pesanan ditandai sudah ditinjau.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal menandai ditinjau.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .markReviewed({ ref: o.ref });
+  }
+
+  /* SD-01 — idempotencyKey is minted once when the form opens (see
+     data-openledgerform) and deliberately NOT cleared on failure, so
+     tapping Simpan again after a lost response or a timeout retries the
+     exact same command instead of minting a fresh one — the server then
+     recognises the replay and records the receipt once. */
+  function submitLedgerRecord(o) {
+    var input = document.getElementById('ledgeramount');
+    var amount = input ? Number(input.value) : NaN;
+    if (!isFinite(amount) || amount <= 0) {
+      toast('Masukkan jumlah yang benar.', true);
+      return;
+    }
+    if (recordingPayment) recordingPayment.amount = input.value;
+    var key = o.ref + '|ledger';
+    if (pending[key]) return;
+    pending[key] = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        delete pending[key];
+        if (res && res.ok) {
+          o.received = res.summary.received;
+          o.hasLedgerEvents = res.summary.hasLedgerEvents;
+          o.paymentReconciliation = 'known';
+          recordingPayment = false;
+          paymentIdempotencyKey = null;
+          toast('Catatan pembayaran tersimpan.');
+        } else {
+          toast(esc((res && res.message) || 'Gagal menyimpan catatan pembayaran.'), true);
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        delete pending[key];
+        toast(esc(String((err && err.message) || err)), true);
+        render();
+      })
+      .recordPayment({ ref: o.ref, type: recordingPayment.type, amount: amount, idempotencyKey: paymentIdempotencyKey });
   }
 
   /* Manual theme override — the stylesheet already fully supports
@@ -1072,22 +1224,51 @@
   /* Mirrors buildTicketLines_ in the Apps Script server code exactly — the
      client can't call back into that file synchronously, so this is a
      deliberate duplicate. Keep both in sync if either changes. */
+  /* A stable identity for a line item's own content, independent of its
+     position — mirrors itemContentKey_/itemChecklistKeys_ in Code.gs
+     exactly; keep both in sync if either changes. Used only for SD-02
+     checklist persistence, never for the positional c.key the DOM/local
+     bench state already uses. See STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md. */
+  function canonicalJson(value) {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+    var keys = Object.keys(value).sort();
+    return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + canonicalJson(value[k]); }).join(',') + '}';
+  }
+
+  function itemContentKey(item) {
+    var sig = canonicalJson(item || {});
+    var hash = 5381;
+    for (var i = 0; i < sig.length; i += 1) hash = ((hash * 33) ^ sig.charCodeAt(i)) >>> 0;
+    return hash.toString(36);
+  }
+
+  function itemChecklistKeys(items) {
+    var seen = {};
+    return (items || []).map(function (item) {
+      var base = itemContentKey(item);
+      var n = seen[base] = (seen[base] || 0) + 1;
+      return 'item:' + base + '#' + n;
+    });
+  }
+
   function buildList(order, catalog) {
+    var contentKeys = itemChecklistKeys(order.items);
     return (order.items || []).map(function (item, i) {
       if (item.type === 'stem') {
         var flower = resolveLabel(catalog.flowers, item.id);
         var stemLines = flower.spec ? [{ v: flower.spec }] : [];
         stemLines.push({ k: 'bungkus', v: item.wrapped === true ? 'Dengan kertas pembungkus' : 'Tanpa kertas pembungkus' });
-        return { key: 'i' + i, qty: item.qty, name: flower.name, lines: stemLines };
+        return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: flower.name, lines: stemLines };
       }
       if (item.type === 'pot') {
         var pot = resolveLabel(catalog.pots, item.id);
-        return { key: 'i' + i, qty: item.qty, name: pot.name, lines: pot.spec ? [{ v: pot.spec }] : [] };
+        return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: pot.name, lines: pot.spec ? [{ v: pot.spec }] : [] };
       }
       if (item.type === 'package') {
         var pkg = (catalog.packages || [])[Number(item.id)];
         var stems = pkg ? pkg.stems : '?';
-        return { key: 'i' + i, qty: item.qty, name: 'Paket ' + stems + ' tangkai', lines: [{ v: 'pilihan bunga studio' }] };
+        return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: 'Paket ' + stems + ' tangkai', lines: [{ v: 'pilihan bunga studio' }] };
       }
       if (item.type === 'custom') {
         var each = [], total = [];
@@ -1104,9 +1285,9 @@
         });
         var lines = [{ k: 'per rangkaian', v: each.join(' · ') }];
         if (item.qty > 1) lines.push({ k: 'total', v: total.join(' · ') });
-        return { key: 'i' + i, qty: item.qty, name: 'Rangkaian custom', lines: lines };
+        return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty, name: 'Rangkaian custom', lines: lines };
       }
-      return { key: 'i' + i, qty: item.qty || 1, name: 'Item tidak dikenal', lines: [] };
+      return { key: 'i' + i, contentKey: contentKeys[i], qty: item.qty || 1, name: 'Item tidak dikenal', lines: [] };
     });
   }
 
@@ -1477,6 +1658,83 @@
     }
   }
 
+  /* SD-04 — explicit review completion. Opening the ticket never marks it
+     reviewed; only this tap does. */
+  function reviewBlock(o) {
+    if (o.reviewedAt) {
+      return '<div class="block"><h3>Tinjau pesanan</h3>' +
+        '<p class="why">Sudah ditinjau ' + esc(fmtStamp(o.reviewedAt)) +
+        (o.reviewedBy ? ' oleh ' + esc(o.reviewedBy) : '') + '.</p></div>';
+    }
+    var reviewPending = isPending(o.ref, 'review');
+    return '<div class="block"><h3>Tinjau pesanan</h3>' +
+      '<p class="why">Periksa barang, tanggal pesanan, dan cara pengantaran sebelum mulai — lalu tandai sudah ditinjau.</p>' +
+      '<div class="actions"><button type="button" class="btn" data-markreviewed="1"' +
+      (reviewPending ? ' disabled' : '') + '>Tandai sudah ditinjau</button></div></div>';
+  }
+
+  /* SD-01 — the verified payment ledger, alongside (not replacing) the
+     existing Payment Status workflow above. "Diterima" only ever reflects
+     recorded ledger events, never the status string. */
+  function ledgerBlock(o) {
+    var total = billed(o);
+    var received = o.received || 0;
+    var outstanding = total === null ? null : (total - received);
+    var html = '<div class="block"><h3>Pembayaran terverifikasi</h3>' +
+      '<div class="breakdown"><span>Diterima ' + esc(rupiah(received)) + '</span>';
+    if (outstanding !== null) {
+      if (outstanding > 0) html += '<span>Sisa ' + esc(rupiah(outstanding)) + '</span>';
+      else if (outstanding < 0) html += '<span>Kredit ' + esc(rupiah(-outstanding)) + '</span>';
+      else html += '<span>Lunas terverifikasi</span>';
+    }
+    html += '</div>';
+    if (o.paymentReconciliation === 'legacy_unreconciled') {
+      html += '<p class="why">Riwayat sebelum fitur ini dicatat belum ada di sini — status pembayaran di atas tetap berlaku ' +
+        'sampai direkonsiliasi manual oleh pemilik studio.</p>';
+    }
+    html += ledgerFormHtml(o);
+    return html + '</div>';
+  }
+
+  function ledgerFormHtml(o) {
+    if (!recordingPayment) {
+      return '<div class="actions"><button type="button" class="btn ghost small" data-openledgerform="1">Catat pembayaran</button></div>';
+    }
+    var ledgerPending = isPending(o.ref, 'ledger');
+    var typeLabels = { receipt: 'Terima', refund: 'Kembalikan', correction: 'Koreksi' };
+    return '<div class="confirm">' +
+      '<span class="k">Jenis</span>' +
+      '<div class="seg" role="group" aria-label="Jenis catatan pembayaran">' +
+      ['receipt', 'refund', 'correction'].map(function (t) {
+        return '<button type="button" data-ledgertype="' + t + '" aria-pressed="' + (recordingPayment.type === t) +
+          '"' + (ledgerPending ? ' disabled' : '') + '>' + typeLabels[t] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="ongkir" style="margin-top:10px"><label for="ledgeramount">Jumlah</label>' +
+      '<span class="amtwrap"><span class="prefix" aria-hidden="true">Rp</span>' +
+      '<input id="ledgeramount" type="number" inputmode="numeric" min="0" step="1000" value="' +
+      esc(recordingPayment.amount || '') + '"' + (ledgerPending ? ' disabled' : '') + '></span></div>' +
+      '<div class="actions">' +
+      '<button type="button" class="btn" data-submitledger="1"' + (ledgerPending ? ' disabled' : '') + '>Simpan</button>' +
+      '<button type="button" class="btn ghost" data-cancelledgerform="1"' + (ledgerPending ? ' disabled' : '') + '>Batal</button>' +
+      '</div></div>';
+  }
+
+  /* SD-03 — read-only activity feed, collapsed like the provenance block
+     since it's reference material, not something she needs open by
+     default. */
+  function riwayatBlock(o) {
+    var rows = state.activity[o.ref] || [];
+    if (!rows.length) return '';
+    return '<details class="provenance"><summary>Riwayat (' + rows.length + ')</summary>' +
+      rows.map(function (r) { return '<span>' + esc(fmtStamp(r.at)) + ' — ' + esc(r.detail) + '</span>'; }).join('') +
+      '</details>';
+  }
+
+  function generateIdempotencyKey() {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    return 'idem-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
   /* The most destructive action in the Desk, on its own at the bottom of
      the ticket instead of sharing an .actions row with routine payment
      buttons — see P3-6 in STUDIO-DESK-UX-REVIEW.md. The confirm step
@@ -1628,6 +1886,7 @@
     if (!o) { elTicket.innerHTML = '<div class="block"><p class="why">Pilih pesanan dari daftar.</p></div>'; return; }
     var catalog = state.catalog;
     markSeen(o);
+    loadTicketExtras(o);
 
     var p = per(o.ref);
     var g = gate(o, catalog);
@@ -1656,7 +1915,9 @@
           '<span class="rel">' + esc(relDate(o.date)) + '</span></div>' +
       '</div>';
 
+    html += reviewBlock(o);
     html += paymentBlock(o);
+    html += ledgerBlock(o);
 
     var isCancelled = o.payment === 'Cancelled';
     if (isCancelled) {
@@ -1696,7 +1957,8 @@
         (comps.length
           ? '<ul class="make">' + comps.map(function (c) {
               var on = !!compState[c.key];
-              return '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-fk="comp-' + esc(c.key) +
+              return '<li><button type="button" class="comp" data-comp="' + esc(c.key) + '" data-contentkey="' + esc(c.contentKey) +
+                '" data-fk="comp-' + esc(c.key) +
                 '" aria-pressed="' + on + '"><span class="box" aria-hidden="true">✓</span>' +
                 '<span class="qty">' + c.qty + '×</span><span><span class="name">' + esc(c.name) + '</span>' +
                 c.lines.map(function (l) {
@@ -1735,6 +1997,20 @@
       : 'Kurir ke luar Bali · ' + o.address + ', ' + o.city + ' ' + o.postal;
     html += '<div class="block"><h3>Pengantaran</h3><div style="font-size:14.5px">' + esc(dest) + '</div></div>';
 
+    var packingRequired = !isCancelled && phase === 'Assembly and packing';
+    if (packingRequired) {
+      /* SD-02: a distinct final packing checklist, separate from the
+         per-item make list — required before Lanjut out of this phase. */
+      var packingState = per(o.ref).packing || {};
+      html += '<div class="block"><h3 data-fk="packingHeading" tabindex="-1">Cek sebelum siap kirim</h3>' +
+        packingItemsFor(o).map(function (item) {
+          var on = !!packingState[item.key];
+          return '<button type="button" class="tick" data-packing="' + esc(item.key) + '" data-fk="packing-' + esc(item.key) +
+            '" aria-pressed="' + on + '"><span class="box" aria-hidden="true">✓</span>' +
+            '<span class="label">' + esc(item.label) + '</span></button>';
+        }).join('') + '</div>';
+    }
+
     if (!isCancelled) {
       /* Work phase — all five (Cancelled aside) are hers. */
       html += '<div class="block"><h3 data-fk="phaseHeading" tabindex="-1">Tahap kerja</h3><div class="phases">' +
@@ -1744,13 +2020,15 @@
         }).join('') + '</div>';
 
       var next = PHASES[pIndex + 1];
+      var packingBlocksAdvance = packingRequired && !packingComplete(o);
       if (pIndex > 0 || !next) {
         html += '<div class="actions">' +
-          (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
+          (next ? '<button type="button" class="btn" data-advance="1"' + (phasePending || packingBlocksAdvance ? ' disabled' : '') + '>Lanjut: ' + esc(next.label) + '</button>'
                 : '<span class="why">Pesanan selesai.</span>') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-retreat="1"' + (phasePending ? ' disabled' : '') + '>Kembali</button>' : '') +
           (pIndex > 0 ? '<button type="button" class="btn ghost" data-sendphase="1">Kirim pesan</button>' : '') +
-          (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' : '') +
+          (phaseErr && pIndex > 0 ? '<span class="why err">' + esc(phaseErr) + '</span>' :
+            (packingBlocksAdvance ? '<span class="why">Centang dulu semua item pengecekan kemasan di atas.</span>' : '')) +
           '</div>';
       }
       html += '</div>';
@@ -1777,6 +2055,7 @@
         '<button type="button" class="btn ghost small" data-retrynotes="1">Coba lagi</button></div>' : '') +
       '</div>' +
       cancelBlock(o) +
+      riwayatBlock(o) +
       '<details class="provenance"><summary>Info teknis</summary>' +
       '<span>Orders · baris ' + o.row + '</span>' +
       '<span>Desk menulis: Payment Plan · Payment Status · Shipping Fee · Work Phase · Internal Notes</span>' +
@@ -1835,6 +2114,28 @@
       why.textContent = phaseErr || (g.ready
         ? (g.allOk ? '' : 'Tanggalnya sudah lewat — kabari pembeli dulu kalau perlu.')
         : (g.autoOk ? 'Centang baris di atas dulu.' : 'Belum bisa dimulai — lihat tanda merah di atas.'));
+    }
+  }
+
+  /* The phase block's own Lanjut button (distinct from the gate's Mulai
+     kerjakan above — only one or the other is ever in the DOM at a time,
+     since the gate only renders at pIndex <= 0 and this block's actions
+     only render at pIndex > 0). Gated on the packing checklist while
+     leaving Dirangkai dan dikemas. See SD-02. */
+  function updatePhaseAdvanceButtonState() {
+    var o = findOrder(state.selected);
+    if (!o) return;
+    var btn = elTicket.querySelector('[data-advance]');
+    if (!btn) return;
+    var phasePending = isPending(o.ref, 'phase');
+    var packingRequired = o.phase === 'Assembly and packing';
+    var packingBlocksAdvance = packingRequired && !packingComplete(o);
+    btn.disabled = phasePending || packingBlocksAdvance;
+    var why = btn.nextElementSibling;
+    if (why && why.classList.contains('why')) {
+      var phaseErr = fieldErrors[o.ref + '|phase'];
+      why.classList.toggle('err', !!phaseErr);
+      why.textContent = phaseErr || (packingBlocksAdvance ? 'Centang dulu semua item pengecekan kemasan di atas.' : '');
     }
   }
 
@@ -2139,6 +2440,7 @@
       savePer();
       tick.setAttribute('aria-pressed', String(tickOn));
       updateAdvanceButtonState();
+      if (tick.dataset.tick === 'card') syncChecklistItem(o.ref, 'gate:card-read', 'v1', tickOn);
       return;
     }
 
@@ -2150,8 +2452,45 @@
       savePer();
       comp.setAttribute('aria-pressed', String(compOn));
       updateCompCount();
+      syncChecklistItem(o.ref, comp.dataset.contentkey, comp.dataset.contentkey, compOn);
       return;
     }
+
+    var packing = e.target.closest('[data-packing]');
+    if (packing) {
+      p.packing = p.packing || {};
+      var packingOn = !p.packing[packing.dataset.packing];
+      p.packing[packing.dataset.packing] = packingOn;
+      savePer();
+      packing.setAttribute('aria-pressed', String(packingOn));
+      updatePhaseAdvanceButtonState();
+      syncChecklistItem(o.ref, 'packing:' + packing.dataset.packing, 'v1', packingOn);
+      return;
+    }
+
+    if (e.target.closest('[data-markreviewed]')) { markReviewedAction(o); return; }
+
+    if (e.target.closest('[data-openledgerform]')) {
+      recordingPayment = { type: 'receipt', amount: '' };
+      paymentIdempotencyKey = generateIdempotencyKey();
+      renderTicket();
+      return;
+    }
+    var ledgerTypeBtn = e.target.closest('[data-ledgertype]');
+    if (ledgerTypeBtn && recordingPayment) {
+      var amountInput = document.getElementById('ledgeramount');
+      if (amountInput) recordingPayment.amount = amountInput.value;
+      recordingPayment.type = ledgerTypeBtn.dataset.ledgertype;
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-cancelledgerform]')) {
+      recordingPayment = false;
+      paymentIdempotencyKey = null;
+      renderTicket();
+      return;
+    }
+    if (e.target.closest('[data-submitledger]')) { submitLedgerRecord(o); return; }
 
     var payBtn = e.target.closest('[data-pay]');
     if (payBtn) {

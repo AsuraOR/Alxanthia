@@ -917,6 +917,48 @@ console.log('--- SUITE 40 (P5-7): the client prefers the server\'s date over the
   console.log('✔ Suite 40 Passed\n');
 }
 
+console.log('--- SUITE 50 (SD-01..SD-04 client): review, ledger, checklist sync, and Riwayat are wired into the ticket ---');
+{
+  assert.ok(deskHtml.includes('function reviewBlock(o)') && deskHtml.includes('data-markreviewed="1"'),
+    'a Tinjau pesanan block with an explicit mark-reviewed action must exist');
+  assert.ok(deskHtml.includes('function markReviewedAction(o)') && deskHtml.includes('.markReviewed({ ref: o.ref });'),
+    'marking reviewed must call the server markReviewed command');
+
+  assert.ok(deskHtml.includes('function ledgerBlock(o)') && deskHtml.includes('<span>Diterima '),
+    'a ledger block showing the verified received amount must exist, separate from the Payment Status workflow');
+  assert.ok(deskHtml.includes("o.paymentReconciliation === 'legacy_unreconciled'"),
+    'a legacy-unreconciled order must be flagged in the ledger block, not silently treated as freshly unpaid');
+  assert.ok(deskHtml.includes('function generateIdempotencyKey()') &&
+    deskHtml.includes('paymentIdempotencyKey = generateIdempotencyKey();'),
+    'opening the Catat pembayaran form must mint an idempotency key');
+  assert.ok(/withFailureHandler\(function \(err\) \{\s*delete pending\[key\];\s*toast\(esc\(String\(\(err && err\.message\) \|\| err\)\), true\);\s*render\(\);\s*\}\)\s*\.recordPayment/.test(deskHtml),
+    'a failed recordPayment call must not clear paymentIdempotencyKey, so a retry reuses the same key');
+  assert.ok(!/paymentIdempotencyKey = null;[\s\S]{0,40}withFailureHandler/.test(deskHtml),
+    'the idempotency key must survive a failure, not be cleared before the retry path');
+
+  assert.ok(deskHtml.includes('function loadTicketExtras(o)') && deskHtml.includes('.getChecklist(o.ref);') && deskHtml.includes('.getActivity(o.ref);'),
+    'opening a ticket must fetch its server checklist and activity extras');
+  assert.ok(deskHtml.includes('function applyServerChecklist(') && deskHtml.includes('extrasLoadedFor === o.ref'),
+    'extras must load once per ticket open, and the server checklist must be merged in as the authoritative state');
+  assert.ok(deskHtml.includes("syncChecklistItem(o.ref, comp.dataset.contentkey"),
+    'ticking a make-list item must also push its state to the server, keyed by content rather than position');
+  assert.ok(deskHtml.includes("data-contentkey=\"' + esc(c.contentKey)"),
+    'each make-list item must carry its content-derived checklist key in the DOM');
+
+  assert.ok(deskHtml.includes('var PACKING_ITEMS =') && deskHtml.includes('function packingComplete(o)'),
+    'a distinct final packing checklist must exist');
+  assert.ok(deskHtml.includes('var packingBlocksAdvance = packingRequired && !packingComplete(o);') &&
+    deskHtml.includes("phasePending || packingBlocksAdvance ? ' disabled' : ''"),
+    'the Lanjut button leaving Dirangkai dan dikemas must be blocked until the packing checklist is complete');
+
+  assert.ok(deskHtml.includes('function riwayatBlock(o)') && deskHtml.includes('state.activity[o.ref]'),
+    'a read-only Riwayat panel sourced from the server activity log must exist');
+
+  assert.ok(deskHtml.includes('function itemContentKey(item)') && deskHtml.includes('function itemChecklistKeys(items)'),
+    'the client must mirror the server\'s itemContentKey_/itemChecklistKeys_ exactly for checklist keys to match');
+  console.log('✔ Suite 50 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 5. Desk Ops suites (SD-01..SD-04 in STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md)
 //    — the additive payment ledger, durable checklist, activity log, and
@@ -1136,5 +1178,5 @@ console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and repor
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 49 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 50 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

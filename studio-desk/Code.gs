@@ -10,15 +10,33 @@
 // ============================================================================
 var SHEET_NAME = 'Orders';
 var TIMEZONE = 'Asia/Makassar'; // must match CONFIGURE-SUBMISSION-ENDPOINT.md
+// SD-12: the size of the contiguous "recent window" listOrders() always
+// reads in one range call — this is a performance knob, not the active-order
+// cutoff. An active order's row can be far older than this window and is
+// still always included; see the Work Phase scan in listOrders() below.
 var MAX_ROWS = 500;
-// Counted from Preferred Date (when the customer wanted the order), NOT from
-// the date the order was actually marked Delivered — the Desk does not
-// record a delivery timestamp. A finished order can therefore drop out of
-// view immediately (if its Preferred Date was already long past when it was
-// marked Delivered) or linger past this window (if Delivered ahead of a
-// future Preferred Date). See Troubleshooting: "A finished order disappears
-// from the queue sooner than expected".
+// A soft safety cap on the combined payload listOrders() returns (active
+// orders + the recent window's retained Delivered/Cancelled rows). Active
+// orders are never dropped to stay under it — see listOrders(). A florist
+// running one desk should never realistically approach this; it exists so a
+// data anomaly can't make a single request read/return an unbounded amount.
+var MAX_LISTED_ORDERS = 2000;
+// Counted from the order's own completion timestamp when one is on record —
+// Delivered orders recorded through markDeliveryComplete() (SD-10) carry a
+// Desk Delivery completedAt; see includeOrder_(). For a Delivered order with
+// no such record (legacy, or completed before SD-10 existed) and for every
+// Cancelled order (which has no completion-timestamp concept at all), this
+// still counts from Preferred Date, which can make a finished order drop out
+// of view immediately or linger past this window. See Troubleshooting: "A
+// finished order disappears from the queue sooner than expected". Either
+// way, ageing out of listOrders() only affects the default view — the order
+// itself is never deleted and stays reachable through searchArchive() (SD-12).
 var KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE = 14;
+// SD-12: searchArchive() page size and the minimum query length, both to
+// keep a single request small and to stop a one/two-character query (like a
+// single digit) from effectively dumping the whole sheet in one page.
+var ARCHIVE_PAGE_SIZE = 25;
+var ARCHIVE_MIN_QUERY_LENGTH = 2;
 
 var SITE_CONTENT_URL = 'https://alxanthia.com/site-content.json';
 var CATALOG_CACHE_KEY = 'desk_catalog_v1';
@@ -126,16 +144,57 @@ function checkAccess_() {
 // ============================================================================
 // listOrders()
 // ============================================================================
+// SD-12: an active order (anything not Delivered/Cancelled) must never be
+// hidden just because its row is older than the recent window below — a
+// materials wait or a blocker can leave an order sitting for a long time.
+// So this always scans the whole sheet's Work Phase column first (cheap:
+// one column, one range read) to find every active row regardless of
+// position, then reads the contiguous MAX_ROWS-sized recent window in one
+// range call for everything else (Delivered/Cancelled retention below, plus
+// active rows that already fall inside it). Any active row outside that
+// window — normally none, occasionally a straggler — is fetched with its
+// own single-row read; there are never more than a handful of these in
+// practice. A finished order that ages out of this list is never deleted —
+// see searchArchive() for full-history search.
 function listOrders() {
   checkAccess_();
   var sheet = openSheet_();
   var headers = readHeaders_(sheet);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
+  var numDataRows = lastRow - 1;
 
-  var startRow = Math.max(2, lastRow - MAX_ROWS + 1);
-  var numRows = lastRow - startRow + 1;
-  var values = sheet.getRange(startRow, 1, numRows, headers.length).getValues();
+  var phaseCol = headers.map['Work Phase'];
+  var activeRows = [];
+  if (phaseCol !== undefined) {
+    var phaseValues = sheet.getRange(2, phaseCol + 1, numDataRows, 1).getValues();
+    for (var i = 0; i < phaseValues.length; i += 1) {
+      var ph = String(phaseValues[i][0]);
+      if (ph !== 'Delivered' && ph !== 'Cancelled') activeRows.push(2 + i);
+    }
+  }
+
+  var windowStart = Math.max(2, lastRow - MAX_ROWS + 1);
+  var rowSet = {};
+  activeRows.forEach(function (r) { rowSet[r] = true; });
+  for (var w = windowStart; w <= lastRow; w += 1) rowSet[w] = true;
+  var allRows = Object.keys(rowSet).map(Number).sort(function (a, b) { return a - b; });
+
+  if (allRows.length > MAX_LISTED_ORDERS) {
+    var activeSet = {};
+    activeRows.forEach(function (r) { activeSet[r] = true; });
+    var kept = allRows.filter(function (r) { return activeSet[r]; });
+    var recentOnly = allRows.filter(function (r) { return !activeSet[r]; });
+    recentOnly = recentOnly.slice(Math.max(0, recentOnly.length - Math.max(0, MAX_LISTED_ORDERS - kept.length)));
+    allRows = kept.concat(recentOnly).sort(function (a, b) { return a - b; });
+  }
+
+  var rowValuesByRow = {};
+  var windowValues = sheet.getRange(windowStart, 1, lastRow - windowStart + 1, headers.length).getValues();
+  for (var v = 0; v < windowValues.length; v += 1) rowValuesByRow[windowStart + v] = windowValues[v];
+  allRows.forEach(function (r) {
+    if (!rowValuesByRow[r]) rowValuesByRow[r] = sheet.getRange(r, 1, 1, headers.length).getValues()[0];
+  });
 
   var ledgerSummary = getLedgerSummaryMap_();
   var reviewedMap = getReviewedMap_();
@@ -144,13 +203,13 @@ function listOrders() {
   var blockerMap = getBlockerMap_();
 
   var orders = [];
-  for (var i = 0; i < values.length; i += 1) {
-    var order = rowToOrder_(values[i], headers, startRow + i);
-    if (order && includeOrder_(order)) {
+  allRows.forEach(function (r) {
+    var order = rowToOrder_(rowValuesByRow[r], headers, r);
+    if (order && includeOrder_(order, deliveryMap)) {
       attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap);
       orders.push(order);
     }
-  }
+  });
   return orders;
 }
 
@@ -160,9 +219,19 @@ function listOrders() {
 // STUDIO-DESK-UX-REVIEW.md). Phase-cancelled rows now age out on the same
 // window as Delivered rows instead of vanishing outright, so they reach
 // laneMatch() and can appear under Dibatalkan.
-function includeOrder_(order) {
+//
+// deliveryMap is optional — callers that already have it (listOrders())
+// pass it so a Delivered row's real completion timestamp (SD-10) is used
+// when one exists; searchArchive() never calls this at all, since archive
+// search is explicitly about finding orders regardless of age.
+function includeOrder_(order, deliveryMap) {
   if (order.phase === 'Cancelled' || order.phase === 'Delivered') {
-    var daysPast = daysBetween_(order.date, todayStr_());
+    var basisDate = order.date;
+    if (order.phase === 'Delivered' && deliveryMap) {
+      var delivery = deliveryMap[order.ref];
+      if (delivery && delivery.completedAt) basisDate = String(delivery.completedAt).slice(0, 10);
+    }
+    var daysPast = daysBetween_(basisDate, todayStr_());
     if (daysPast > KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE) return false;
   }
   return true;
@@ -176,6 +245,70 @@ function daysBetween_(earlierDateStr, laterDateStr) {
   var a = new Date(String(earlierDateStr) + 'T00:00:00');
   var b = new Date(String(laterDateStr) + 'T00:00:00');
   return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+// ============================================================================
+// SD-12 — Arsip: full-history search by Order Reference, buyer name, or
+// buyer WhatsApp, independent of listOrders()'s recency window. Every order
+// stays reachable this way regardless of how long ago it was Delivered or
+// Cancelled — ageing out of listOrders() is a default-view convenience, not
+// deletion or archival in any data sense (nothing is ever moved or removed).
+// Reads every row (all columns, since any matched row needs its full data
+// anyway) — for a very large sheet this can approach Apps Script's
+// execution-time limit; see "Arsip search and very large sheets" in
+// STUDIO-DESK-SETUP.md.
+// ============================================================================
+function searchArchive(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var query = String(payload.query || '').trim();
+  if (query.length < ARCHIVE_MIN_QUERY_LENGTH) {
+    return { ok: false, code: 'QUERY_TOO_SHORT', message: 'Ketik minimal ' + ARCHIVE_MIN_QUERY_LENGTH + ' karakter untuk mencari.' };
+  }
+  var cursor = Number(payload.cursor);
+  if (!isFinite(cursor) || cursor < 0) cursor = 0;
+  cursor = Math.floor(cursor);
+
+  var sheet = openSheet_();
+  var headers = readHeaders_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, results: [], nextCursor: null, totalMatches: 0 };
+
+  var numDataRows = lastRow - 1;
+  var refCol = headers.map['Order Reference'];
+  var buyerCol = headers.map['Buyer Name'];
+  var waCol = headers.map['Buyer WhatsApp'];
+  var allValues = sheet.getRange(2, 1, numDataRows, headers.length).getValues();
+
+  var needle = query.toLowerCase();
+  var matched = [];
+  for (var i = 0; i < allValues.length; i += 1) {
+    var row = allValues[i];
+    var ref = refCol === undefined ? '' : String(row[refCol] || '').toLowerCase();
+    var buyer = buyerCol === undefined ? '' : String(row[buyerCol] || '').toLowerCase();
+    var wa = waCol === undefined ? '' : String(row[waCol] || '').toLowerCase();
+    if (ref.indexOf(needle) !== -1 || buyer.indexOf(needle) !== -1 || wa.indexOf(needle) !== -1) {
+      matched.push({ row: 2 + i, values: row });
+    }
+  }
+  matched.reverse(); // most recently submitted first
+
+  var page = matched.slice(cursor, cursor + ARCHIVE_PAGE_SIZE);
+  var nextCursor = cursor + ARCHIVE_PAGE_SIZE < matched.length ? cursor + ARCHIVE_PAGE_SIZE : null;
+
+  var ledgerSummary = getLedgerSummaryMap_();
+  var reviewedMap = getReviewedMap_();
+  var scheduleMap = getScheduleMap_();
+  var deliveryMap = getDeliveryMap_();
+  var blockerMap = getBlockerMap_();
+
+  var results = page.map(function (m) {
+    var order = rowToOrder_(m.values, headers, m.row);
+    if (order) attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap);
+    return order;
+  }).filter(function (o) { return !!o; });
+
+  return { ok: true, results: results, nextCursor: nextCursor, totalMatches: matched.length };
 }
 
 function rowToOrder_(rowValues, headers, rowNumber) {

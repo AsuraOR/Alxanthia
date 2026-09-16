@@ -1422,6 +1422,124 @@ console.log('--- SUITE 55 (SD-08..SD-11 client): schedule, delivery/handoff, blo
   console.log('✔ Suite 55 Passed\n');
 }
 
+console.log('--- SUITE 56 (SD-12): an active order older than the recent window is still returned by listOrders() ---');
+{
+  var oldActiveRows = [rowFor({
+    'Order Reference': 'ALX-OLD-ACTIVE', 'Preferred Date': '2026-01-01', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali'
+  })];
+  for (var i = 0; i < 500; i += 1) {
+    oldActiveRows.push(rowFor({
+      'Order Reference': 'ALX-FILLER-' + i, 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+      'Work Phase': 'Delivered', 'Location Type': 'bali'
+    }));
+  }
+  const sandbox = makeSandbox({ sheet: makeSheetStub(oldActiveRows) });
+  const refs = sandbox.listOrders().map(function (o) { return o.ref; });
+  assert.ok(refs.includes('ALX-OLD-ACTIVE'),
+    'an active order at row 2, 500+ rows outside the recent window, must still be returned — it must never be hidden just because its row is old');
+  console.log('✔ Suite 56 Passed\n');
+}
+
+console.log("--- SUITE 57 (SD-12): a Delivered order's retention uses its real completion timestamp (SD-10) when one is on record, not just Preferred Date ---");
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-COMPLETED-1', 'Preferred Date': '2026-01-01', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Delivered', 'Location Type': 'bali', 'Payment Status': 'Paid'
+  })];
+  const deliveryRow = ['ALX-COMPLETED-1', '', '', '', '', '', '', '2026-09-11 10:00:00', '2026-09-11 10:00:00', 'maker@example.com'];
+  const sandbox = makeSandbox({ sheet: makeSheetStub(orderRows), opsSheets: { 'Desk Delivery': makeOpsSheetStub([[], deliveryRow]) } });
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders.length, 1,
+    'a Delivered order completed yesterday must still be listed, even though its Preferred Date (2026-01-01) is long past the retention window on its own');
+  assert.strictEqual(orders[0].ref, 'ALX-COMPLETED-1');
+
+  // Without any Desk Delivery record for it, the same far-past Preferred
+  // Date order must still age out — the fallback must not silently keep
+  // every Delivered order forever.
+  const legacyRows = [rowFor({
+    'Order Reference': 'ALX-LEGACY-DELIVERED', 'Preferred Date': '2026-01-01', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Delivered', 'Location Type': 'bali'
+  })];
+  const legacySandbox = makeSandbox({ sheet: makeSheetStub(legacyRows), opsSheets: { 'Desk Delivery': makeOpsSheetStub([[]]) } });
+  assert.strictEqual(legacySandbox.listOrders().length, 0,
+    'a Delivered order with no recorded completion timestamp must still fall back to the Preferred-Date-based window');
+  console.log('✔ Suite 57 Passed\n');
+}
+
+console.log('--- SUITE 58 (SD-12): searchArchive() finds any order by reference/buyer/phone regardless of age, with a validated query ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-ARCHIVE-OLD', 'Preferred Date': '2020-01-01', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Delivered', 'Location Type': 'bali', 'Buyer Name': 'Wayan Sudira', 'Buyer WhatsApp': '+6281111222333'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {});
+
+  const tooShort = sandbox.searchArchive({ query: 'a' });
+  assert.strictEqual(tooShort.ok, false);
+  assert.strictEqual(tooShort.code, 'QUERY_TOO_SHORT');
+
+  const byRef = sandbox.searchArchive({ query: 'archive-old' });
+  assert.strictEqual(byRef.ok, true);
+  assert.strictEqual(byRef.results.length, 1, 'an order far outside listOrders()\' retention window must still be findable by reference');
+  assert.strictEqual(byRef.results[0].ref, 'ALX-ARCHIVE-OLD');
+  assert.strictEqual(byRef.nextCursor, null);
+
+  assert.strictEqual(sandbox.searchArchive({ query: 'sudira' }).results.length, 1, 'search must match buyer name case-insensitively');
+  assert.strictEqual(sandbox.searchArchive({ query: '1111222' }).results.length, 1, 'search must match a WhatsApp number substring');
+  assert.strictEqual(sandbox.searchArchive({ query: 'nomatch12' }).results.length, 0);
+  console.log('✔ Suite 58 Passed\n');
+}
+
+console.log('--- SUITE 59 (SD-12): searchArchive() paginates with a stable cursor, covering every match exactly once ---');
+{
+  var pageRows = [];
+  for (var p = 0; p < 30; p += 1) {
+    pageRows.push(rowFor({
+      'Order Reference': 'ALX-PAGE-' + String(p).padStart(2, '0'), 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+      'Work Phase': 'Not started', 'Location Type': 'bali'
+    }));
+  }
+  const sandbox = makeDeskOpsSandbox(pageRows, {});
+  const page1 = sandbox.searchArchive({ query: 'ALX-PAGE' });
+  assert.strictEqual(page1.results.length, 25, 'the first page must be capped at ARCHIVE_PAGE_SIZE');
+  assert.strictEqual(page1.nextCursor, 25);
+  assert.strictEqual(page1.totalMatches, 30);
+
+  const page2 = sandbox.searchArchive({ query: 'ALX-PAGE', cursor: page1.nextCursor });
+  assert.strictEqual(page2.results.length, 5, 'the second page must return the remainder');
+  assert.strictEqual(page2.nextCursor, null);
+
+  const refsPage1 = page1.results.map(function (o) { return o.ref; });
+  const refsPage2 = page2.results.map(function (o) { return o.ref; });
+  assert.strictEqual(new Set(refsPage1.concat(refsPage2)).size, 30, 'the two pages together must cover every match exactly once, with no gap or overlap');
+
+  const badCursor = sandbox.searchArchive({ query: 'ALX-PAGE', cursor: -5 });
+  assert.strictEqual(badCursor.results.length, 25, 'a negative cursor must be treated as 0, not throw or skew the page');
+  console.log('✔ Suite 59 Passed\n');
+}
+
+console.log('--- SUITE 60 (SD-12 client): the Arsip lane searches the server instead of filtering the loaded orders, with pagination ---');
+{
+  assert.ok(deskHtml.includes("{ key: 'archive', label: 'Arsip' }"), 'an Arsip chip/lane must exist');
+  assert.ok(deskHtml.includes("if (laneKey === 'archive') return false;"),
+    'the Arsip lane must not be a laneMatch() filter over state.orders — a match can be arbitrarily older than anything loaded');
+  assert.ok(deskHtml.includes("state.lane === 'archive'") && deskHtml.includes('function triggerArchiveSearch(query, append)'),
+    'selecting Arsip and typing must call a dedicated server search function');
+  assert.ok(deskHtml.includes('.searchArchive({ query: trimmed, cursor: cursor });'),
+    'the Arsip search must call the server searchArchive command');
+  assert.ok(deskHtml.includes('if (state.archive.query !== trimmed) return;'),
+    'a late search response for a query she has since changed must never clobber newer results (same request-ordering concern as SD-03 writes)');
+  assert.ok(deskHtml.includes('data-loadmorearchive') && deskHtml.includes('triggerArchiveSearch(state.archive.query, true);'),
+    'a "Muat lebih banyak" control must fetch the next page via the same search function, in append mode');
+  assert.ok(deskHtml.includes('function findOrder(ref)') &&
+    deskHtml.includes('(state.archive.results || []).find(function (o) { return o.ref === ref; })'),
+    'findOrder() must also check archive results, so opening a ticket found via Arsip search works');
+  assert.ok(deskHtml.includes('var archiveSearchTimer = null;') && deskHtml.includes('setTimeout(function () { triggerArchiveSearch(typed, false); }, 400);'),
+    'typing in the search box while on the Arsip lane must be debounced, not fire a server request per keystroke');
+  console.log('✔ Suite 60 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 55 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 60 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

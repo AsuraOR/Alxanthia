@@ -873,6 +873,11 @@
     { key: 'Cancelled',         label: 'Dibatalkan' }
   ];
 
+  /* SD-12 — mirrors ARCHIVE_MIN_QUERY_LENGTH in Code.gs, so the client can
+     show its own "type more" prompt without a wasted round trip for a query
+     the server would reject anyway. */
+  var ARCHIVE_MIN_QUERY_LENGTH_CLIENT = 2;
+
   /* SD-11 — mirrors BLOCKER_REASONS in Code.gs exactly; the stored value is
      already plain Indonesian text, so key and label only differ in casing. */
   var BLOCKER_REASONS = [
@@ -899,7 +904,12 @@
     per: {},
     checklist: {}, // ref -> array of server checklist rows (SD-02), loaded per ticket
     activity: {}, // ref -> array of server activity rows (SD-03), loaded per ticket
-    composition: {} // ref -> array of {lineKey, composition, updatedAt, updatedBy} (SD-09), loaded per ticket
+    composition: {}, // ref -> array of {lineKey, composition, updatedAt, updatedBy} (SD-09), loaded per ticket
+    /* SD-12 — Arsip lane results, kept apart from state.orders (listOrders()'
+       recent/active window) since a match can be arbitrarily old. Cleared
+       whenever the query changes; appended to when "Muat lebih banyak" is
+       used, so results stay stable across a page fetch. */
+    archive: { query: '', results: [], nextCursor: null, loading: false, error: null }
   };
   var confirming = false;
   var pending = {}; // "ref|field" -> true while a write is in flight
@@ -1141,7 +1151,8 @@
   }
 
   function findOrder(ref) {
-    return (state.orders || []).find(function (o) { return o.ref === ref; }) || null;
+    return (state.orders || []).find(function (o) { return o.ref === ref; }) ||
+      (state.archive.results || []).find(function (o) { return o.ref === ref; }) || null;
   }
 
   function isPending(ref, field) { return !!pending[ref + '|' + field]; }
@@ -1414,6 +1425,9 @@
     if (laneKey === 'late') return isActive(order) && daysUntil(order.date) < 0;
     if (laneKey === 'today') return isActive(order) && daysUntil(order.date) === 0;
     if (laneKey === 'cancelled') return order.payment === 'Cancelled' || order.phase === 'Cancelled';
+    /* SD-12 — Arsip is server search over the whole sheet, not a filter over
+       the orders already loaded into state.orders; see renderQueue(). */
+    if (laneKey === 'archive') return false;
     return laneOf(order) === laneKey;
   }
 
@@ -1603,12 +1617,15 @@
 
     var lanes = [{ key: 'all', label: 'Aktif' }, { key: 'pay', label: 'Menunggu bayar' }]
       .concat(PHASES.map(function (p) { return { key: p.key, label: p.label }; }))
-      .concat([{ key: 'cancelled', label: 'Dibatalkan' }]);
+      .concat([{ key: 'cancelled', label: 'Dibatalkan' }, { key: 'archive', label: 'Arsip' }]);
     if (state.lane === 'late') lanes.splice(1, 0, { key: 'late', label: 'Terlambat' });
     if (state.lane === 'today') lanes.splice(1, 0, { key: 'today', label: 'Jatuh tempo hari ini' });
 
     elChips.innerHTML = lanes.map(function (l) {
-      var n = state.orders.filter(function (o) { return laneMatch(o, l.key); }).length;
+      /* SD-12 — Arsip isn't a filter over state.orders like every other
+         lane (a match can be arbitrarily older than what listOrders() ever
+         loads), so its count comes from the last server search instead. */
+      var n = l.key === 'archive' ? state.archive.results.length : state.orders.filter(function (o) { return laneMatch(o, l.key); }).length;
       return '<button type="button" data-lane="' + esc(l.key) + '" aria-pressed="' + (state.lane === l.key) +
         '">' + esc(l.label) + '<span class="n">' + n + '</span></button>';
     }).join('');
@@ -1623,6 +1640,34 @@
 
   function renderQueue() {
     var catalog = state.catalog;
+
+    /* SD-12 — Arsip is server search across the whole order history, not a
+       filter over what's already loaded, so it renders from state.archive
+       instead of visibleOrders(). cardLi() below is a function declaration,
+       hoisted within this function, so it's already usable here. */
+    if (state.lane === 'archive') {
+      var q = (state.archive.query || '').trim();
+      if (q.length < ARCHIVE_MIN_QUERY_LENGTH_CLIENT) {
+        elQueue.innerHTML = '<li class="queue-empty">Ketik referensi, nama pembeli, atau nomor WhatsApp di kotak pencarian untuk mencari pesanan lama.</li>';
+        return;
+      }
+      if (state.archive.error) {
+        elQueue.innerHTML = '<li class="queue-empty">' + esc(state.archive.error) + '</li>';
+        return;
+      }
+      if (!state.archive.results.length) {
+        elQueue.innerHTML = '<li class="queue-empty">' + (state.archive.loading ? 'Mencari…' : 'Tidak ada pesanan yang cocok.') + '</li>';
+        return;
+      }
+      elQueue.innerHTML = state.archive.results.map(cardLi).join('') +
+        (state.archive.loading
+          ? '<li class="queue-empty">Mencari…</li>'
+          : (state.archive.nextCursor !== null
+            ? '<li><button type="button" class="btn ghost small" data-loadmorearchive="1" style="margin:10px auto;display:block">Muat lebih banyak</button></li>'
+            : ''));
+      return;
+    }
+
     var list = visibleOrders();
 
     if (!list.length) {
@@ -2779,6 +2824,52 @@
       .listOrders();
   }
 
+  /* SD-12 — Arsip search, debounced from elSearch's own input handler.
+     append=false starts a fresh query (clears any previous results/cursor);
+     append=true fetches the next page with the existing cursor, for "Muat
+     lebih banyak". */
+  var archiveSearchTimer = null;
+  function triggerArchiveSearch(query, append) {
+    var trimmed = String(query || '').trim();
+    state.archive.query = trimmed;
+    if (!append) {
+      state.archive.results = [];
+      state.archive.nextCursor = null;
+    }
+    state.archive.error = null;
+    if (trimmed.length < ARCHIVE_MIN_QUERY_LENGTH_CLIENT) {
+      state.archive.loading = false;
+      render();
+      return;
+    }
+    var cursor = append ? state.archive.nextCursor : 0;
+    state.archive.loading = true;
+    render();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        /* A late response for a query she's since changed or a page she's
+           already moved past must never clobber newer, already-rendered
+           results — the same single-user request-ordering concern SD-03
+           documents for writes. */
+        if (state.archive.query !== trimmed) return;
+        state.archive.loading = false;
+        if (res && res.ok) {
+          state.archive.results = append ? state.archive.results.concat(res.results) : res.results;
+          state.archive.nextCursor = res.nextCursor;
+        } else {
+          state.archive.error = (res && res.message) || 'Gagal mencari arsip.';
+        }
+        render();
+      })
+      .withFailureHandler(function (err) {
+        if (state.archive.query !== trimmed) return;
+        state.archive.loading = false;
+        state.archive.error = String((err && err.message) || err);
+        render();
+      })
+      .searchArchive({ query: trimmed, cursor: cursor });
+  }
+
   /* =====================================================================
      Events
      ===================================================================== */
@@ -2818,6 +2909,13 @@
     var b = e.target.closest('button[data-lane]');
     if (!b) return;
     state.lane = b.dataset.lane;
+    /* SD-12 — switching into Arsip with a search term already typed (from
+       browsing another lane) runs it immediately rather than leaving her
+       looking at an empty list until she retypes something. */
+    if (state.lane === 'archive' && state.search.trim().length >= ARCHIVE_MIN_QUERY_LENGTH_CLIENT && state.archive.query !== state.search.trim()) {
+      triggerArchiveSearch(state.search, false);
+      return;
+    }
     render();
   });
 
@@ -2837,6 +2935,12 @@
 
   elSearch.addEventListener('input', function () {
     state.search = elSearch.value;
+    if (state.lane === 'archive') {
+      if (archiveSearchTimer) clearTimeout(archiveSearchTimer);
+      var typed = elSearch.value;
+      archiveSearchTimer = setTimeout(function () { triggerArchiveSearch(typed, false); }, 400);
+      return;
+    }
     render();
   });
 
@@ -2864,6 +2968,11 @@
     if (cross) {
       state.lane = cross.dataset.crosslane;
       render();
+      return;
+    }
+
+    if (e.target.closest('[data-loadmorearchive]')) {
+      triggerArchiveSearch(state.archive.query, true);
       return;
     }
 

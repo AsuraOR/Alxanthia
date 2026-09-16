@@ -228,27 +228,34 @@ Then delete the test row from the sheet.
 
 ---
 
-## Part 10 — Desk Ops setup (payment ledger, checklist, activity log, review)
+## Part 10 — Desk Ops setup (payment ledger, checklist, activity log, review, scheduling, composition, delivery, blockers)
 
 This part is for the additive features layered on top of the base Desk: a verified payment ledger, a
-server-saved production/packing checklist, a plain-Indonesian activity log, and explicit order review
-completion. **Skip this part entirely if you haven't been asked to enable these** — the base Desk
-(Parts 1–9) works exactly as before without it, and every one of these features degrades safely (shows
-zero/nothing, never throws) until you run the migration below.
+server-saved production/packing checklist, a plain-Indonesian activity log, explicit order review
+completion, an agreed schedule/production deadline, saved package composition, delivery/pickup records,
+and explicit blockers. **Skip this part entirely if you haven't been asked to enable these** — the base
+Desk (Parts 1–9) works exactly as before without it, and every one of these features degrades safely
+(shows zero/nothing, never throws) until you run the migration below.
 
 ### What gets added
 
-Three new sheets in the **same spreadsheet** as `Orders`, alongside it, never touching it:
+Seven new sheets in the **same spreadsheet** as `Orders`, alongside it, never touching it:
 
 | Sheet | Columns | What it's for |
 | --- | --- | --- |
 | `Desk Ledger` | Event ID, Order Reference, Type, Amount, Note, Recorded At, Recorded By, Reverses Event ID, Idempotency Key | Every verified receipt/refund/correction she records. Append-only — a correction is its own new row, never an edit to an old one. |
 | `Desk Checklist` | Order Reference, Item Key, Content Version, Completed, Completed At, Completed By | Her production and packing checks, saved so they survive a cleared browser cache or a new phone. |
-| `Desk Activity` | Event ID, Order Reference, Action, Detail, At, By, Mutation ID | A plain-Indonesian history: payments recorded, phase changes, order review. |
+| `Desk Activity` | Event ID, Order Reference, Action, Detail, At, By, Mutation ID | A plain-Indonesian history: payments recorded, phase changes, order review, schedule changes, composition set, delivery/handoff/completion, blocker opened/resolved. |
+| `Desk Schedule` | Order Reference, Agreed Date, Agreed Time, Production Deadline, Agreed At, Agreed By, Reschedule Reason | The agreed fulfillment date/time and a separate internal production deadline — kept apart from the customer's original `Preferred Date` on `Orders`, which is never overwritten. |
+| `Desk Composition` | Order Reference, Line Key, Composition JSON, Updated At, Updated By | Which specific flowers/additions actually went into a "studio's choice" package line, with labels snapshotted at save time so a later catalogue edit can't rewrite what a past order meant. |
+| `Desk Delivery` | Order Reference, Recipient Name, Recipient Contact, Destination Detail, Courier, Tracking, Handoff At, Completed At, Updated At, Updated By | Delivery/pickup details, plus the actual handoff and completion timestamps — separate from `Work Phase`. |
+| `Desk Blocker` | Event ID, Order Reference, Reason, Note, Opened At, Opened By, Resolved At, Resolved By | Append-only: an open row (empty `Resolved At`) is the current blocker, if any; resolving fills in the last two columns rather than deleting the row. |
 
 Nothing here touches `WRITABLE_FIELDS` — the Desk still writes exactly the same five `Orders` columns
-it always has (Part 2). These three sheets are written only through their own narrow, validated
-commands (`recordPayment`, `setChecklistItem`, `markReviewed`), never through `updateOrder`.
+it always has (Part 2). These seven sheets are written only through their own narrow, validated
+commands (`recordPayment`, `setChecklistItem`, `markReviewed`, `setSchedule`, `setComposition`,
+`setDeliveryInfo`, `markHandoff`, `markDeliveryComplete`, `setBlocker`, `resolveBlocker`), never through
+`updateOrder`.
 
 ### Running the migration
 
@@ -279,14 +286,30 @@ dispatch (Part 9, item 2) exactly as it always has, in addition to — not inste
 
 Disabling these features doesn't require deleting anything:
 
-- To stop using the ledger/checklist/review UI, redeploy an earlier version of this script (Part 9)
-  that predates this part — the three `Desk Ledger`/`Desk Checklist`/`Desk Activity` sheets simply sit
-  unused; nothing reads or writes them once the older code is live again.
+- To stop using this layer's UI, redeploy an earlier version of this script (Part 9) that predates this
+  part — the seven `Desk *` sheets simply sit unused; nothing reads or writes them once the older code
+  is live again.
 - If you want the sheets gone entirely, delete them from the spreadsheet directly (right-click the
   sheet tab → Delete). This is a manual, deliberate step — the migration functions never delete
   anything, and neither does any part of the Desk itself.
-- Deleting the sheets after rolling back the code loses the ledger/checklist/activity history recorded
-  in them; the `Orders` sheet itself (and everything in Parts 1–9) is completely unaffected either way.
+- Deleting the sheets after rolling back the code loses the ledger/checklist/activity/schedule/
+  composition/delivery/blocker history recorded in them; the `Orders` sheet itself (and everything in
+  Parts 1–9) is completely unaffected either way.
+
+### Arsip search and very large sheets
+
+`searchArchive()` (the Arsip lane's search — see Part 9's queue for what it's for) reads every row and
+every column of `Orders`, because a matching row could be anywhere in the sheet's history and its full
+data is needed once matched. For a spreadsheet with up to a few thousand orders this is fast; for a
+much larger sheet it can approach Apps Script's per-execution time limit (currently 6 minutes for a
+consumer/Workspace account). If Arsip search starts timing out as the shop's history grows very large,
+the fix is to move old rows to a separate, explicitly-named archive spreadsheet rather than trying to
+search an unbounded single sheet — that's a deliberate, separate change; ask your developer.
+
+`listOrders()` (the default queue) does not have this problem in normal use: it always returns every
+*active* order regardless of how old its row is (a quick, single-column scan of `Work Phase` first), and
+otherwise only reads a bounded recent window (`MAX_ROWS`, 500 rows) plus a soft overall cap
+(`MAX_LISTED_ORDERS`, 2000) that only ever trims already-finished orders, never active ones.
 
 ### A note on deployment
 
@@ -330,12 +353,15 @@ from the sheet, never the catalogue).
 ### A finished order disappears from the queue sooner than expected
 
 The 14-day window a Delivered order stays visible (`KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE`) is
-counted from **Preferred Date** — when the customer wanted the flowers — not from the day you marked
-it Delivered. If an order's Preferred Date was already weeks ago by the time you finish it, it can
-drop out of the queue almost immediately after you mark it Delivered. This is expected behaviour, not
-a bug: the Desk does not currently record a separate delivery date. If you need finished orders to
-stay visible for a fixed number of days after you actually deliver them, that requires adding a
-`Delivered At` column and is a deliberate, separate change — ask your developer.
+counted from the actual completion timestamp recorded in `Desk Delivery` (Part 10, SD-10 — tapping
+**Tandai sudah diambil**/**Tandai sudah diterima**) when one exists. If an order was Delivered before
+that feature existed, or Work Phase was set to `Delivered` directly on the sheet without ever going
+through that action, there is no recorded completion timestamp — the window falls back to counting
+from **Preferred Date** instead (when the customer wanted the flowers, not when you actually finished),
+which can make it drop out of the queue almost immediately after you mark it Delivered, or linger far
+past when it was really done. Either way this only affects the *default* queue — the order itself is
+never deleted, and stays fully searchable through the **Arsip** lane (type its reference, buyer name, or
+WhatsApp number) no matter how long ago it finished.
 
 ### Money doesn't match what the customer was quoted
 
@@ -344,9 +370,9 @@ recalculated server-side by the order writer at submission time, never anything 
 browser or from the Desk itself. If a total looks wrong, check `Price Mismatch` on that row in the
 sheet directly (the Desk's gate surfaces this as "Harga ditandai REVIEW").
 
-### "Sheet ... belum ada" error when recording a payment, ticking a checklist item, or marking reviewed
+### "Sheet ... belum ada" error when recording a payment, ticking a checklist item, marking reviewed, setting a schedule, saving a composition, recording delivery, or logging a blocker
 
 The Desk Ops sheets (Part 10) haven't been created yet in this spreadsheet, or this deployment is
 running older code that predates them. Run `deskOpsMigrationApply()` from the Apps Script editor (Part
-10) and redeploy. Everything else in the Desk keeps working normally in the meantime — these three
-features are the only things that need the migration.
+10) and redeploy. Everything else in the Desk keeps working normally in the meantime — these seven
+sheets/features are the only things that need the migration.

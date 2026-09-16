@@ -1294,9 +1294,19 @@
     }
 
     if (pay === 'Cancelled') {
-      html += '<div class="paid-line"><span class="cancelled">Dibatalkan</span>' +
-        (isDeposit ? '<span class="why">Jika DP sudah diterima, proses pengembalian dicatat manual.</span>' : '') + '</div>' +
-        '<div class="actions"><button type="button" class="btn ghost" data-pay="Unpaid">Aktifkan lagi</button></div>';
+      html += '<div class="paid-line"><span class="cancelled">Dibatalkan</span></div>';
+      if (isDeposit) {
+        /* Un-cancelling used to always reset to Unpaid, silently erasing the
+           record that a deposit had already landed — see P1-5 in
+           STUDIO-DESK-UX-REVIEW.md. Ask instead of guessing. */
+        html += '<span class="why">Jika DP sudah diterima sebelum dibatalkan, aktifkan lewat tombol pertama supaya pembeli tidak diminta bayar dua kali.</span>' +
+          '<div class="actions">' +
+          '<button type="button" class="btn" data-pay="Deposit paid">Aktifkan — DP sudah diterima</button>' +
+          '<button type="button" class="btn ghost" data-pay="Unpaid">Aktifkan — belum ada pembayaran</button>' +
+          '</div>';
+      } else {
+        html += '<div class="actions"><button type="button" class="btn ghost" data-pay="Unpaid">Aktifkan lagi</button></div>';
+      }
     } else if (isDeposit) {
       var depositReceived = pay === 'Deposit paid' || pay === 'Checking balance';
       html += '<div class="paid-line"><span class="' + (depositReceived ? 'ok' : '') + '">' +

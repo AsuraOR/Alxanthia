@@ -528,6 +528,19 @@ console.log('--- SUITE 25 (P1-3): the pulse counters exclude cancelled orders, m
   console.log('✔ Suite 25 Passed\n');
 }
 
+console.log('--- SUITE 26 (P1-5): un-cancelling a deposit order offers to restore the deposit, not erase it ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('data-pay="Deposit paid">Aktifkan — DP sudah diterima'),
+    'a Deposit 50% order must offer a reactivation path that restores Deposit paid, not just Unpaid');
+  assert.ok(paymentBlockSrc.includes('data-pay="Unpaid">Aktifkan — belum ada pembayaran'),
+    'a Deposit 50% order must still offer the belum-ada-pembayaran path back to Unpaid');
+  assert.ok(paymentBlockSrc.includes("if (isDeposit) {") , 'the two reactivation buttons must only apply to Deposit 50% orders');
+  console.log('✔ Suite 26 Passed\n');
+}
+
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.

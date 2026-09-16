@@ -4,11 +4,13 @@
  * =============================================================================
  * Run with: node tests/verify-studio-desk.js
  *
- * Modelled on tests/verify-server-pricing.js: extracts the exact Apps Script
- * code block from STUDIO-DESK-SETUP.md (the same text an owner pastes into a
- * new, standalone Apps Script project) and exercises it in a sandbox with
+ * Modelled on tests/verify-server-pricing.js: reads the Desk's source directly
+ * from studio-desk/Code.gs and studio-desk/Index.html — the exact files an
+ * owner copies into a new, standalone Apps Script project (see Part 4 of
+ * STUDIO-DESK-SETUP.md) — and exercises the server file in a sandbox with
  * minimal Apps Script API stubs, so the actual documented server code is
- * what gets tested — not a reimplementation that could drift from it.
+ * what gets tested — not a reimplementation, or a copy in the tests, that
+ * could drift from it.
  * =============================================================================
  */
 const assert = require('assert');
@@ -21,16 +23,12 @@ console.log('ALXANTHIA STUDIO DESK — SERVER TEST SUITE');
 console.log('======================================================================\n');
 
 // ---------------------------------------------------------------------------
-// 1. Extract the Apps Script code block from the setup guide
+// 1. Read the Desk's source straight from the files an owner pastes in.
 // ---------------------------------------------------------------------------
-const guidePath = path.join(__dirname, '..', 'STUDIO-DESK-SETUP.md');
-const guideSrc = fs.readFileSync(guidePath, 'utf8');
-const jsBlocks = [...guideSrc.matchAll(/```javascript\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
-const serverSrc = jsBlocks.find((block) => block.includes('function doGet'));
-assert(serverSrc, 'Could not locate the Apps Script code block in STUDIO-DESK-SETUP.md');
-const htmlBlocks = [...guideSrc.matchAll(/```html\r?\n([\s\S]*?)\r?\n```/g)].map((m) => m[1]);
-const deskHtml = htmlBlocks.find((block) => block.includes('function paymentBlock'));
-assert(deskHtml, 'Could not locate the Studio Desk HTML block in STUDIO-DESK-SETUP.md');
+const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'studio-desk', 'Code.gs'), 'utf8');
+assert(serverSrc.includes('function doGet'), 'studio-desk/Code.gs does not look like the Apps Script server code');
+const deskHtml = fs.readFileSync(path.join(__dirname, '..', 'studio-desk', 'Index.html'), 'utf8');
+assert(deskHtml.includes('function paymentBlock'), 'studio-desk/Index.html does not look like the Studio Desk page');
 
 // ---------------------------------------------------------------------------
 // 2. A fake Orders sheet — an in-memory grid plus a write log, standing in
@@ -322,14 +320,18 @@ console.log('--- SUITE 10b: an unpaid balance blocks dispatch server-side ---');
   console.log('✔ Suite 10b Passed\n');
 }
 
-console.log('--- SUITE 10c: the payment panel hides only after full settlement ---');
+console.log('--- SUITE 10c: a paid order keeps its money panel, with a paid-confirmation action ---');
 {
   const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
   const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
   const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
   assert.ok(
-    paymentBlockSrc.includes("if (pay === 'Paid') return '';"),
-    'Paid orders must render no payment panel'
+    !paymentBlockSrc.includes("if (pay === 'Paid') return '';"),
+    'a Paid order must not blank its payment panel — the billed total must stay visible'
+  );
+  assert.ok(
+    paymentBlockSrc.includes('data-sendpaid="1"'),
+    'a Paid order must offer a way to send the payment-confirmed message'
   );
   assert.ok(
     !paymentBlockSrc.includes("pay === 'Deposit paid') return ''") &&
@@ -346,24 +348,159 @@ console.log('--- SUITE 10d: order search matches buyer names and order codes ---
   const searchSandbox = {};
   vm.createContext(searchSandbox);
   vm.runInContext(match[0] + '\nthis.matchesSearch = matchesSearch;', searchSandbox);
-  const order = { buyer: 'Ni Putu Ayu Lestari', ref: 'ALX-260912-K4T9' };
+  const order = { buyer: 'Ni Putu Ayu Lestari', ref: 'ALX-260912-K4T9', wa: '+62 812-3456-7890' };
   assert.strictEqual(searchSandbox.matchesSearch(order, 'ayu'), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, 'k4t9'), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, '  ALX-260912  '), true);
   assert.strictEqual(searchSandbox.matchesSearch(order, 'made'), false);
   assert.strictEqual(searchSandbox.matchesSearch(order, ''), true);
+  assert.strictEqual(searchSandbox.matchesSearch(order, '812-3456'), true, 'digits-only match must ignore dashes in the query');
+  assert.strictEqual(searchSandbox.matchesSearch(order, '62812345 67890'), true, 'digits-only match must ignore spacing in the query');
+  assert.strictEqual(searchSandbox.matchesSearch(order, '99999'), false);
   console.log('✔ Suite 10d Passed\n');
+}
+
+console.log('--- SUITE 14: firstName() greets by first name, stripping Balinese/Indonesian honorifics ---');
+{
+  const match = deskHtml.match(/  var NAME_PREFIXES[\s\S]*?\n  function firstName\(full\) \{[\s\S]*?\n  \}/);
+  assert.ok(match, 'the Desk must include its firstName() greeting helper');
+  const nameSandbox = {};
+  vm.createContext(nameSandbox);
+  vm.runInContext(match[0] + '\nthis.firstName = firstName;', nameSandbox);
+  assert.strictEqual(nameSandbox.firstName('Ni Made Ayu Lestari'), 'Made');
+  assert.strictEqual(nameSandbox.firstName('I Wayan Sudiarta'), 'Wayan');
+  assert.strictEqual(nameSandbox.firstName('Budi Santoso'), 'Budi');
+  assert.strictEqual(nameSandbox.firstName('Budi'), 'Budi');
+  assert.strictEqual(nameSandbox.firstName('Ibu Sari'), 'Sari');
+  assert.strictEqual(nameSandbox.firstName('Ni'), 'Ni', 'a lone honorific-looking token must not be stripped down to nothing');
+  assert.strictEqual(nameSandbox.firstName(''), '');
+  assert.strictEqual(nameSandbox.firstName(undefined), '');
+  console.log('✔ Suite 14 Passed\n');
+}
+
+console.log('--- SUITE 15: cancelling an order requires confirmation and can be undone ---');
+{
+  assert.ok(deskHtml.includes('data-askcancel="1"'), 'the cancel button must route through a confirm step, not write directly');
+  assert.ok(!deskHtml.includes('data-pay="Cancelled">Batalkan pesanan'),
+    'the ghost cancel button must no longer write Payment Status directly');
+  assert.ok(deskHtml.includes("confirming = 'cancel'"), 'clicking the cancel button must arm the cancel confirmation');
+  assert.ok(deskHtml.includes('Batalkan pesanan') && deskHtml.includes('Ya, batalkan'),
+    'a confirm dialog with an explicit Ya/Tidak choice must exist for cancellation');
+  assert.ok(deskHtml.includes('data-pay="Unpaid">Aktifkan lagi'),
+    'a cancelled order must offer a way back to Unpaid');
+  console.log('✔ Suite 15 Passed\n');
+}
+
+console.log('--- SUITE 16: a catalogue failure degrades instead of blanking the whole Desk ---');
+{
+  const renderStart = deskHtml.indexOf('function render() {');
+  const renderEnd = deskHtml.indexOf('\n  function renderTop()', renderStart);
+  const renderSrc = deskHtml.slice(renderStart, renderEnd);
+  assert.ok(
+    /if \(state\.ordersError\) \{/.test(renderSrc) && !/if \(state\.ordersError \|\| state\.catalogError\)/.test(renderSrc),
+    'only an orders fetch failure may show the fatal error screen — a catalogue failure must not'
+  );
+  const bootStart = deskHtml.indexOf('function boot() {');
+  const bootEnd = deskHtml.indexOf('\n  function reloadOrders()', bootStart);
+  const bootSrc = deskHtml.slice(bootStart, bootEnd);
+  assert.ok(bootSrc.includes('state.catalogError'), 'boot() must still record the catalogue error for the stale banner');
+  assert.ok(/state\.catalog = \{ stale: true/.test(bootSrc),
+    'boot() must install a safe empty catalogue so rendering can proceed after getCatalog() throws');
+  assert.ok(deskHtml.includes('bankReady'),
+    'payment-send buttons must be guarded when bank details are unavailable, rather than sending a message with undefined in it');
+  console.log('✔ Suite 16 Passed\n');
+}
+
+console.log('--- SUITE 17: the Delivered retention window is named for what it actually measures ---');
+{
+  assert.ok(serverSrc.includes('KEEP_DELIVERED_DAYS_PAST_PREFERRED_DATE'),
+    'the retention constant must be named for the date it actually counts from (Preferred Date)');
+  assert.ok(!/\bKEEP_DELIVERED_DAYS\b(?!_PAST_PREFERRED_DATE)/.test(serverSrc),
+    'no reference to the old, misleadingly-named constant may remain');
+  console.log('✔ Suite 17 Passed\n');
+}
+
+console.log('--- SUITE 18: an unsaved note survives a trip away from the Desk ---');
+{
+  assert.ok(deskHtml.includes('NOTE_DRAFTS_KEY'), 'note drafts must be persisted, like state.per, not kept only in memory');
+  assert.ok(deskHtml.includes('saveNoteDrafts()'), 'a saveNoteDrafts() persistence helper must exist and be called');
+  assert.ok(deskHtml.includes('data-savenotes="1"'), 'an explicit save control must exist beside blur-to-save');
+  assert.ok(deskHtml.includes('belum tersimpan'), 'an unsaved note must be visibly marked, not rely on invisible blur-to-save alone');
+  const saveNotesMatch = deskHtml.match(/function saveNotes\(o\) \{[\s\S]*?\n  \}/);
+  assert.ok(saveNotesMatch, 'a saveNotes() helper must exist');
+  assert.ok(/writeField\(o\.ref, 'notes', value, 'Internal Notes', function \(\) \{\s*delete noteDrafts\[o\.ref\]/.test(saveNotesMatch[0]),
+    'the draft must be cleared only inside the write success callback, not before the server confirms it'
+  );
+  console.log('✔ Suite 18 Passed\n');
+}
+
+console.log('--- SUITE 19: the phone back gesture closes the ticket instead of leaving the Desk ---');
+{
+  assert.ok(deskHtml.includes("history.pushState({ desk: 'detail'"), 'opening a ticket must push a history entry on mobile');
+  assert.ok(deskHtml.includes("addEventListener('popstate'"), 'a popstate listener must close the detail view');
+  assert.ok(/try \{\s*history\.pushState/.test(deskHtml), 'pushState must be guarded — it can be restricted inside the Apps Script iframe');
+  console.log('✔ Suite 19 Passed\n');
+}
+
+console.log('--- SUITE 20: an early balance payment can still be recorded ahead of Ready for dispatch ---');
+{
+  const paymentBlockStart = deskHtml.indexOf('function paymentBlock(o)');
+  const paymentBlockEnd = deskHtml.indexOf('\n  function renderTicket()', paymentBlockStart);
+  const paymentBlockSrc = deskHtml.slice(paymentBlockStart, paymentBlockEnd);
+  assert.ok(paymentBlockSrc.includes('var balanceDue = phaseIndex >= readyIndex;'),
+    'whether the balance can be recorded must be computed from phase order, not string equality alone');
+  assert.ok(paymentBlockSrc.includes("o.phase === 'Ready for dispatch'\n                ? '<button type=\"button\" class=\"btn\" data-sendpayment=\"balance\""),
+    'Kirim pesan pelunasan (asking for money early) must remain gated to exactly Ready for dispatch');
+  assert.ok(paymentBlockSrc.includes("(balanceDue\n            ? "),
+    'Tandai perlu dicek / Tandai lunas must be reachable at or after Ready for dispatch, not only exactly at it');
+  console.log('✔ Suite 20 Passed\n');
+}
+
+console.log('--- SUITE 20a: the catalogue fetch is data, not code — no new Function() over network content ---');
+{
+  assert.ok(!serverSrc.includes('new Function'), 'the catalogue fetch must never execute the response as code');
+  assert.ok(serverSrc.includes("JSON.parse(res.getContentText())"), 'the catalogue fetch must JSON.parse the response');
+  assert.ok(serverSrc.includes("site-content.json"), 'SITE_CONTENT_URL must point at the JSON endpoint, not the executable script');
+  console.log('✔ Suite 20a Passed\n');
+}
+
+console.log('--- SUITE 21: cancelled orders get their own lane and drop out of Aktif ---');
+{
+  assert.ok(deskHtml.includes("{ key: 'cancelled', label: 'Dibatalkan' }"), 'a Dibatalkan lane must exist');
+  assert.ok(deskHtml.includes("order.payment !== 'Cancelled'"), 'isActive must exclude cancelled orders from the Aktif lane');
+  console.log('✔ Suite 21 Passed\n');
+}
+
+console.log('--- SUITE 22: the default-selected ticket matches the top of the visible, sorted list ---');
+{
+  assert.ok(deskHtml.includes('function visibleOrders()'), 'a shared visibleOrders() helper must exist');
+  assert.ok(deskHtml.includes('var visible = visibleOrders();'),
+    'the default selection must be computed from the same filtered/sorted list the queue renders, not raw sheet order');
+  console.log('✔ Suite 22 Passed\n');
 }
 
 // ---------------------------------------------------------------------------
 // 4. getCatalog()/pickLabels_() suites use a trimmed real copy of
 //    site-content.js so this fixture can never drift from the live site.
+//    getCatalog() now fetches site-content.json (see P3-1 in
+//    STUDIO-DESK-FIXES.md), built from site-content.js by scripts/build.js —
+//    so the fixture reproduces that exact build step rather than trusting a
+//    second, hand-written JSON copy that could drift from it.
 // ---------------------------------------------------------------------------
 const siteContentSrc = fs.readFileSync(path.join(__dirname, '..', 'site-content.js'), 'utf8');
 
-console.log('--- SUITE 11: getCatalog() parses site-content.js into the Part 4 shape, no prices ---');
+function buildSiteContentJson(src) {
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox);
+  return JSON.stringify(sandbox.window.ALXANTHIA_DATA);
+}
+
+const siteContentJson = buildSiteContentJson(siteContentSrc);
+
+console.log('--- SUITE 11: getCatalog() parses site-content.json into the Part 4 shape, no prices ---');
 {
-  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentSrc }) });
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
   const catalog = sandbox.getCatalog();
 
   assert.ok(catalog.flowers.Sunflower, 'a known flower key must resolve');
@@ -403,9 +540,25 @@ console.log('--- SUITE 12: getCatalog() falls back to the backup on a failed fet
   console.log('✔ Suite 12 Passed\n');
 }
 
+console.log('--- SUITE 12a: a malformed catalogue payload falls back to the backup instead of throwing ---');
+{
+  const backup = JSON.stringify({
+    flowers: { Rose: { name: 'Mawar', spec: '' } }, pots: {}, additions: {}, packages: [], wraps: {}, minimumLeadDays: 2
+  });
+  const sandbox = makeSandbox({
+    props: { DESK_CATALOG_BACKUP: backup },
+    fetch: () => ({ getResponseCode: () => 200, getContentText: () => '{not valid json' })
+  });
+  const catalog = sandbox.getCatalog();
+  assert.strictEqual(catalog.stale, true);
+  assert.strictEqual(catalog.flowers.Rose.name, 'Mawar');
+  assert.strictEqual(sandbox._cachePutCalls.length, 0, 'a payload that fails to parse must not populate the cache');
+  console.log('✔ Suite 12a Passed\n');
+}
+
 console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback, not a crash ---');
 {
-  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentSrc }) });
+  const sandbox = makeSandbox({ fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson }) });
   const catalog = sandbox.getCatalog();
   const lines = sandbox.buildTicketLines_([{ type: 'stem', id: 'unknown-flower', qty: 1 }], catalog);
   assert.strictEqual(lines.length, 1);
@@ -418,5 +571,5 @@ console.log('--- SUITE 13: an unknown catalogue key renders a humanised fallback
 }
 
 console.log('======================================================================');
-console.log('✔ ALL 13 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 28 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

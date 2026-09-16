@@ -1028,11 +1028,13 @@
     var payLabel = (PAYMENTS.find(function (p) { return p.key === pay; }) || {}).label || pay;
     auto.push({
       ok: pay === 'Paid' || pay === 'Deposit paid',
+      blocking: true,
       label: pay === 'Paid' ? 'Pembayaran lunas' : (pay === 'Deposit paid' ? 'DP 50% diterima' : 'Pembayaran belum diterima'),
       sub: 'Status di sheet: ' + payLabel
     });
     auto.push({
       ok: !order.mismatch,
+      blocking: true,
       label: order.mismatch ? 'Harga ditandai REVIEW' : 'Harga terverifikasi',
       sub: order.mismatch
         ? 'Verified Total dan Submitted Total beda di sheet — cek dulu sebelum mulai.'
@@ -1040,28 +1042,44 @@
     });
     var d = daysUntil(order.date);
     var leadDays = (catalog && catalog.minimumLeadDays) || 2;
-    auto.push({
-      ok: d >= 0,
-      label: d < 0 ? 'Sudah lewat tanggal' : (d < leadDays ? 'Tanggal mepet' : 'Tanggal masih cukup'),
-      sub: fmtDate(order.date) + ' · ' + relDate(order.date)
-    });
+    /* A past Preferred Date is worth a warning, not a permanent lock — she
+       still has to make the order. An unreadable date is different: there is
+       nothing to warn about, so that one stays blocking. */
+    if (isNaN(d)) {
+      auto.push({
+        ok: false,
+        blocking: true,
+        label: 'Tanggal pesanan tidak terbaca',
+        sub: 'Cek tanggal pesanan ini — formatnya tidak bisa dibaca.'
+      });
+    } else {
+      auto.push({
+        ok: d >= 0,
+        blocking: false,
+        label: d < 0 ? 'Sudah lewat tanggal' : (d < leadDays ? 'Tanggal mepet' : 'Tanggal masih cukup'),
+        sub: fmtDate(order.date) + ' · ' + relDate(order.date)
+      });
+    }
     auto.push(order.locationType === 'bali'
       ? {
           ok: !!(order.regency && order.method),
+          blocking: true,
           label: 'Tujuan lengkap',
           sub: (order.regency || '—') + ' · ' + (order.method === 'self_pickup' ? 'ambil sendiri' : 'Grab / Gojek')
         }
       : {
           ok: !!(order.address && order.city && order.postal),
+          blocking: true,
           label: 'Tujuan lengkap',
           sub: (order.city || '—') + ' ' + (order.postal || '')
         });
 
     var manual = order.card ? [{ key: 'card', label: 'Teks kartu sudah dibaca ulang' }] : [];
     var ticks = per(order.ref).ticks || {};
-    var autoOk = auto.every(function (c) { return c.ok; });
+    var autoOk = auto.every(function (c) { return !c.blocking || c.ok; });
+    var allOk = auto.every(function (c) { return c.ok; });
     var manualOk = manual.every(function (m) { return ticks[m.key]; });
-    return { auto: auto, manual: manual, autoOk: autoOk, ready: autoOk && manualOk };
+    return { auto: auto, manual: manual, autoOk: autoOk, allOk: allOk, ready: autoOk && manualOk };
   }
 
   /* =====================================================================
@@ -1129,7 +1147,7 @@
   function renderTop() {
     var late = 0, today = 0, pay = 0, working = 0;
     state.orders.forEach(function (o) {
-      if (o.phase === 'Delivered') return;
+      if (!isActive(o)) return;
       var d = daysUntil(o.date);
       if (d < 0) late++;
       else if (d === 0) today++;
@@ -1367,8 +1385,10 @@
             '<span class="label">' + esc(m.label) + '</span></button>';
         }).join('') +
         '<div class="actions"><button type="button" class="btn" data-advance="1"' + (g.ready && !phasePending ? '' : ' disabled') + '>' +
-        'Mulai kerjakan</button><span class="why' + (phaseErr ? ' err' : '') + '">' +
-        (phaseErr || (g.ready ? '' : (g.autoOk ? 'Centang baris di atas dulu.' : 'Belum bisa dimulai — lihat tanda merah di atas.'))) +
+        (g.ready && !g.allOk ? 'Tetap mulai kerjakan' : 'Mulai kerjakan') + '</button><span class="why' + (phaseErr ? ' err' : '') + '">' +
+        (phaseErr || (g.ready
+          ? (g.allOk ? '' : 'Tanggalnya sudah lewat — kabari pembeli dulu kalau perlu.')
+          : (g.autoOk ? 'Centang baris di atas dulu.' : 'Belum bisa dimulai — lihat tanda merah di atas.'))) +
         '</span></div></div>';
     }
 

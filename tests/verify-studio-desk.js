@@ -1159,7 +1159,7 @@ console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and repor
 
   const applyReport = sandbox.deskOpsMigrationApply();
   assert.ok(applyReport.includes('Desk Ledger') && applyReport.includes('creating'));
-  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'all three Desk Ops sheets must be created');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 7, 'all seven Desk Ops sheets must be created');
   // Array.from() re-materialises both sides in this (outer) realm — the vm
   // sandbox's own arrays are a different realm than this test file's, so a
   // strict-equal Array constructor check would fail here despite matching
@@ -1173,10 +1173,207 @@ console.log('--- SUITE 49: Desk Ops migration is additive, idempotent, and repor
   // Re-running after creation must be a no-op, not a duplicate/second sheet.
   const secondApply = sandbox.deskOpsMigrationApply();
   assert.ok(secondApply.includes('OK'), 're-running the migration once sheets exist must report OK, not recreate them');
-  assert.strictEqual(sandbox._insertedSheetNames.length, 3, 'a second run must not insert any further sheets');
+  assert.strictEqual(sandbox._insertedSheetNames.length, 7, 'a second run must not insert any further sheets');
   console.log('✔ Suite 49 Passed\n');
 }
 
+// ---------------------------------------------------------------------------
+// 6. Desk Ops suites (SD-08..SD-11 in STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md)
+//    — scheduling, package composition snapshots, delivery/pickup records,
+//    and explicit blockers, each additive and keyed by Order Reference like
+//    SD-01..SD-04 above.
+// ---------------------------------------------------------------------------
+console.log('--- SUITE 51 (SD-08): scheduling stores an agreed date/time and production deadline, validated and durable ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-SCHED-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Schedule': makeOpsSheetStub([[]]), 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const badDate = sandbox.setSchedule({ ref: 'ALX-SCHED-1', agreedDate: '2026/09/20' });
+  assert.strictEqual(badDate.ok, false);
+  assert.strictEqual(badDate.code, 'BAD_DATE');
+
+  const inconsistent = sandbox.setSchedule({ ref: 'ALX-SCHED-1', agreedDate: '2026-09-20', productionDeadline: '2026-09-22' });
+  assert.strictEqual(inconsistent.ok, false);
+  assert.strictEqual(inconsistent.code, 'INCONSISTENT_DATES', 'a production deadline after the agreed date must be rejected');
+
+  const first = sandbox.setSchedule({ ref: 'ALX-SCHED-1', agreedDate: '2026-09-20', agreedTime: '14:30', productionDeadline: '2026-09-19' });
+  assert.strictEqual(first.ok, true);
+  assert.strictEqual(first.schedule.agreedDate, '2026-09-20');
+  assert.strictEqual(first.schedule.agreedTime, '14:30');
+  assert.strictEqual(first.schedule.productionDeadline, '2026-09-19');
+
+  // Rescheduling upserts the same row rather than appending a second one.
+  const second = sandbox.setSchedule({ ref: 'ALX-SCHED-1', agreedDate: '2026-09-21', rescheduleReason: 'Pembeli minta ubah tanggal' });
+  assert.strictEqual(second.ok, true);
+  const stored = sandbox.getSchedule('ALX-SCHED-1');
+  assert.strictEqual(stored.agreedDate, '2026-09-21');
+  assert.strictEqual(stored.rescheduleReason, 'Pembeli minta ubah tanggal');
+
+  const activity = sandbox.getActivity('ALX-SCHED-1');
+  assert.strictEqual(activity.length, 2, 'each schedule change must leave its own activity entry');
+  assert.strictEqual(activity[0].action, 'schedule_changed');
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].schedule.agreedDate, '2026-09-21', 'listOrders() must surface the current schedule on each order');
+  console.log('✔ Suite 51 Passed\n');
+}
+
+console.log('--- SUITE 52 (SD-09): package composition is validated against the catalogue and snapshots labels; changing it invalidates its own checklist entry ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-COMP-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sheet = makeSheetStub(orderRows);
+  const checklistSheet = makeOpsSheetStub([[]]);
+  const sandbox = makeSandbox({
+    sheet,
+    opsSheets: { 'Desk Composition': makeOpsSheetStub([[]]), 'Desk Checklist': checklistSheet, 'Desk Activity': makeOpsSheetStub([[]]) },
+    fetch: () => ({ getResponseCode: () => 200, getContentText: () => siteContentJson })
+  });
+
+  // Package index 0 is specified as 3 stems (site-content.js), so a 2-stem
+  // composition must be rejected against the catalogue's own spec.
+  const mismatch = sandbox.setComposition({ ref: 'ALX-COMP-1', lineKey: 'line-1', packageIndex: 0, stems: { Sunflower: 2 } });
+  assert.strictEqual(mismatch.ok, false);
+  assert.strictEqual(mismatch.code, 'STEM_COUNT_MISMATCH');
+
+  const empty = sandbox.setComposition({ ref: 'ALX-COMP-1', lineKey: 'line-1', packageIndex: 0, stems: {} });
+  assert.strictEqual(empty.ok, false);
+  assert.strictEqual(empty.code, 'BAD_COMPOSITION');
+
+  // Tick the make-list entry for this same line before the composition changes.
+  checklistSheet.appendRow(['ALX-COMP-1', 'line-1', 'v1', true, '2026-09-12 10:00:00', 'maker@example.com']);
+
+  const res = sandbox.setComposition({ ref: 'ALX-COMP-1', lineKey: 'line-1', packageIndex: 0, stems: { Sunflower: 3 }, additions: { rounded: 1 } });
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.composition.stems[0].name, 'Bunga Matahari', 'the flower label must be snapshotted from the catalogue, not just the raw key');
+  assert.strictEqual(res.composition.additions[0].name, 'Daun Bulat');
+
+  const stored = sandbox.getComposition('ALX-COMP-1');
+  assert.strictEqual(stored.length, 1);
+  assert.strictEqual(stored[0].composition.stems[0].qty, 3);
+
+  const checklistState = sandbox.getChecklist('ALX-COMP-1');
+  const line1 = checklistState.find((c) => c.key === 'line-1');
+  assert.strictEqual(line1.completed, false, 'a composition change must invalidate whatever was already ticked for this same line');
+  console.log('✔ Suite 52 Passed\n');
+}
+
+console.log('--- SUITE 53 (SD-10): delivery info persists without clobbering unrelated fields, tracking is validated, and handoff/completion are payment- and blocker-gated, idempotent ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-DELIV-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Not started', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, {
+    'Desk Delivery': makeOpsSheetStub([[]]),
+    'Desk Ledger': makeOpsSheetStub([[]]),
+    'Desk Blocker': makeOpsSheetStub([[]]),
+    'Desk Activity': makeOpsSheetStub([[]])
+  });
+
+  const badTracking = sandbox.setDeliveryInfo({ ref: 'ALX-DELIV-1', tracking: 'javascript:alert(1)' });
+  assert.strictEqual(badTracking.ok, false);
+  assert.strictEqual(badTracking.code, 'BAD_TRACKING');
+
+  const info = sandbox.setDeliveryInfo({ ref: 'ALX-DELIV-1', recipientName: 'Made Ayu', courier: 'Grab', tracking: 'https://track.example/abc' });
+  assert.strictEqual(info.ok, true);
+  assert.strictEqual(info.delivery.recipientName, 'Made Ayu');
+
+  const partial = sandbox.setDeliveryInfo({ ref: 'ALX-DELIV-1', destinationDetail: 'Depan pagar hijau' });
+  assert.strictEqual(partial.delivery.recipientName, 'Made Ayu', 'an unrelated field update must preserve what was already set');
+  assert.strictEqual(partial.delivery.tracking, 'https://track.example/abc');
+
+  const blockedByPayment = sandbox.markHandoff({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(blockedByPayment.ok, false);
+  assert.strictEqual(blockedByPayment.code, 'PAYMENT_DUE', 'handoff (courier or self-pickup alike) must never bypass the payment gate');
+
+  sandbox.recordPayment({ ref: 'ALX-DELIV-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-deliv-1' });
+  sandbox.updateOrder({ ref: 'ALX-DELIV-1', row: 2, field: 'payment', value: 'Paid' });
+  const stillShort = sandbox.markHandoff({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(stillShort.ok, false);
+  assert.strictEqual(stillShort.code, 'PAYMENT_DUE', 'Payment Status alone is not authoritative once ledger events exist — the received total must also cover the bill');
+
+  sandbox.recordPayment({ ref: 'ALX-DELIV-1', type: 'receipt', amount: 50000, idempotencyKey: 'idem-deliv-2' });
+
+  sandbox.setBlocker({ ref: 'ALX-DELIV-1', reason: 'menunggu jawaban pembeli' });
+  const blockedByBlocker = sandbox.markHandoff({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(blockedByBlocker.ok, false);
+  assert.strictEqual(blockedByBlocker.code, 'BLOCKED', 'an open blocker must hold handoff, not just phase changes');
+  sandbox.resolveBlocker({ ref: 'ALX-DELIV-1' });
+
+  const handoff = sandbox.markHandoff({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(handoff.ok, true);
+  assert.ok(handoff.delivery.handoffAt);
+
+  const handoffRetry = sandbox.markHandoff({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(handoffRetry.idempotentReplay, true, 'a repeated handoff command must not overwrite the original handoffAt');
+  assert.strictEqual(handoffRetry.delivery.handoffAt, handoff.delivery.handoffAt);
+
+  const complete = sandbox.markDeliveryComplete({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(complete.ok, true);
+  assert.ok(complete.delivery.completedAt);
+
+  const completeRetry = sandbox.markDeliveryComplete({ ref: 'ALX-DELIV-1' });
+  assert.strictEqual(completeRetry.idempotentReplay, true);
+  assert.strictEqual(completeRetry.delivery.completedAt, complete.delivery.completedAt);
+  console.log('✔ Suite 53 Passed\n');
+}
+
+console.log('--- SUITE 54 (SD-11): a blocker holds forward phase progress only, is idempotent to open/resolve, and never touches payment or notes ---');
+{
+  const orderRows = [rowFor({
+    'Order Reference': 'ALX-BLOCK-1', 'Preferred Date': '2026-09-20', 'Item Data': '[]', 'Order Summary': 'x',
+    'Work Phase': 'Assembly and packing', 'Location Type': 'bali', 'Verified Total': 100000, 'Shipping Fee': '', 'Payment Status': 'Unpaid'
+  })];
+  const sandbox = makeDeskOpsSandbox(orderRows, { 'Desk Blocker': makeOpsSheetStub([[]]), 'Desk Activity': makeOpsSheetStub([[]]) });
+
+  const badReason = sandbox.setBlocker({ ref: 'ALX-BLOCK-1', reason: 'alasan aneh' });
+  assert.strictEqual(badReason.ok, false);
+  assert.strictEqual(badReason.code, 'BAD_REASON');
+
+  const opened = sandbox.setBlocker({ ref: 'ALX-BLOCK-1', reason: 'bahan belum tersedia', note: 'Menunggu kiriman mawar' });
+  assert.strictEqual(opened.ok, true);
+  assert.strictEqual(opened.blocker.reason, 'bahan belum tersedia');
+
+  // Opening again while one is already open is a no-op replay, not a second blocker.
+  const openedAgain = sandbox.setBlocker({ ref: 'ALX-BLOCK-1', reason: 'masalah pengiriman' });
+  assert.strictEqual(openedAgain.idempotentReplay, true);
+  assert.strictEqual(openedAgain.blocker.reason, 'bahan belum tersedia', 'a second setBlocker call must return the existing open blocker, not open a different one');
+
+  const forward = sandbox.updateOrder({ ref: 'ALX-BLOCK-1', row: 2, field: 'phase', value: 'Ready for dispatch' });
+  assert.strictEqual(forward.ok, false);
+  assert.strictEqual(forward.code, 'BLOCKED', 'an open blocker must hold forward phase movement');
+
+  const backward = sandbox.updateOrder({ ref: 'ALX-BLOCK-1', row: 2, field: 'phase', value: 'Not started' });
+  assert.strictEqual(backward.ok, true, 'moving backward must stay usable while a blocker is open');
+
+  const notes = sandbox.updateOrder({ ref: 'ALX-BLOCK-1', row: 2, field: 'notes', value: 'Catatan internal' });
+  assert.strictEqual(notes.ok, true, 'an open blocker must never hold unrelated fields like notes');
+
+  const resolved = sandbox.resolveBlocker({ ref: 'ALX-BLOCK-1' });
+  assert.strictEqual(resolved.ok, true);
+  assert.strictEqual(resolved.blocker, null);
+
+  const resolvedRetry = sandbox.resolveBlocker({ ref: 'ALX-BLOCK-1' });
+  assert.strictEqual(resolvedRetry.idempotentReplay, true, 'resolving with nothing open must be a no-op, not an error');
+
+  const nowAllowed = sandbox.updateOrder({ ref: 'ALX-BLOCK-1', row: 2, field: 'phase', value: 'Assembly and packing' });
+  assert.strictEqual(nowAllowed.ok, true, 'forward movement must be allowed again once the blocker is resolved');
+
+  const activity = sandbox.getActivity('ALX-BLOCK-1');
+  assert.ok(activity.some((a) => a.action === 'blocker_opened'));
+  assert.ok(activity.some((a) => a.action === 'blocker_resolved'));
+
+  const orders = sandbox.listOrders();
+  assert.strictEqual(orders[0].blocker, null, 'listOrders() must show no open blocker once resolved');
+  console.log('✔ Suite 54 Passed\n');
+}
+
 console.log('======================================================================');
-console.log('✔ ALL 50 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
+console.log('✔ ALL 54 STUDIO DESK SERVER SUITES PASSED SUCCESSFULLY');
 console.log('======================================================================');

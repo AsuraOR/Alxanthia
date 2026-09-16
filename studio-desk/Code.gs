@@ -41,7 +41,7 @@ var PHASE_VALUES = ['Not started', 'Assembly and packing', 'Ready for dispatch',
 
 // ============================================================================
 // Desk Ops — additive operational storage beyond the five Orders columns
-// above (see STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md, ground rule 4). Three
+// above (see STUDIO-DESK-ADDITIONAL-IMPLEMENTATION.md, ground rule 4). Seven
 // small sheets, each in the same spreadsheet as Orders, each keyed by Order
 // Reference, each written only through the narrow, validated commands below
 // — never through updateOrder(), which stays limited to WRITABLE_FIELDS.
@@ -54,6 +54,37 @@ var DESK_CHECKLIST_SHEET = 'Desk Checklist';
 var DESK_CHECKLIST_HEADERS = ['Order Reference', 'Item Key', 'Content Version', 'Completed', 'Completed At', 'Completed By'];
 var DESK_ACTIVITY_SHEET = 'Desk Activity';
 var DESK_ACTIVITY_HEADERS = ['Event ID', 'Order Reference', 'Action', 'Detail', 'At', 'By', 'Mutation ID'];
+
+// SD-08 — one row per order, upserted (not append-only like the ledger): the
+// current agreed fulfillment commitment and internal production target,
+// kept distinct from the Orders sheet's own Preferred Date (the customer's
+// original, provisional request — never overwritten by this).
+var DESK_SCHEDULE_SHEET = 'Desk Schedule';
+var DESK_SCHEDULE_HEADERS = ['Order Reference', 'Agreed Date', 'Agreed Time', 'Production Deadline', 'Agreed At', 'Agreed By', 'Reschedule Reason'];
+
+// SD-09 — one row per (order, package line), upserted: what she actually
+// put in a studio-selected package, snapshotted so a later catalogue change
+// can never rewrite what a historical order meant.
+var DESK_COMPOSITION_SHEET = 'Desk Composition';
+var DESK_COMPOSITION_HEADERS = ['Order Reference', 'Line Key', 'Composition JSON', 'Updated At', 'Updated By'];
+
+// SD-10 — one row per order, upserted: delivery/pickup facts distinct from
+// Work Phase. Handoff (she released it) and receipt/pickup completion
+// (confirmed received) are separate timestamps — the first is never proof
+// of the second.
+var DESK_DELIVERY_SHEET = 'Desk Delivery';
+var DESK_DELIVERY_HEADERS = [
+  'Order Reference', 'Recipient Name', 'Recipient Contact', 'Destination Detail', 'Courier', 'Tracking',
+  'Handoff At', 'Completed At', 'Updated At', 'Updated By'
+];
+
+// SD-11 — append-only: opening a blocker and resolving it are each their
+// own row, so the history of what blocked an order and when it cleared is
+// never overwritten. The CURRENT state is "the latest row for this ref
+// with no Resolved At".
+var DESK_BLOCKER_SHEET = 'Desk Blocker';
+var DESK_BLOCKER_HEADERS = ['Event ID', 'Order Reference', 'Reason', 'Note', 'Opened At', 'Opened By', 'Resolved At', 'Resolved By'];
+var BLOCKER_REASONS = ['bahan belum tersedia', 'menunggu jawaban pembeli', 'masalah pengiriman', 'lainnya'];
 
 // receipt: money in. refund: money out. correction: a signed adjustment for
 // fixing a mistake without silently editing or deleting the row it corrects
@@ -108,12 +139,15 @@ function listOrders() {
 
   var ledgerSummary = getLedgerSummaryMap_();
   var reviewedMap = getReviewedMap_();
+  var scheduleMap = getScheduleMap_();
+  var deliveryMap = getDeliveryMap_();
+  var blockerMap = getBlockerMap_();
 
   var orders = [];
   for (var i = 0; i < values.length; i += 1) {
     var order = rowToOrder_(values[i], headers, startRow + i);
     if (order && includeOrder_(order)) {
-      attachOpsSummary_(order, ledgerSummary, reviewedMap);
+      attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap);
       orders.push(order);
     }
   }
@@ -297,6 +331,25 @@ function updateOrder(payload) {
       }
     }
 
+    // SD-11: an open blocker never cancels an order or erases its
+    // progress, but it does hold forward work — moving deeper into the
+    // phase sequence — until resolved. Moving backward (Kembali) and
+    // everything else (payment, notes, cara pembayaran) stays usable.
+    if (field === 'phase') {
+      var currentPhaseValue = String(sheet.getRange(row, colIdx + 1).getValue());
+      var currentPhaseIdx = PHASE_VALUES.indexOf(currentPhaseValue);
+      var targetPhaseIdx = PHASE_VALUES.indexOf(validated.value);
+      if (targetPhaseIdx > currentPhaseIdx) {
+        var openBlocker = getOpenBlocker_(ref);
+        if (openBlocker) {
+          return {
+            ok: false, code: 'BLOCKED',
+            message: 'Pesanan ini masih ada kendala (' + openBlocker.reason + ') — selesaikan dulu sebelum melanjutkan tahap kerja.'
+          };
+        }
+      }
+    }
+
     sheet.getRange(row, colIdx + 1).setValue(validated.value);
 
     // Best-effort activity log entry for the change just made. This is a
@@ -417,7 +470,11 @@ function ensureDeskOpsSheets_(apply) {
   var specs = [
     { name: DESK_LEDGER_SHEET, headers: DESK_LEDGER_HEADERS },
     { name: DESK_CHECKLIST_SHEET, headers: DESK_CHECKLIST_HEADERS },
-    { name: DESK_ACTIVITY_SHEET, headers: DESK_ACTIVITY_HEADERS }
+    { name: DESK_ACTIVITY_SHEET, headers: DESK_ACTIVITY_HEADERS },
+    { name: DESK_SCHEDULE_SHEET, headers: DESK_SCHEDULE_HEADERS },
+    { name: DESK_COMPOSITION_SHEET, headers: DESK_COMPOSITION_HEADERS },
+    { name: DESK_DELIVERY_SHEET, headers: DESK_DELIVERY_HEADERS },
+    { name: DESK_BLOCKER_SHEET, headers: DESK_BLOCKER_HEADERS }
   ];
   var report = [];
   specs.forEach(function (spec) {
@@ -458,7 +515,7 @@ function deskOpsMigrationDryRun() {
 }
 
 // Select this function in the Apps Script editor and press Run to actually
-// create the three Desk Ops sheets (or add any headers missing from an
+// create the seven Desk Ops sheets (or add any headers missing from an
 // existing one). Safe to re-run.
 function deskOpsMigrationApply() {
   return ensureDeskOpsSheets_(true);
@@ -656,7 +713,7 @@ function getPaymentLedger(ref) {
 // whose Payment Status implies money already changed hands, but which has
 // no ledger events, is surfaced as needing reconciliation rather than
 // being silently treated as freshly unpaid or, worse, as fully received.
-function attachOpsSummary_(order, ledgerSummary, reviewedMap) {
+function attachOpsSummary_(order, ledgerSummary, reviewedMap, scheduleMap, deliveryMap, blockerMap) {
   var ledger = ledgerSummary[order.ref];
   order.received = ledger ? ledger.received : 0;
   order.hasLedgerEvents = !!(ledger && ledger.hasLedgerEvents);
@@ -665,6 +722,9 @@ function attachOpsSummary_(order, ledgerSummary, reviewedMap) {
   var reviewed = reviewedMap[order.ref];
   order.reviewedAt = reviewed ? reviewed.reviewedAt : '';
   order.reviewedBy = reviewed ? reviewed.reviewedBy : '';
+  order.schedule = (scheduleMap && scheduleMap[order.ref]) || null;
+  order.delivery = (deliveryMap && deliveryMap[order.ref]) || null;
+  order.blocker = (blockerMap && blockerMap[order.ref]) || null;
 }
 
 // Single-order equivalent of attachOpsSummary_, for updateOrder()'s and
@@ -680,6 +740,9 @@ function attachOpsSummaryForSingle_(order) {
   var reviewed = getReviewedForRef_(order.ref);
   order.reviewedAt = reviewed.reviewedAt;
   order.reviewedBy = reviewed.reviewedBy;
+  order.schedule = getSchedule_(order.ref);
+  order.delivery = getDelivery_(order.ref);
+  order.blocker = getOpenBlocker_(order.ref);
   return order;
 }
 
@@ -723,22 +786,10 @@ function setChecklistItem(payload) {
   }
   try {
     var sheet = openOpsSheet_(DESK_CHECKLIST_SHEET);
-    var lastRow = sheet.getLastRow();
-    var foundRow = 0;
-    if (lastRow >= 2) {
-      var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-      for (var i = 0; i < values.length; i += 1) {
-        if (String(values[i][0]) === ref && String(values[i][1]) === key) { foundRow = i + 2; break; }
-      }
-    }
     var by = String(Session.getActiveUser().getEmail() || '');
     var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
     var row = [ref, key, contentVersion, completed, completed ? at : '', completed ? by : ''];
-    if (foundRow) {
-      sheet.getRange(foundRow, 1, 1, row.length).setValues([row]);
-    } else {
-      sheet.appendRow(row);
-    }
+    upsertRow_(sheet, [ref, key], row);
     return { ok: true, item: { key: key, contentVersion: contentVersion, completed: completed, completedAt: row[4], completedBy: row[5] } };
   } finally {
     lock.releaseLock();
@@ -840,6 +891,516 @@ function getReviewedMap_() {
     map[String(values[i][1])] = { reviewedAt: String(values[i][4] || ''), reviewedBy: String(values[i][5] || '') };
   }
   return map;
+}
+
+// ============================================================================
+// Shared "one current row per key" upsert — Desk Schedule, Desk
+// Composition, and Desk Delivery all keep exactly one current row per key
+// and overwrite it in place (unlike the append-only Desk Ledger/Blocker).
+// ============================================================================
+function upsertRow_(sheet, keyValues, rowValues) {
+  var lastRow = sheet.getLastRow();
+  var foundRow = 0;
+  if (lastRow >= 2) {
+    var keyLen = keyValues.length;
+    var existing = sheet.getRange(2, 1, lastRow - 1, keyLen).getValues();
+    for (var i = 0; i < existing.length; i += 1) {
+      var match = true;
+      for (var k = 0; k < keyLen; k += 1) {
+        if (String(existing[i][k]) !== String(keyValues[k])) { match = false; break; }
+      }
+      if (match) { foundRow = i + 2; break; }
+    }
+  }
+  if (foundRow) {
+    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+}
+
+function validateDateStr_(s) {
+  if (s === '' || s === null || s === undefined) return { ok: true, value: '' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return { ok: false };
+  var d = new Date(String(s) + 'T00:00:00');
+  if (isNaN(d.getTime())) return { ok: false };
+  return { ok: true, value: String(s) };
+}
+
+function validateTimeStr_(s) {
+  if (s === '' || s === null || s === undefined) return { ok: true, value: '' };
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(s))) return { ok: false };
+  return { ok: true, value: String(s) };
+}
+
+// ============================================================================
+// SD-08 — scheduling. Preferred Date on the Orders sheet stays the
+// customer's original, provisional request; this is the current agreed
+// commitment and internal production target, entirely separate and never
+// overwriting it.
+// ============================================================================
+function setSchedule(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var agreedDateV = validateDateStr_(payload.agreedDate);
+  if (!agreedDateV.ok) return { ok: false, code: 'BAD_DATE', message: 'Tanggal yang disepakati tidak valid.' };
+  var agreedTimeV = validateTimeStr_(payload.agreedTime);
+  if (!agreedTimeV.ok) return { ok: false, code: 'BAD_TIME', message: 'Jam yang disepakati tidak valid.' };
+  var deadlineV = validateDateStr_(payload.productionDeadline);
+  if (!deadlineV.ok) return { ok: false, code: 'BAD_DEADLINE', message: 'Target produksi tidak valid.' };
+
+  // The production target exists to make sure making finishes in time to
+  // dispatch by the agreed date — it must not fall after it.
+  if (agreedDateV.value && deadlineV.value && deadlineV.value > agreedDateV.value) {
+    return { ok: false, code: 'INCONSISTENT_DATES', message: 'Target produksi tidak boleh lebih lambat dari tanggal yang disepakati.' };
+  }
+
+  var note = safeText_(String(payload.rescheduleReason || '').slice(0, 300));
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var sheet = openOpsSheet_(DESK_SCHEDULE_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var row = [ref, agreedDateV.value, agreedTimeV.value, deadlineV.value, at, by, note];
+    upsertRow_(sheet, [ref], row);
+
+    var detailParts = [];
+    if (agreedDateV.value) detailParts.push('tanggal disepakati ' + agreedDateV.value + (agreedTimeV.value ? ' ' + agreedTimeV.value : ''));
+    if (deadlineV.value) detailParts.push('target produksi ' + deadlineV.value);
+    logActivity_(ref, 'schedule_changed', 'Jadwal diperbarui: ' + (detailParts.join(', ') || 'dikosongkan') + (note ? ' — ' + note : ''), '');
+
+    return {
+      ok: true,
+      schedule: {
+        agreedDate: agreedDateV.value, agreedTime: agreedTimeV.value, productionDeadline: deadlineV.value,
+        agreedAt: at, agreedBy: by, rescheduleReason: note
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function rowToSchedule_(row) {
+  return {
+    agreedDate: String(row[1] || ''), agreedTime: String(row[2] || ''), productionDeadline: String(row[3] || ''),
+    agreedAt: String(row[4] || ''), agreedBy: String(row[5] || ''), rescheduleReason: String(row[6] || '')
+  };
+}
+
+function getSchedule_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_SCHEDULE_SHEET); } catch (e) { return null; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_SCHEDULE_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][0]) === ref) return rowToSchedule_(values[i]);
+  }
+  return null;
+}
+
+function getSchedule(ref) {
+  checkAccess_();
+  return getSchedule_(String(ref || ''));
+}
+
+function getScheduleMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_SCHEDULE_SHEET); } catch (e) { return map; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_SCHEDULE_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    var ref = String(values[i][0]);
+    if (ref) map[ref] = rowToSchedule_(values[i]);
+  }
+  return map;
+}
+
+// ============================================================================
+// SD-09 — package composition snapshot. Line Key reuses the same
+// itemChecklistKeys_ scheme as Desk Checklist (content-derived, stable
+// across reordering) so a package's composition and its make-list check
+// are always talking about the same physical line. Labels are snapshotted
+// into the stored JSON so a later catalogue edit or removal can never
+// rewrite what a historical order actually meant.
+// ============================================================================
+function catalogForValidation_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(CATALOG_CACHE_KEY);
+  return hit ? JSON.parse(hit) : fetchAndCacheCatalog_();
+}
+
+function setComposition(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var lineKey = String(payload.lineKey || '');
+  if (!ref || !lineKey) return { ok: false, code: 'BAD_KEY', message: 'Referensi atau baris paket tidak valid.' };
+
+  var rawStems = (payload.stems && typeof payload.stems === 'object') ? payload.stems : {};
+  var rawAdditions = (payload.additions && typeof payload.additions === 'object') ? payload.additions : {};
+  var cleanStems = {};
+  var stemTotal = 0;
+  Object.keys(rawStems).forEach(function (k) {
+    var n = Math.round(Number(rawStems[k]));
+    if (isFinite(n) && n > 0) { cleanStems[String(k)] = n; stemTotal += n; }
+  });
+  var cleanAdditions = {};
+  Object.keys(rawAdditions).forEach(function (k) {
+    var n = Math.round(Number(rawAdditions[k]));
+    if (isFinite(n) && n > 0) cleanAdditions[String(k)] = n;
+  });
+  if (stemTotal <= 0) return { ok: false, code: 'BAD_COMPOSITION', message: 'Isi komposisi paket dulu — pilih bunga dan jumlahnya.' };
+
+  var catalog = catalogForValidation_();
+  var pkg = (catalog.packages || [])[Number(payload.packageIndex)];
+  if (pkg && typeof pkg.stems === 'number' && stemTotal !== pkg.stems) {
+    return {
+      ok: false, code: 'STEM_COUNT_MISMATCH',
+      message: 'Jumlah tangkai (' + stemTotal + ') harus sama dengan spesifikasi paket (' + pkg.stems + ' tangkai).'
+    };
+  }
+
+  var snapshot = {
+    stems: Object.keys(cleanStems).map(function (k) {
+      return { key: k, qty: cleanStems[k], name: resolveLabel_(catalog.flowers, k).name };
+    }),
+    additions: Object.keys(cleanAdditions).map(function (k) {
+      return { key: k, qty: cleanAdditions[k], name: resolveLabel_(catalog.additions, k).name };
+    })
+  };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var sheet = openOpsSheet_(DESK_COMPOSITION_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    upsertRow_(sheet, [ref, lineKey], [ref, lineKey, JSON.stringify(snapshot), at, by]);
+
+    // A composition change invalidates whatever was already ticked for
+    // this same line in the make-list — see SD-09's "invalidate affected
+    // completion checks if composition changes after work starts".
+    try {
+      var checklistSheet = openOpsSheet_(DESK_CHECKLIST_SHEET);
+      upsertRow_(checklistSheet, [ref, lineKey], [ref, lineKey, '', false, '', '']);
+    } catch (checklistError) { /* checklist sheet optional; nothing to invalidate if absent */ }
+
+    logActivity_(ref, 'composition_set', 'Komposisi paket dicatat: ' + stemTotal + ' tangkai', '');
+    return { ok: true, composition: snapshot };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getComposition(ref) {
+  checkAccess_();
+  ref = String(ref || '');
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_COMPOSITION_SHEET); } catch (e) { return []; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_COMPOSITION_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][0]) !== ref) continue;
+    var parsed = null;
+    try { parsed = JSON.parse(String(values[i][2] || 'null')); } catch (parseError) { parsed = null; }
+    out.push({ lineKey: String(values[i][1]), composition: parsed, updatedAt: String(values[i][3] || ''), updatedBy: String(values[i][4] || '') });
+  }
+  return out;
+}
+
+// ============================================================================
+// SD-10 — delivery and pickup records, distinct from Work Phase. Handoff
+// (she released the goods) and completion (confirmed received/picked up)
+// are separate, each stamped server-side at call time — never trusting a
+// client-supplied timestamp — and each idempotent (an already-recorded
+// timestamp is never silently overwritten by a retry).
+// ============================================================================
+function rowToDelivery_(row) {
+  return {
+    recipientName: String(row[1] || ''), recipientContact: String(row[2] || ''), destinationDetail: String(row[3] || ''),
+    courier: String(row[4] || ''), tracking: String(row[5] || ''), handoffAt: String(row[6] || ''),
+    completedAt: String(row[7] || ''), updatedAt: String(row[8] || ''), updatedBy: String(row[9] || '')
+  };
+}
+
+function getDelivery_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_DELIVERY_SHEET); } catch (e) { return null; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_DELIVERY_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][0]) === ref) return rowToDelivery_(values[i]);
+  }
+  return null;
+}
+
+function getDelivery(ref) {
+  checkAccess_();
+  return getDelivery_(String(ref || ''));
+}
+
+function getDeliveryMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_DELIVERY_SHEET); } catch (e) { return map; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_DELIVERY_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    var ref = String(values[i][0]);
+    if (ref) map[ref] = rowToDelivery_(values[i]);
+  }
+  return map;
+}
+
+// Accepts empty, a bare code/text, or an http(s) URL — anything else
+// (javascript:, data:, or a malformed scheme) is rejected outright, so the
+// client can safely decide whether to render this as a clickable link.
+function validateTracking_(value) {
+  var text = String(value || '').trim();
+  if (!text) return { ok: true, value: '', isUrl: false };
+  if (/^https?:\/\/\S+$/i.test(text)) return { ok: true, value: text.slice(0, 500), isUrl: true };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) return { ok: false };
+  return { ok: true, value: safeText_(text.slice(0, 200)), isUrl: false };
+}
+
+function setDeliveryInfo(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var trackingV = validateTracking_(payload.tracking);
+  if (!trackingV.ok) return { ok: false, code: 'BAD_TRACKING', message: 'Nomor/tautan lacak tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var sheet = openOpsSheet_(DESK_DELIVERY_SHEET);
+    var existing = getDelivery_(ref) || {};
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var row = [
+      ref,
+      safeText_(String(payload.recipientName !== undefined ? payload.recipientName : (existing.recipientName || '')).slice(0, 200)),
+      safeText_(String(payload.recipientContact !== undefined ? payload.recipientContact : (existing.recipientContact || '')).slice(0, 200)),
+      safeText_(String(payload.destinationDetail !== undefined ? payload.destinationDetail : (existing.destinationDetail || '')).slice(0, 500)),
+      safeText_(String(payload.courier !== undefined ? payload.courier : (existing.courier || '')).slice(0, 200)),
+      payload.tracking !== undefined ? trackingV.value : (existing.tracking || ''),
+      existing.handoffAt || '', existing.completedAt || '', at, by
+    ];
+    upsertRow_(sheet, [ref], row);
+    logActivity_(ref, 'delivery_updated', 'Info pengantaran diperbarui.', '');
+    return { ok: true, delivery: rowToDelivery_(row) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Shared by markHandoff() below — goods must not leave the studio (courier
+// OR self-pickup) ahead of full payment. Mirrors updateOrder()'s own
+// Shipped/Delivered check, including the SD-01 ledger cross-check, so
+// pickup can never bypass the same rule shipping is held to.
+function requirePaymentComplete_(ref) {
+  var sheet = openSheet_();
+  var headers = readHeaders_(sheet);
+  var refCol = headers.map['Order Reference'];
+  var row = findRowByReference_(sheet, refCol, ref, null);
+  if (!row) return { ok: false, code: 'NOT_FOUND', message: 'Pesanan dengan referensi ini tidak ditemukan lagi.' };
+  var paymentCol = headers.map['Payment Status'];
+  var currentPayment = paymentCol === undefined ? '' : sheet.getRange(row, paymentCol + 1).getValue();
+  if (String(currentPayment) !== 'Paid') {
+    return { ok: false, code: 'PAYMENT_DUE', message: 'Pelunasan harus diterima sebelum pesanan diserahkan.' };
+  }
+  var verifiedCol = headers.map['Verified Total'];
+  var shippingCol = headers.map['Shipping Fee'];
+  var verifiedTotal = verifiedCol === undefined ? 0 : Number(sheet.getRange(row, verifiedCol + 1).getValue()) || 0;
+  var shippingFee = shippingCol === undefined ? 0 : Number(sheet.getRange(row, shippingCol + 1).getValue()) || 0;
+  var billedTotal = verifiedTotal + shippingFee;
+  var ledgerCheck = getPaymentSummaryForRef_(ref);
+  if (ledgerCheck.hasLedgerEvents && ledgerCheck.received < billedTotal) {
+    return { ok: false, code: 'PAYMENT_DUE', message: 'Jumlah yang tercatat diterima belum mencapai total tagihan.' };
+  }
+  return { ok: true };
+}
+
+function markHandoff(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var existing = getDelivery_(ref) || {};
+    if (existing.handoffAt) return { ok: true, delivery: existing, idempotentReplay: true };
+
+    var paymentCheck = requirePaymentComplete_(ref);
+    if (!paymentCheck.ok) return paymentCheck;
+
+    var openBlockerForHandoff = getOpenBlocker_(ref);
+    if (openBlockerForHandoff) {
+      return {
+        ok: false, code: 'BLOCKED',
+        message: 'Pesanan ini masih ada kendala (' + openBlockerForHandoff.reason + ') — selesaikan dulu sebelum menyerahkan pesanan.'
+      };
+    }
+
+    var sheet = openOpsSheet_(DESK_DELIVERY_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var row = [
+      ref, existing.recipientName || '', existing.recipientContact || '', existing.destinationDetail || '',
+      existing.courier || '', existing.tracking || '', at, existing.completedAt || '', at, by
+    ];
+    upsertRow_(sheet, [ref], row);
+    logActivity_(ref, 'handoff_recorded', 'Pesanan diserahkan untuk pengiriman/diambil.', '');
+    return { ok: true, delivery: rowToDelivery_(row) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function markDeliveryComplete(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var existing = getDelivery_(ref) || {};
+    if (existing.completedAt) return { ok: true, delivery: existing, idempotentReplay: true };
+
+    var sheet = openOpsSheet_(DESK_DELIVERY_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    var row = [
+      ref, existing.recipientName || '', existing.recipientContact || '', existing.destinationDetail || '',
+      existing.courier || '', existing.tracking || '', existing.handoffAt || '', at, at, by
+    ];
+    upsertRow_(sheet, [ref], row);
+    logActivity_(ref, 'delivery_completed', 'Pesanan dikonfirmasi diterima/diambil.', '');
+    return { ok: true, delivery: rowToDelivery_(row) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============================================================================
+// SD-11 — explicit blockers. Append-only: opening and resolving are
+// distinct, timestamped events, so a blocker's full lifecycle is never
+// silently rewritten. At most one blocker is open per order at a time —
+// calling setBlocker() again while one is already open just returns the
+// existing one instead of opening a second; resolve it first to record a
+// different reason. A blocker never touches Work Phase, Payment Status, or
+// any checklist/ledger state — see updateOrder()/markHandoff() for the
+// narrow "holds forward work only" enforcement.
+// ============================================================================
+function rowToBlocker_(row, rowIndex) {
+  return {
+    eventId: String(row[0]), ref: String(row[1]), reason: String(row[2] || ''), note: String(row[3] || ''),
+    openedAt: String(row[4] || ''), openedBy: String(row[5] || ''), resolvedAt: String(row[6] || ''), resolvedBy: String(row[7] || ''),
+    row: rowIndex
+  };
+}
+
+function getOpenBlocker_(ref) {
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_BLOCKER_SHEET); } catch (e) { return null; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_BLOCKER_HEADERS.length).getValues();
+  var found = null;
+  for (var i = 0; i < values.length; i += 1) {
+    if (String(values[i][1]) !== ref || String(values[i][6] || '')) continue;
+    found = rowToBlocker_(values[i], i + 2);
+  }
+  return found;
+}
+
+function getBlocker(ref) {
+  checkAccess_();
+  return getOpenBlocker_(String(ref || ''));
+}
+
+function getBlockerMap_() {
+  var map = {};
+  var sheet;
+  try { sheet = openOpsSheet_(DESK_BLOCKER_SHEET); } catch (e) { return map; }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var values = sheet.getRange(2, 1, lastRow - 1, DESK_BLOCKER_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i += 1) {
+    var ref = String(values[i][1]);
+    if (!ref || String(values[i][6] || '')) continue;
+    map[ref] = rowToBlocker_(values[i], i + 2);
+  }
+  return map;
+}
+
+function setBlocker(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  var reason = String(payload.reason || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+  if (BLOCKER_REASONS.indexOf(reason) === -1) return { ok: false, code: 'BAD_REASON', message: 'Alasan kendala tidak dikenali.' };
+  var note = safeText_(String(payload.note || '').slice(0, 500));
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var existing = getOpenBlocker_(ref);
+    if (existing) return { ok: true, blocker: existing, idempotentReplay: true };
+
+    var sheet = openOpsSheet_(DESK_BLOCKER_SHEET);
+    var eventId = 'blk_' + Utilities.getUuid();
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    sheet.appendRow([eventId, ref, reason, note, at, by, '', '']);
+    logActivity_(ref, 'blocker_opened', 'Kendala: ' + reason + (note ? ' — ' + note : ''), '');
+    return { ok: true, blocker: { eventId: eventId, ref: ref, reason: reason, note: note, openedAt: at, openedBy: by, resolvedAt: '', resolvedBy: '' } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function resolveBlocker(payload) {
+  checkAccess_();
+  payload = payload || {};
+  var ref = String(payload.ref || '');
+  if (!ref) return { ok: false, code: 'BAD_REF', message: 'Referensi pesanan tidak valid.' };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, code: 'LOCKED', message: 'Sheet sedang dipakai proses lain. Coba lagi sebentar.' };
+  try {
+    var existing = getOpenBlocker_(ref);
+    if (!existing) return { ok: true, blocker: null, idempotentReplay: true };
+
+    var sheet = openOpsSheet_(DESK_BLOCKER_SHEET);
+    var by = String(Session.getActiveUser().getEmail() || '');
+    var at = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+    sheet.getRange(existing.row, 7, 1, 2).setValues([[at, by]]);
+    logActivity_(ref, 'blocker_resolved', 'Kendala selesai: ' + existing.reason, '');
+    return { ok: true, blocker: null };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ============================================================================

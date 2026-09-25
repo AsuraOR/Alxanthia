@@ -1,6 +1,7 @@
 /**
- * Synthesised sound design for the reel: pen scratches while the ink draws,
- * a paper rustle at each plate turn, and a soft chime as the logo appears.
+ * Synthesised stop-motion paper sound design: stamp thumps, a tap for each
+ * cut-paper piece placed, tag flicks, sheets sliding, and a soft chime as the
+ * logo appears.
  * Deterministic (seeded noise), timed from timeline.js, silent at both ends
  * so the loop is seamless. Writes a 48 kHz stereo 16-bit WAV.
  */
@@ -40,30 +41,27 @@ function synth() {
   const rand = rng(20260925);
   const add = (i, v, pan) => { if (i >= 0 && i < N) { L[i] += v * (1 - pan) * 1.4; R[i] += v * (1 + pan) * 1.4; } };
 
-  // Pen scratches: short nib gestures of band-passed noise with a gritty envelope.
-  const drawWindows = TL.plateStarts.map((s) => [s + 0.05, s + TL.plateDraw])
-    .concat([[TL.sun.start + 0.05, TL.sun.start + TL.sun.draw]]);
-  for (const [a, b] of drawWindows) {
-    let t = a;
-    while (t < b) {
-      const dur = 0.08 + rand() * 0.16;
-      const f0 = 2600 + rand() * 2200, pan = (rand() - 0.5) * 0.5;
-      const bp = biquad('bp', f0, 0.9), hp = biquad('hp', 900, 0.7);
-      const i0 = Math.round(t * SR), n = Math.round(dur * SR);
-      let grain = 1;
-      for (let k = 0; k < n; k++) {
-        if (k % 144 === 0) grain = 0.35 + rand() * 0.65;
-        const env = Math.min(1, k / (0.012 * SR)) * Math.min(1, (n - k) / (0.03 * SR));
-        add(i0 + k, hp(bp(rand() * 2 - 1)) * env * grain * 0.1, pan);
-      }
-      t += dur + 0.02 + rand() * 0.07;
+  // Short noise burst through a band-pass: the building block for paper sounds.
+  const burst = (t0, dur, f0, q, gain, pan, lowThump) => {
+    const bp = biquad('bp', f0, q), lp = biquad('lp', 180, 0.7);
+    const i0 = Math.round(t0 * SR), n = Math.round(dur * SR);
+    for (let k = 0; k < n; k++) {
+      const env = Math.min(1, k / (0.002 * SR)) * Math.exp(-k / (n * 0.3));
+      const noise = rand() * 2 - 1;
+      add(i0 + k, (bp(noise) + (lowThump ? lp(noise) * 3 : 0)) * env * gain, pan);
     }
-  }
-
-  // Paper rustles as each plate turns (at the outgoing plate's fade).
-  const turns = TL.plateStarts.map((s) => s + TL.plateOut[0] - 0.05);
-  for (const t0 of turns) {
-    const n = Math.round(0.6 * SR), i0 = Math.round(t0 * SR);
+  };
+  const step = 1 / TL.stepFps;
+  // Paper taps: one per stop-motion step while pieces are being placed.
+  const tapWindow = (a, b, density, gain) => {
+    for (let t = a; t < b; t += step) {
+      if (rand() > density) continue;
+      burst(t + rand() * 0.01, 0.035 + rand() * 0.03, 1400 + rand() * 1800, 1.1, gain * (0.6 + rand() * 0.4), (rand() - 0.5) * 0.6, true);
+    }
+  };
+  // Sheet slide: a longer rustle with crackle.
+  const slide = (t0, dur, gain) => {
+    const n = Math.round(dur * SR), i0 = Math.round(t0 * SR);
     const lp = biquad('lp', 3200, 0.7), hp = biquad('hp', 350, 0.7), lp2 = biquad('lp', 5000, 0.7);
     let crackle = 0;
     for (let k = 0; k < n; k++) {
@@ -71,11 +69,30 @@ function synth() {
       const env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.6)), 1.6);
       if (rand() < 0.004) crackle = 1;
       crackle *= 0.992;
-      const swoosh = hp(lp(rand() * 2 - 1)) * 0.2;
-      const crack = lp2((rand() * 2 - 1) * crackle) * 0.28;
-      add(i0 + k, (swoosh + crack) * env, (u - 0.5) * 0.6);
+      add(i0 + k, (hp(lp(rand() * 2 - 1)) * 0.2 + lp2((rand() * 2 - 1) * crackle) * 0.28) * env * gain, (u - 0.5) * 0.8);
     }
+  };
+
+  const P = TL.plate;
+  TL.plateStarts.forEach((s0) => {
+    burst(s0 + P.stamp, 0.09, 700, 0.8, 0.5, 0, true);                   // stamp thump
+    tapWindow(s0 + P.assemble[0], s0 + P.assemble[1], 0.75, 0.22);       // pieces placed
+    burst(s0 + P.tag, 0.06, 3200, 1.4, 0.25, 0.2, false);                // tag flick
+    burst(s0 + P.tag + 0.2, 0.05, 2600, 1.4, 0.2, 0.2, true);            // tag lands
+    slide(s0 + P.exit[0], P.exit[1] - P.exit[0] + 0.15, 1);              // sheet slides off
+  });
+  const sun = TL.sun, s0 = TL.sun.start;
+  burst(s0 + P.stamp, 0.09, 700, 0.8, 0.5, 0, true);
+  tapWindow(s0 + sun.assemble[0], s0 + sun.assemble[1], 0.75, 0.22);
+  burst(s0 + sun.tag, 0.06, 3200, 1.4, 0.25, 0.2, false);
+  slide(s0 + sun.unlabel[0], 0.45, 0.45);                                // sticker + tag lifted away
+  for (let t = s0 + sun.flip[0]; t < s0 + sun.flip[1]; t += step) {       // pieces flipping over
+    burst(t, 0.03, 4200 + rand() * 1500, 1.6, 0.12, (rand() - 0.5) * 0.8, false);
   }
+  const lk = TL.lockup;
+  for (let i = 0; i < 9; i++) burst(lk.letters[0] + i * 0.09 + 0.3, 0.04, 1800 + rand() * 600, 1.2, 0.2, (i - 4) / 8, true);
+  for (const t of [lk.tagline, lk.comingSoon, lk.handle]) burst(t + 0.3, 0.07, 1500, 1, 0.3, 0, true);
+  slide(TL.cover[0], TL.cover[1] - TL.cover[0], 1);                      // blank sheet slides back in
 
   // Chime: soft bell partials, then a Schroeder reverb on the chime bus.
   const bus = new Float32Array(N);
@@ -89,9 +106,9 @@ function synth() {
       bus[i0 + k] += v * att * gain;
     }
   };
-  bell(TL.sun.sparkles[0], 1046.5, 0.09);                 // C6 — logo lands
-  bell(TL.sun.sparkles[0] + 0.32, 1568.0, 0.055);         // G6 — sparkles
-  bell(TL.text.comingSoon[0] + 0.1, 1318.5, 0.045);       // E6 — "Coming soon"
+  bell(TL.sparkles[0], 1046.5, 0.09);                     // C6 — logo lands
+  bell(TL.sparkles[0] + 0.32, 1568.0, 0.055);             // G6 — sparkles
+  bell(TL.lockup.comingSoon + 0.3, 1318.5, 0.045);        // E6 — "Coming soon"
   const combs = [1557, 1617, 1491, 1422].map((d) => ({ buf: new Float32Array(d), i: 0, g: 0.8 }));
   const aps = [225, 556].map((d) => ({ buf: new Float32Array(d), i: 0 }));
   for (let k = 0; k < N; k++) {

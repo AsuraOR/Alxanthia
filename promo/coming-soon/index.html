@@ -31,7 +31,7 @@
     <div id="stage"><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
     <div class="controls">
       <button id="play" aria-pressed="true">Pause</button>
-      <input id="scrub" type="range" min="0" max="18" step="0.0333" value="0" aria-label="Time" />
+      <input id="scrub" type="range" min="0" max="21" step="0.0333" value="0" aria-label="Time" />
       <output id="time">0.00 s</output>
       <button data-ratio="9x16">9:16</button>
       <button data-ratio="4x5">4:5</button>
@@ -52,11 +52,19 @@
       S = AlxScene.build(svg, r);
       document.querySelectorAll('[data-ratio]').forEach((b) => { if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', String(b.dataset.ratio === r)); });
     }
-    setRatio(ratio);
     if (render) document.body.classList.add('render');
 
-    // Render hook for render.js: fonts + logo artwork loaded → frames are deterministic.
-    window.__ready = Promise.all([document.fonts.ready, AlxScene.assetsReady]).then(() => { AlxScene.renderAt(S, 0); return true; });
+    // Fonts must be loaded before building (the lock-up measures glyphs), and the
+    // logo artwork decoded before any frame renders. render.js awaits __ready.
+    const fontsLoaded = Promise.all([
+      document.fonts.load('500 92px "Cormorant Garamond"'),
+      document.fonts.load('italic 400 40px "Cormorant Garamond"')
+    ]);
+    window.__ready = Promise.all([fontsLoaded, AlxScene.assetsReady]).then(() => {
+      setRatio(ratio);
+      AlxScene.renderAt(S, 0);
+      return true;
+    });
     window.__frame = (t) => AlxScene.renderAt(S, t);
 
     if (!render) {
@@ -67,13 +75,14 @@
       btn.onclick = () => { playing = !playing; btn.textContent = playing ? 'Pause' : 'Play'; btn.setAttribute('aria-pressed', String(playing)); last = performance.now(); };
       scrub.oninput = () => { t = parseFloat(scrub.value); playing = false; btn.textContent = 'Play'; btn.setAttribute('aria-pressed', 'false'); };
       document.querySelectorAll('button[data-ratio]').forEach((b) => b.onclick = () => setRatio(b.dataset.ratio));
-      (function loop(now) {
+      scrub.max = D;
+      window.__ready.then(() => (function loop(now) {
         if (playing) t = (t + (now - last) / 1000) % D;
         last = now;
         AlxScene.renderAt(S, t);
         scrub.value = t; out.textContent = t.toFixed(2) + ' s';
         requestAnimationFrame(loop);
-      })(performance.now());
+      })(performance.now()));
     }
   </script>
 </body>

@@ -19,7 +19,7 @@ const { writeWav } = require('./audio.js');
 const DIR = __dirname;
 const OUT = path.join(DIR, 'out');
 const SIZES = { '9x16': [1080, 1920], '4x5': [1080, 1350] };
-const COVER_T = 16.4; // lock-up fully in, before the fade
+const COVER_T = 17.6; // lock-up fully in, before the butterfly arrives
 
 // Prefer Playwright's own browser; fall back to a pre-installed Chromium
 // (e.g. /opt/pw-browsers/chromium) when the pinned version isn't downloaded.
@@ -66,8 +66,12 @@ async function renderVideo(browser, ratio, wav) {
     '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
     '-r', String(TL.fps), '-movflags', '+faststart', silent
   ], async (stdin) => {
+    // The picture only changes 12×/s (stop-motion steps): capture each step once
+    // and repeat it for the 30 fps frames that fall inside it.
+    let lastStep = -1, buf;
     for (let i = 0; i < frames; i++) {
-      const buf = await shot(page, i / TL.fps);
+      const st = Math.floor((i / TL.fps) * TL.stepFps + 1e-6);
+      if (st !== lastStep) { buf = await shot(page, i / TL.fps); lastStep = st; }
       if (!stdin.write(buf)) await new Promise((r) => stdin.once('drain', r));
       if (i % 60 === 0) process.stdout.write('  ' + ratio + ' frame ' + i + '/' + frames + '\r');
     }

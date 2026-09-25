@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Coming Soon Reel</title>
+  <style>
+    @font-face { font-family: 'Cormorant Garamond'; src: url(fonts/CormorantGaramond.woff2) format('woff2'); font-style: normal; font-weight: 300 700; }
+    @font-face { font-family: 'Cormorant Garamond'; src: url(fonts/CormorantGaramond-Italic.woff2) format('woff2'); font-style: italic; font-weight: 300 700; }
+    :root { --bg: #23201B; --fg: #F3EDE1; --muted: #BDB6A8; --accent: #C79B5C; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 Karla, system-ui, sans-serif; }
+    .wrap { min-height: 100vh; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 16px; gap: 12px; }
+    #stage { height: calc(100vh - 110px); max-width: 100%; aspect-ratio: 1080 / 1920; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+    #stage[data-ratio="4x5"] { aspect-ratio: 1080 / 1350; }
+    #stage svg { width: 100%; height: 100%; display: block; }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; width: min(720px, 100%); }
+    .controls input[type=range] { flex: 1 1 240px; accent-color: var(--accent); }
+    button { font: inherit; background: transparent; color: var(--fg); border: 1px solid #4A453C; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+    button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+    output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 5.5em; text-align: right; }
+    /* Render mode: stage at native size, nothing else on the page. */
+    body.render .controls { display: none; }
+    body.render .wrap { padding: 0; display: block; }
+    body.render #stage { height: auto; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="stage"><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div class="controls">
+      <button id="play" aria-pressed="true">Pause</button>
+      <input id="scrub" type="range" min="0" max="21" step="0.0333" value="0" aria-label="Time" />
+      <output id="time">0.00 s</output>
+      <button data-ratio="9x16">9:16</button>
+      <button data-ratio="4x5">4:5</button>
+    </div>
+  </div>
+  <script src="timeline.js"></script>
+  <script src="scene.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const render = params.has('render');
+    let ratio = params.get('ratio') === '4x5' ? '4x5' : '9x16';
+    const svg = document.querySelector('#stage svg');
+    const stage = document.getElementById('stage');
+    let S;
+    function setRatio(r) {
+      ratio = r;
+      stage.dataset.ratio = r;
+      S = AlxScene.build(svg, r);
+      document.querySelectorAll('[data-ratio]').forEach((b) => { if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', String(b.dataset.ratio === r)); });
+    }
+    if (render) document.body.classList.add('render');
+
+    // Fonts must be loaded before building (the lock-up measures glyphs), and the
+    // logo artwork decoded before any frame renders. render.js awaits __ready.
+    const fontsLoaded = Promise.all([
+      document.fonts.load('500 92px "Cormorant Garamond"'),
+      document.fonts.load('italic 400 40px "Cormorant Garamond"')
+    ]);
+    window.__ready = Promise.all([fontsLoaded, AlxScene.assetsReady]).then(() => {
+      setRatio(ratio);
+      AlxScene.renderAt(S, 0);
+      return true;
+    });
+    window.__frame = (t) => AlxScene.renderAt(S, t);
+
+    if (!render) {
+      const D = AlxScene.TL.duration;
+      const scrub = document.getElementById('scrub'), out = document.getElementById('time'), btn = document.getElementById('play');
+      let playing = true, t = parseFloat(params.get('t')) || 0, last = performance.now();
+      if (params.has('t')) { playing = false; btn.textContent = 'Play'; btn.setAttribute('aria-pressed', 'false'); }
+      btn.onclick = () => { playing = !playing; btn.textContent = playing ? 'Pause' : 'Play'; btn.setAttribute('aria-pressed', String(playing)); last = performance.now(); };
+      scrub.oninput = () => { t = parseFloat(scrub.value); playing = false; btn.textContent = 'Play'; btn.setAttribute('aria-pressed', 'false'); };
+      document.querySelectorAll('button[data-ratio]').forEach((b) => b.onclick = () => setRatio(b.dataset.ratio));
+      scrub.max = D;
+      window.__ready.then(() => (function loop(now) {
+        if (playing) t = (t + (now - last) / 1000) % D;
+        last = now;
+        AlxScene.renderAt(S, t);
+        scrub.value = t; out.textContent = t.toFixed(2) + ' s';
+        requestAnimationFrame(loop);
+      })(performance.now()));
+    }
+  </script>
+</body>
+</html>

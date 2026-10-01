@@ -3874,6 +3874,27 @@
     window.addEventListener('resize', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
   }
 
+  /**
+   * UX-11: a one-sentence summary, with the full notice behind a native
+   * <details>. Built with createElement/textContent — never innerHTML.
+   */
+  function renderCheckoutPrivacyNotice() {
+    const el = document.getElementById('checkout-privacy-notice');
+    if (!el) return;
+    const vars = { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' };
+    const summaryText = document.createElement('span');
+    summaryText.textContent = ck('checkoutPrivacySummary', vars);
+    const details = document.createElement('details');
+    details.className = 'checkout-privacy-details';
+    const summary = document.createElement('summary');
+    summary.textContent = ck('checkoutPrivacyLinkText');
+    const full = document.createElement('p');
+    full.textContent = ck('checkoutPrivacyNotice', vars);
+    details.appendChild(summary);
+    details.appendChild(full);
+    el.replaceChildren(summaryText, details);
+  }
+
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
@@ -3888,13 +3909,13 @@
       '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
       '#checkout-back-to-review': ck('checkoutBackToReview'),
-      '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
       '#buyer-name-required': ck('checkoutRequiredMark'), '#buyer-phone-required': ck('checkoutRequiredMark'),
       '#location-type-required': ck('checkoutRequiredMark'), '#regency-required': ck('checkoutRequiredMark'),
       '#address-required': ck('checkoutRequiredMark'), '#city-required': ck('checkoutRequiredMark'),
       '#postal-required': ck('checkoutRequiredMark'), '#date-required': ck('checkoutRequiredMark')
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
+    renderCheckoutPrivacyNotice();
     const pickupHelp = document.getElementById('pickup-help');
     if (pickupHelp) {
       const helpText = ck('checkoutPickupHelp');

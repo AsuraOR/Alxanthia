@@ -188,6 +188,13 @@
             finishEl.hidden || !/Bungkus|Wrap/.test(finishEl.textContent),
             finishEl.textContent
           );
+          doc.getElementById('checkout-continue').click();
+          const stepInd2 = doc.getElementById('checkout-step-indicator');
+          assert('Checkout form reads "Langkah 2 dari 3 · Data"', stepInd2 && stepInd2.textContent === 'Langkah 2 dari 3 · Data', stepInd2 && stepInd2.textContent);
+          assert('Checkout submit button reads "Kirim pesanan"', doc.getElementById('save-order').textContent === 'Kirim pesanan');
+          const privacy = doc.getElementById('checkout-privacy-notice');
+          const privacyDetails = privacy && privacy.querySelector('details');
+          assert('Privacy notice is a short summary plus a <details> with the full text', !!privacyDetails && privacyDetails.querySelector('p').textContent.includes('Dengan mencentang kotak di bawah'));
           doc.getElementById('checkout-close').click();
           win.AlxanthiaApp.selectPackage(0, false);
           checkoutBtn.click();

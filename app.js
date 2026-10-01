@@ -51,6 +51,7 @@
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
   let turnstileToken = ''; // DEV-07: current Cloudflare Turnstile token, if the widget is configured
   let turnstileWidgetId = null;
+  let lastStickyCartCount = null; // UX-04: same idea for the sticky order bar's bump
   let lastFloatingCartCount = null; // null until first render, so the pill doesn't bump on initial paint
 
   /**
@@ -2165,6 +2166,19 @@
       }
     }
     lastFloatingCartCount = n;
+
+    // UX-04: the sticky bar is the phone's cart control, so it gets the same bump.
+    const stickyInner = document.querySelector('.sticky-order-inner');
+    if (stickyInner) {
+      if (n > 0 && lastStickyCartCount !== null && n !== lastStickyCartCount &&
+          !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        stickyInner.classList.remove('bump');
+        if (typeof stickyInner.offsetWidth === 'number') void stickyInner.offsetWidth;
+        stickyInner.classList.add('bump');
+        setTimeout(() => stickyInner.classList.remove('bump'), 400);
+      }
+      lastStickyCartCount = n;
+    }
   }
 
   /**

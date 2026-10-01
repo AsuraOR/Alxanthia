@@ -2988,8 +2988,9 @@ details.is-closing > .faq-answer-wrapper {
    a scroll back to the cart. Hidden while the cart is empty. */
 .floating-cart-pill {
   position: fixed;
-  top: 86px;
-  right: 20px;
+  top: auto;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  right: 24px;
   z-index: 85;
   display: inline-flex;
   align-items: center;
@@ -3005,7 +3006,7 @@ details.is-closing > .faq-answer-wrapper {
   letter-spacing: 0.02em;
   box-shadow: 0 6px 20px rgba(35, 32, 27, 0.2);
   cursor: pointer;
-  transform: translateY(-8px) scale(0.92);
+  transform: translateY(8px) scale(0.92);
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -3050,21 +3051,15 @@ details.is-closing > .faq-answer-wrapper {
 }
 
 @media (max-width: 860px) {
-  /* The hero's two action buttons sit right under the header on mobile
-     (stacked, full-width), so a top-right pill would sit on top of them.
-     Bottom-right, clear of the slim sticky order bar, is safe instead. */
+  /* UX-04: on phones the sticky order bar is the one cart control, so the
+     pill is removed (display: none also takes it out of the tab order). */
   .floating-cart-pill {
-    top: auto;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    right: 14px;
-    padding: 9px 14px;
-    font-size: 12.5px;
-    transform: translateY(8px) scale(0.92);
+    display: none !important;
   }
+}
 
-  .floating-cart-pill.visible {
-    transform: translateY(0) scale(1);
-  }
+.sticky-order-inner.bump {
+  animation: floatingCartBump 380ms var(--motion-ease-out);
 }
 
 /* ==========================================================================
@@ -3860,7 +3855,8 @@ details.is-closing > .faq-answer-wrapper {
     transition: none !important;
   }
 
-  .floating-cart-pill.bump {
+  .floating-cart-pill.bump,
+  .sticky-order-inner.bump {
     animation: none !important;
   }
 

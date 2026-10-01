@@ -318,7 +318,7 @@
       <form id="lock-form" class="lock-form" autocomplete="off">
         <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••"
           aria-label="Kata sandi akses / Access passcode" autofocus required />
-        <button type="submit" class="lock-btn">Unlock →</button>
+        <button type="submit" class="lock-btn" id="lock-unlock-btn">Buka →</button>
       </form>
       <p id="lock-error" class="lock-error" aria-live="polite" role="alert"></p>
     </div>
@@ -369,7 +369,7 @@
         <img src="alxanthia-logo-96.webp" srcset="alxanthia-logo-96.webp 1x, alxanthia-logo-192.webp 2x" width="28"
           height="40" alt="Alxanthia Logo" class="brand-logo" />
         <span class="brand-name">Alxanthia</span>
-        <span class="brand-est">est. 2026 | Based in Bali</span>
+        <span class="brand-est" id="brand-est">est. 2026 · Bali</span>
       </a>
 
       <!-- Mobile Fast Actions -->
@@ -422,21 +422,6 @@
           <a href="#collection" class="btn-primary" id="cta-browse">Lihat bunganya</a>
           <a href="#bouquets" class="btn-secondary" id="cta-bouquets">Susun buket</a>
         </div>
-
-        <dl class="hero-benefits">
-          <div class="benefit-item">
-            <dt id="ben1-t">Datang sudah jadi</dt>
-            <dd id="ben1-d">Tidak perlu dirangkai — buka dan letakkan.</dd>
-          </div>
-          <div class="benefit-item">
-            <dt id="ben2-t">Tanpa air</dt>
-            <dd id="ben2-d">Chenille dan kawat, untuk pajangan dalam ruangan.</dd>
-          </div>
-          <div class="benefit-item">
-            <dt id="ben3-t">Dibuat sesuai pesanan</dt>
-            <dd id="ben3-d">Dipotong, dibentuk, dan dibungkus setelah Anda pesan.</dd>
-          </div>
-        </dl>
       </div>
 
       <figure class="hero-figure">
@@ -618,19 +603,8 @@
         <div class="order-controls-col">
           <!-- Inline Product Picker (visible only while the cart is empty) -->
           <div class="order-picker" id="order-picker">
-            <h3 class="step-label" id="order-picker-label">Belum ada pilihan — pilih produk di sini</h3>
-            <div class="order-picker-group" id="order-picker-group-flowers">
-              <p class="order-picker-group-label" id="order-picker-flowers-label"></p>
-              <div class="order-picker-grid" id="order-picker-flowers"></div>
-            </div>
-            <div class="order-picker-group" id="order-picker-group-pots">
-              <p class="order-picker-group-label" id="order-picker-pots-label"></p>
-              <div class="order-picker-grid" id="order-picker-pots"></div>
-            </div>
-            <div class="order-picker-group" id="order-picker-group-packages">
-              <p class="order-picker-group-label" id="order-picker-packages-label"></p>
-              <div class="order-picker-grid" id="order-picker-packages"></div>
-            </div>
+            <h3 class="step-label" id="order-picker-label">Keranjang Anda masih kosong. Mulai dari:</h3>
+            <div class="order-empty-shortcuts" id="order-empty-shortcuts"></div>
           </div>
 
           <!-- Wrap Colour Chooser -->
@@ -674,7 +648,6 @@
             <div class="summary-top-row">
               <h3 class="step-label" id="selection-label">Pilihan Anda</h3>
               <div class="summary-top-actions">
-                <button type="button" class="btn-clear-cart" id="btn-clear-cart">Kosongkan keranjang</button>
                 <button type="button" class="btn-edit-selection" id="btn-edit-selection">Ubah pilihan</button>
               </div>
             </div>
@@ -686,6 +659,7 @@
               <p class="summary-price" id="summary-price">Rp 55.000</p>
               <span class="summary-shipping-note" id="summary-shipping-note">Belum termasuk ongkir</span>
             </div>
+            <button type="button" class="btn-clear-cart" id="btn-clear-cart">Kosongkan keranjang</button>
 
             <h3 class="step-label" id="includes-label">Termasuk</h3>
             <ul class="summary-includes-list" id="summary-includes-list">
@@ -702,17 +676,8 @@
             <div class="channel-buttons">
               <div id="channels-disabled-box" class="channels-disabled-box" style="display: none;" role="alert"></div>
               <button type="button" class="btn-channel btn-whatsapp btn-whatsapp-primary" id="btn-checkout">
-                <span class="channel-icon" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path
-                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
-                    </path>
-                  </svg>
-                </span>
                 <div class="channel-info-text">
                   <span class="channel-name">Tinjau pesanan</span>
-                  <span class="channel-action">lanjut →</span>
                 </div>
               </button>
 
@@ -821,7 +786,6 @@
       </div>
       <div class="kit-teaser-actions">
         <a href="#" class="btn-primary" id="kit-soon-cta" target="_blank" rel="noopener">Saya mau kitnya →</a>
-        <a href="#faq" class="btn-secondary" id="kit-soon-secondary">Baca FAQ</a>
       </div>
     </aside>
 
@@ -870,7 +834,7 @@
 
     <div class="footer-bottom container">
       <span id="footer-copyright">© 2026 Alxanthia</span>
-      <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
+      <button type="button" id="btn-lock-site" class="btn-relock" title="Kunci situs lagi">Kunci situs</button>
     </div>
   </footer>
 

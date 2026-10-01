@@ -315,8 +315,7 @@ registerEl('button', 'sticky-order-cta');
 registerEl('ul', 'cart-lines');
 registerEl('div', 'order-picker');
 registerEl('p', 'order-picker-label');
-registerEl('div', 'order-picker-flowers');
-registerEl('div', 'order-picker-packages');
+registerEl('div', 'order-empty-shortcuts');
 registerEl('span', 'summary-price');
 registerEl('span', 'summary-shipping-note');
 registerEl('p', 'includes-label');
@@ -329,7 +328,6 @@ registerEl('div', 'order-announcer');
 // Native checkout trigger (ALX-11)
 const btnCheckout = registerEl('button', 'btn-checkout', 'btn-channel');
 btnCheckout.appendChild(createMockElement('span', '', 'channel-name'));
-btnCheckout.appendChild(createMockElement('span', '', 'channel-action'));
 
 // Channel elements
 const btnWhatsapp = registerEl('a', 'btn-whatsapp', 'btn-channel btn-whatsapp-primary');
@@ -876,6 +874,7 @@ const footerShopee = mockDocument.getElementById('footer-link-shopee');
 // "display: flex !important" in the stylesheet.
 assert(shopeeBtn.classList.contains('btn-shopee-hidden'), 'Shopee button must be hidden while unready, not shown disabled');
 assert(mktText.textContent.includes('Listing Shopee sedang disiapkan'), 'Notice box must honestly state listing in preparation');
+assert.strictEqual(mktBox.style.display, 'none', 'UX-10: the Shopee notice box must be hidden while Shopee is not live');
 assert.strictEqual(footerShopee.getAttribute('aria-disabled'), 'true');
 assert(footerShopee.innerHTML.includes('segera hadir'));
 
@@ -972,9 +971,18 @@ console.log('\n--- SUITE 13: Focus Preservation & Keyboard Accessibility (A3) --
 const finishLabel = mockDocument.getElementById('finish-label');
 
 // When a single stem is selected, focus moves to #finish-label
+// UX-01: adding a stem stays in place — no scroll, no focus jump to #finish-label
 finishLabel.focused = false;
+const ux01ScrollCalls = [];
+const ux01OriginalScrollTo = sandbox.scrollTo;
+sandbox.scrollTo = (opts) => { ux01ScrollCalls.push(opts); };
+app._setCartForTest([]);
+const ux01Before = app.getCart().length;
 app.selectStem('Sunflower', true);
-assert.strictEqual(finishLabel.focused, true, 'Selecting a stem should focus #finish-label for keyboard navigation');
+sandbox.scrollTo = ux01OriginalScrollTo;
+assert.notStrictEqual(finishLabel.focused, true, 'UX-01: adding a stem must not move focus to #finish-label');
+assert.strictEqual(ux01ScrollCalls.length, 0, 'UX-01: adding a stem must not scroll the page');
+assert.strictEqual(app.getCart().length, ux01Before + 1, 'UX-01: the stem is still added to the cart');
 
 // Verify wrap chips radio group roving tabindex & arrow navigation
 const wrapChipsContainer = mockDocument.getElementById('wrap-chips');
@@ -996,7 +1004,7 @@ chips[0].dispatchEvent({
 assert.strictEqual(chips[1].classList.contains('active'), true, 'ArrowRight should activate next wrap chip');
 assert.strictEqual(chips[1].getAttribute('tabindex'), '0', 'New active chip should have tabindex 0');
 assert.strictEqual(chips[0].getAttribute('tabindex'), '-1', 'Previous active chip should have tabindex -1');
-console.log('✔ Suite 13 Passed: Finish label focus transfer and wrap chips roving tabindex/arrow navigation verified');
+console.log('✔ Suite 13 Passed: Stay-in-place add (UX-01) and wrap chips roving tabindex/arrow navigation verified');
 
 // ---------------------------------------------------------------------------
 // Suite 14: Language Reload Metadata (A4)
@@ -1201,7 +1209,7 @@ sandbox.scrollTo = (opts) => { scrollCalls.push(opts); };
 scrollCalls = [];
 app.selectStem('Rose'); // default scroll = true, cart starts empty
 const stemScrollCount = scrollCalls.length;
-assert(stemScrollCount > 0, 'Selecting a stem into an empty cart must scroll to #order by default');
+assert.strictEqual(stemScrollCount, 0, 'UX-01: selecting a stem into an empty cart must not scroll to #order');
 
 // The cart is no longer empty (it holds the Rose stem just added), so a further
 // selection must not yank the page back down to #order — customers adding a
@@ -1217,7 +1225,7 @@ app.resetToInitial();
 scrollCalls = [];
 app.selectPackage(1); // default scroll = true, cart starts empty
 const pkgScrollCount = scrollCalls.length;
-assert(pkgScrollCount > 0, 'Selecting a package into an empty cart must scroll to #order by default, matching stem behaviour (P1-05)');
+assert.strictEqual(pkgScrollCount, 0, 'UX-01: selecting a package into an empty cart must not scroll to #order, matching stem behaviour');
 
 sandbox.scrollTo = originalScrollTo;
 
@@ -1333,31 +1341,21 @@ assert.strictEqual(summaryPrice.style.display, 'none', '#summary-price must stay
 assert.strictEqual(shippingNote.style.display, 'none');
 assert.strictEqual(includesList.children.length, 0);
 
-const pickerFlowers = mockDocument.getElementById('order-picker-flowers');
-const pickerPackages = mockDocument.getElementById('order-picker-packages');
-assert.strictEqual(pickerFlowers.children.length, 8, 'Picker must render wrapped and unwrapped tiles for every flower');
-assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
+// UX-02: the picker is three shortcut buttons, not a second copy of the catalogue
+// (the mock registry doesn't nest elements, so read the shortcut row directly)
+const shortcutRow = mockDocument.getElementById('order-empty-shortcuts');
+const emptyShortcuts = shortcutRow.querySelectorAll('.order-empty-shortcut');
+assert.strictEqual(emptyShortcuts.length, 3, '#order-picker must contain exactly 3 shortcut buttons while the cart is empty');
+assert.strictEqual(shortcutRow.querySelectorAll('img').length, 0, '#order-picker must not render product images');
 
-// Clicking a picker tile adds a line and scrolls to #order, same as every
-// other add-to-cart entry point when the cart starts empty. This also
-// replaces the instant layout collapse (the picker disappearing once the
-// cart is no longer empty) with an intentional smooth scroll, instead of
-// leaving the viewport to snap with no compensation.
-let pickerScrollCalls = [];
-const originalScrollToForPicker = sandbox.scrollTo;
-sandbox.scrollTo = (opts) => { pickerScrollCalls.push(opts); };
-
-pickerFlowers.children[0].click();
-assert(pickerScrollCalls.length > 0, 'Selecting the first item from the inline picker must scroll to #order');
-assert.strictEqual(app.getCart().length, 1, 'Clicking a picker tile must add a cart line');
-
-sandbox.scrollTo = originalScrollToForPicker;
+app.selectStem('Rose', false);
+assert.strictEqual(app.getCart().length, 1);
 
 // Once the cart holds something, the picker gives way to the real cart summary
 assert.strictEqual(orderPicker.style.display, 'none', '#order-picker must hide once the cart is non-empty');
 assert.notStrictEqual(summaryPrice.style.display, 'none', '#summary-price must reappear once the cart has a line');
 
-console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and scrolls to #order on first selection');
+console.log('✔ Suite 21 Passed: The empty-cart picker shows three shortcuts (no product tiles) and hides once the cart has a line');
 
 // ---------------------------------------------------------------------------
 // Suite 22: Predefined bouquets have no variety chooser (curated by studio)

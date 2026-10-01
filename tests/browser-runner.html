@@ -39,12 +39,17 @@
         // Step 0: Ensure app is initialized
         assert('App window and DOM ready', win.AlxanthiaApp !== undefined);
 
-        // Test 1: Stem selection focus transfer to #finish-label (A3)
+        // Test 1: Stem add stays in place (UX-01). This reverses the earlier
+        // A3 behaviour that moved focus to #finish-label.
         const stemBtn = doc.querySelector('.btn-order-stem');
         const finishLabel = doc.getElementById('finish-label');
         if (stemBtn && finishLabel) {
+          stemBtn.focus();
+          const scrollBefore = win.scrollY;
           stemBtn.click();
-          assert('Stem pick transfers focus to #finish-label', doc.activeElement === finishLabel);
+          assert('Stem add keeps focus on the clicked button', doc.activeElement === stemBtn);
+          assert('First stem add leaves scrollY unchanged', Math.abs(win.scrollY - scrollBefore) <= 2, `before ${scrollBefore}, after ${win.scrollY}`);
+          assert('Stem add button shows the "added" confirmation', stemBtn.classList.contains('is-added'));
         } else {
           assert('Stem pick elements present', false, 'stemBtn or finishLabel missing');
         }
@@ -93,11 +98,8 @@
           assert('Second radio has aria-checked="true"', currentRadios[1].getAttribute('aria-checked') === 'true');
         }
 
-        // Test 4: Package selection moves focus to #finish-label (A3), the
-        // same pattern used for a stem pick (Test 1) — DEV-24: the handler
-        // intentionally scrolls to and focuses #finish-label to draw
-        // attention to the next step, so that (not the clicked button) is
-        // where focus should land.
+        // Test 4: Package selection keeps focus on the clicked button.
+        // DEV-24 used to move focus to #finish-label; UX-01 reversed that.
         // Scoped to #packages-grid: mini-pot "add" buttons also carry the
         // shared .btn-choose-bouquet class for styling, so an unscoped
         // selector can pick one of those up instead of a real package button.
@@ -108,8 +110,8 @@
           targetBtn.click();
 
           assert(
-            'Package pick transfers focus to #finish-label',
-            doc.activeElement === finishLabel,
+            'Package pick keeps focus on the clicked button',
+            doc.activeElement === targetBtn,
             `active: ${doc.activeElement ? (doc.activeElement.id || doc.activeElement.className) : 'none'}`
           );
         } else {
@@ -168,6 +170,70 @@
             'Custom builder toggles back to expanded state',
             toggleBtn.getAttribute('aria-expanded') === 'true' && !builderBody.classList.contains('collapsed')
           );
+        }
+
+        // Test 8: Checkout review only mentions wrap colour for bouquets (UX-03)
+        win.AlxanthiaApp.resetToInitial();
+        win.AlxanthiaApp.selectMiniPot('daisy', false);
+        const checkoutBtn = doc.getElementById('btn-checkout');
+        const finishEl = doc.getElementById('checkout-finish');
+        const checkoutModal = doc.getElementById('checkout-modal');
+        if (checkoutBtn && finishEl && checkoutModal) {
+          checkoutBtn.click();
+          const stepInd = doc.getElementById('checkout-step-indicator');
+          assert('Checkout review reads "Langkah 1 dari 3 · Tinjau"', stepInd && stepInd.textContent === 'Langkah 1 dari 3 · Tinjau', stepInd && stepInd.textContent);
+          assert('Checkout review button has no chat icon', !checkoutBtn.querySelector('.channel-icon'));
+          assert(
+            'Mini-pot-only review does not mention wrap colour',
+            finishEl.hidden || !/Bungkus|Wrap/.test(finishEl.textContent),
+            finishEl.textContent
+          );
+          doc.getElementById('checkout-continue').click();
+          const stepInd2 = doc.getElementById('checkout-step-indicator');
+          assert('Checkout form reads "Langkah 2 dari 3 · Data"', stepInd2 && stepInd2.textContent === 'Langkah 2 dari 3 · Data', stepInd2 && stepInd2.textContent);
+          assert('Checkout submit button reads "Kirim pesanan"', doc.getElementById('save-order').textContent === 'Kirim pesanan');
+          const privacy = doc.getElementById('checkout-privacy-notice');
+          const privacyDetails = privacy && privacy.querySelector('details');
+          assert('Privacy notice is a short summary plus a <details> with the full text', !!privacyDetails && privacyDetails.querySelector('p').textContent.includes('Dengan mencentang kotak di bawah'));
+          doc.getElementById('checkout-close').click();
+          win.AlxanthiaApp.selectPackage(0, false);
+          checkoutBtn.click();
+          assert(
+            'Review with a bouquet shows the wrap colour',
+            !finishEl.hidden && /Bungkus|Wrap/.test(finishEl.textContent),
+            finishEl.textContent
+          );
+          doc.getElementById('checkout-close').click();
+          win.AlxanthiaApp.resetToInitial();
+        } else {
+          assert('UX-03 checkout elements present', false);
+        }
+
+        // Test 9: Add buttons name their product via aria-describedby (UX-06)
+        [
+          ['stem add buttons', '.btn-order-stem'],
+          ['mini-pot add buttons', '.btn-add-mini-pot'],
+          ['package choose buttons', '#packages-grid .btn-choose-bouquet']
+        ].forEach(([label, sel]) => {
+          const btns = Array.from(doc.querySelectorAll(sel));
+          const names = btns.map(b => {
+            const el = doc.getElementById(b.getAttribute('aria-describedby') || '');
+            return el ? el.textContent.trim() : '';
+          });
+          assert(`All ${label} have aria-describedby resolving to non-empty text`, btns.length > 0 && names.every(n => n !== ''), JSON.stringify(names));
+          // Stems have two buttons per card (wrapped / unwrapped), so compare unique-per-card
+          const unique = new Set(names);
+          const perCard = sel === '.btn-order-stem' ? btns.length / 2 : btns.length;
+          assert(`Described-by texts of ${label} are unique per card`, unique.size === perCard, `${unique.size} unique vs ${perCard} cards`);
+        });
+
+        // Test 10: Header "Pesan" follows the cart (UX-16)
+        const navOrder = doc.getElementById('nav-order');
+        if (navOrder) {
+          assert('Header Pesan targets the catalogue while the cart is empty', navOrder.getAttribute('href') === '#collection-overview' && !navOrder.hasAttribute('aria-label'));
+          win.AlxanthiaApp.selectStem('Rose', false);
+          assert('Header Pesan targets #order with a count label once the cart has items', navOrder.getAttribute('href') === '#order' && /1/.test(navOrder.getAttribute('aria-label') || ''), navOrder.getAttribute('aria-label'));
+          win.AlxanthiaApp.resetToInitial();
         }
 
         statusEl.textContent = 'All real-browser interactions executed successfully.';

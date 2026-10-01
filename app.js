@@ -51,6 +51,7 @@
   let refreshStickyVisibility = null; // set once initStickyOrderBar() runs; re-checks visibility on cart changes
   let turnstileToken = ''; // DEV-07: current Cloudflare Turnstile token, if the widget is configured
   let turnstileWidgetId = null;
+  let lastStickyCartCount = null; // UX-04: same idea for the sticky order bar's bump
   let lastFloatingCartCount = null; // null until first render, so the pill doesn't bump on initial paint
 
   /**
@@ -87,8 +88,8 @@
   }
 
   function stemOrderButtonLabel(wrapped, lang = currentLang) {
-    if (lang === 'en') return wrapped ? 'With wrap' : 'Without wrap';
-    return wrapped ? 'Dengan bungkus' : 'Tanpa bungkus';
+    if (lang === 'en') return wrapped ? '+ With wrap' : '+ Without wrap';
+    return wrapped ? '+ Dengan bungkus' : '+ Tanpa bungkus';
   }
 
   /**
@@ -835,63 +836,60 @@
   /**
    * Order action: Choose a single finished stem
    */
+  /** True when the cart holds a bouquet (package or custom) — the only lines that carry a wrap colour. */
+  function cartUsesBouquetWrap() {
+    return cart.some(l => l.type === 'package' || l.type === 'custom');
+  }
+
   function selectStemOrder(flowerKey, scroll = true, wrapped = false) {
-    const wasCartEmpty = cart.length === 0;
+    // UX-01: adding stays in place. `scroll` is kept for API compatibility
+    // (AlxanthiaApp exposes it) but no longer moves the page or the focus.
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
+    const before = cartUnitCount();
     addLine({ type: 'stem', flowerKey: selectedFlower, wrapped: wrapped === true, qty: 1 });
-    if (scroll) {
-      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
-      const finishLabel = document.getElementById('finish-label');
-      if (finishLabel) {
-        finishLabel.focus({ preventScroll: true });
-        finishLabel.classList.remove('finish-label-pulse');
-        if (typeof finishLabel.offsetWidth === 'number') {
-          void finishLabel.offsetWidth;
-        }
-        finishLabel.classList.add('finish-label-pulse');
-        setTimeout(() => {
-          finishLabel.classList.remove('finish-label-pulse');
-        }, 1200);
-      }
-    }
+    return cartUnitCount() > before;
   }
 
   function selectMiniPot(potKey, scroll = true) {
-    const wasCartEmpty = cart.length === 0;
     const pot = (siteData.miniPots || []).find(item => item.key === potKey);
-    if (!pot) return;
+    if (!pot) return false;
+    const before = cartUnitCount();
     addLine({ type: 'pot', potKey, qty: 1 });
-    if (scroll && wasCartEmpty) scrollToSection('#order', '.order-controls-col');
+    return cartUnitCount() > before;
+  }
+
+  /**
+   * UX-01: briefly swap an add button's label for "✓ Added". Focus stays put;
+   * screen readers are covered by addLine()'s live-region announcement.
+   */
+  function flashAddedConfirmation(btn) {
+    if (!btn || btn.dataset.flashing === 'true') return;
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const saved = btn.innerHTML;
+    btn.dataset.flashing = 'true';
+    btn.textContent = t.addedConfirm || (currentLang === 'en' ? '✓ Added' : '✓ Ditambahkan');
+    btn.classList.add('is-added');
+    setTimeout(() => {
+      btn.innerHTML = saved;
+      btn.classList.remove('is-added');
+      delete btn.dataset.flashing;
+    }, 1400);
   }
 
   /**
    * Order action: Select a bouquet package
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
-    const wasCartEmpty = cart.length === 0;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
+    const before = cartUnitCount();
     addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
     if (restoreFocus) {
       const activeBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
       if (activeBtn) activeBtn.focus({ preventScroll: true });
     }
-    if (scroll) {
-      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
-      const finishLabel = document.getElementById('finish-label');
-      if (finishLabel) {
-        finishLabel.focus({ preventScroll: true });
-        finishLabel.classList.remove('finish-label-pulse');
-        if (typeof finishLabel.offsetWidth === 'number') {
-          void finishLabel.offsetWidth;
-        }
-        finishLabel.classList.add('finish-label-pulse');
-        setTimeout(() => {
-          finishLabel.classList.remove('finish-label-pulse');
-        }, 1200);
-      }
-    }
+    return cartUnitCount() > before;
   }
 
   /**
@@ -1067,6 +1065,11 @@
     setText('#nav-how', t.navHow);
     setText('#nav-faq', t.navFaq);
     setText('#nav-order', t.navOrder);
+    setText('#brand-est', t.brandEst);
+    setText('#lock-unlock-btn', t.lockUnlock);
+    setText('#btn-lock-site', t.lockSiteLabel);
+    const relockEl = document.getElementById('btn-lock-site');
+    if (relockEl && t.lockSiteTitle) relockEl.setAttribute('title', t.lockSiteTitle);
     setText('#mobile-order-btn', t.navOrder || 'Pesan');
 
     // Responsive brand logo
@@ -1192,15 +1195,17 @@
         ? fillTemplate(t.miniPotHeight || '~{h} cm', { h: pot.heightCm })
         : t.miniPotMaterial;
       card.innerHTML = `
-        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
+        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /><span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span></div>
         <div class="mini-pot-info">
           <span class="mini-pot-material">${heightBadge}</span>
-          <h4 class="mini-pot-title">${trans.name}</h4>
+          <h4 class="mini-pot-title" id="pot-title-${pot.key}">${trans.name}</h4>
           <p class="mini-pot-blurb">${trans.blurb}</p>
           <p class="mini-pot-price">${formatRp(pot.price)}</p>
-          <button type="button" class="btn-choose-bouquet btn-add-mini-pot">${t.miniPotBtn}</button>
+          <button type="button" class="btn-choose-bouquet btn-add-mini-pot" aria-describedby="pot-title-${pot.key}">${t.miniPotBtn}</button>
         </div>`;
-      card.querySelector('.btn-add-mini-pot').addEventListener('click', () => selectMiniPot(pot.key));
+      card.querySelector('.btn-add-mini-pot').addEventListener('click', (e) => {
+        if (selectMiniPot(pot.key)) flashAddedConfirmation(e.currentTarget);
+      });
 
       // ALX-17: mini pots previously had no detail/inspector action at
       // all — reuse the same accessible image-modal pattern the finished
@@ -1232,12 +1237,6 @@
     setText('#cta-browse', t.ctaBrowse);
     setText('#cta-bouquets', t.ctaBouquet);
 
-    setText('#ben1-t', t.ben1t);
-    setText('#ben1-d', t.ben1d);
-    setText('#ben2-t', t.ben2t);
-    setText('#ben2-d', t.ben2d);
-    setText('#ben3-t', t.ben3t);
-    setText('#ben3-d', t.ben3d);
 
     setText('#hero-caption-latin', t.heroPlateCaption || 'Helianthus annuus');
     setText('#hero-caption-pl', t.heroPlatePl || 'PL. I');
@@ -1260,10 +1259,10 @@
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>',
     // Clock (turnaround time)
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>',
+    // Check-circle (arrives finished, no assembly or water)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.7 2.7L16 9.5"></path></svg>',
     // Shield-check (packed to arrive intact)
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>',
-    // Chat bubble (direct order via WhatsApp)
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.3 8.3 0 0 1-4-1l-4.5 1 1-4.4a8.3 8.3 0 0 1-1-4 8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"></path></svg>'
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>'
   ];
 
   function renderTrustBar(t) {
@@ -1272,8 +1271,8 @@
     const rows = [
       [t.tr1t, t.tr1d],
       [t.tr2t, t.tr2d],
-      [t.tr3t, t.tr3d],
-      [t.tr4t, t.tr4d]
+      [t.tr5t, t.tr5d],
+      [t.tr3t, t.tr3d]
     ];
     el.innerHTML = rows.map(([title, desc], i) => `
       <div class="trust-item">
@@ -1312,39 +1311,29 @@
 
       const card = document.createElement('article');
       card.className = 'flower-card';
-      const singleNoteHtml = trans.singleNote
-        ? `<div class="flower-single-note">
-            <svg class="note-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.3A5.7 5.7 0 1 1 2.3 8 5.7 5.7 0 0 1 8 2.3zm0 2.7a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8zm-1 3.2h2v4.8H7V8.2z"/>
-            </svg>
-            <span>${trans.singleNote}</span>
-          </div>`
-        : '';
       const photoStemCount = flower.photoStemCount || 1;
-      const photoBadgeHtml = trans.singleNote
-        ? `<span class="flower-photo-pill">${currentLang === 'en' ? `Photo: ${photoStemCount} stems` : `Foto: ${photoStemCount} tangkai`}</span>`
-        : '';
+      const photoBadgeHtml = `<span class="flower-photo-pill">${currentLang === 'en' ? `Photo: ${photoStemCount} stems` : `Foto: ${photoStemCount} tangkai`}</span>`;
 
       card.innerHTML = `
         <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}">
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
           ${photoBadgeHtml}
+          <span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span>
         </div>
         <div class="flower-info">
-          <h4 class="flower-name">${trans.name}</h4>
+          <h4 class="flower-name" id="flower-title-${key}">${trans.name}</h4>
           <p class="flower-latin">${flower.latin}</p>
           <p class="flower-blurb">${trans.blurb}</p>
           <div class="flower-meta-block">
             <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
             ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
-            ${singleNoteHtml}
           </div>
           <div class="flower-actions-row">
-            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" style="--accent-hover:${flower.accent}">
+            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" aria-describedby="flower-title-${key}" style="--accent-hover:${flower.accent}">
               <span>${stemOrderButtonLabel(false)}</span><span class="btn-order-stem-price">${priceStr}</span>
             </button>
-            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" style="--accent-hover:${flower.accent}">
+            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" aria-describedby="flower-title-${key}" style="--accent-hover:${flower.accent}">
               <span>${stemOrderButtonLabel(true)}</span><span class="btn-order-stem-price">${wrappedPriceStr}</span>
             </button>
           </div>
@@ -1357,7 +1346,7 @@
         photoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
         const handleOpenInspector = (e) => {
           e.preventDefault();
-          openImageModal(flower.photo, flowerAlt, trans.name, `${flower.latin} · ${trans.size} · ${trans.detail}`, photoWrap);
+          openImageModal(flower.photo, flowerAlt, trans.name, `${trans.blurb} — ${flower.latin} · ${trans.size} · ${trans.detail}`, photoWrap);
         };
         photoWrap.addEventListener('click', handleOpenInspector);
         photoWrap.addEventListener('keydown', (e) => {
@@ -1372,7 +1361,7 @@
       orderButtons.forEach(orderBtn => {
         orderBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true');
+          if (selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true')) flashAddedConfirmation(orderBtn);
         });
       });
 
@@ -1461,16 +1450,17 @@
         <div class="bouquet-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name })}">
           ${isPopular ? `<span class="pkg-popular-badge">${t.pkgFavoriteTag || 'Favorit Studio'}</span>` : ''}
           <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
+          <span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span>
         </div>
         <div class="bouquet-info">
           <div class="bouquet-meta-row">
             <span class="bouquet-stems-label">${pkg.stems} ${t.pkgStemLine}</span>
           </div>
-          <h4 class="bouquet-title">${name}</h4>
+          <h4 class="bouquet-title" id="pkg-title-${index}">${name}</h4>
           <p class="bouquet-blurb">${blurb}</p>
           ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
           <div class="pkg-actions-col">
-            <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
+            <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}" aria-describedby="pkg-title-${index}">
               ${active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn}
             </button>
           </div>
@@ -1733,7 +1723,6 @@
     setText('#kit-soon-eyebrow', t.kitSoonEyebrow);
     setText('#kit-soon-title', t.kitSoonTitle);
     setText('#kit-soon-body', t.kitSoonBody);
-    setText('#kit-soon-secondary', t.kitSoonSecondary);
 
     const ctaLink = document.getElementById('kit-soon-cta');
     if (ctaLink) {
@@ -1965,9 +1954,7 @@
         while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
         const emptyLi = document.createElement('li');
         emptyLi.className = 'cart-line-empty';
-        emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
-          ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
-          : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
+        emptyLi.textContent = t.cartEmpty || (currentLang === 'en' ? 'Nothing selected yet.' : 'Belum ada produk dipilih.');
         linesEl.appendChild(emptyLi);
       }
       return;
@@ -2016,44 +2003,10 @@
   }
 
   /**
-   * Build one compact selectable tile for the empty-cart order picker.
-   * Shared shape for both flowers and packages so the markup lives in one place.
-   */
-  function renderPickerTile({ photoSrc, title, priceStr, ariaLabel, onSelect }) {
-    const tile = document.createElement('button');
-    tile.type = 'button';
-    tile.className = 'picker-tile';
-    tile.setAttribute('aria-label', ariaLabel);
-
-    const thumb = document.createElement('img');
-    thumb.className = 'picker-tile-photo';
-    thumb.src = photoSrc;
-    thumb.alt = '';
-    thumb.setAttribute('aria-hidden', 'true');
-    thumb.width = 64;
-    thumb.height = 64;
-    thumb.loading = 'lazy';
-    tile.appendChild(thumb);
-
-    const info = document.createElement('span');
-    info.className = 'picker-tile-info';
-    const titleEl = document.createElement('span');
-    titleEl.className = 'picker-tile-title';
-    titleEl.textContent = title;
-    const priceEl = document.createElement('span');
-    priceEl.className = 'picker-tile-price';
-    priceEl.textContent = priceStr;
-    info.appendChild(titleEl);
-    info.appendChild(priceEl);
-    tile.appendChild(info);
-
-    tile.addEventListener('click', onSelect);
-    return tile;
-  }
-
-  /**
-   * Render the inline order picker — visible only while the cart is empty,
-   * so the header "Pesan" CTA and #order never land on a dead end (P1-08).
+   * Render the empty-cart order panel: three shortcuts to the catalogue
+   * sections instead of a second copy of every product (UX-02). Visible only
+   * while the cart is empty. The buttons are created once and their click
+   * handlers bound once; later renders only refresh the label and texts.
    */
   function renderOrderPicker() {
     const pickerEl = document.getElementById('order-picker');
@@ -2066,74 +2019,31 @@
     pickerEl.style.display = 'block';
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    setText('#order-picker-label', t.orderPickerLabel || 'Pilih produk');
-    setText('#order-picker-flowers-label', t.catOneTitle || 'Bunga jadi');
-    setText('#order-picker-pots-label', t.catTwoTitle || 'Mini pot');
-    setText('#order-picker-packages-label', t.catThreeTitle || 'Buket');
+    setText('#order-picker-label', t.orderPickerLabel || (currentLang === 'en' ? 'Your cart is empty. Start with:' : 'Keranjang Anda masih kosong. Mulai dari:'));
 
-    const flowersEl = document.getElementById('order-picker-flowers');
-    if (flowersEl) {
-      while (flowersEl.children.length > 0) flowersEl.removeChild(flowersEl.children[flowersEl.children.length - 1]);
-      (siteData.flowerOrder || []).forEach(key => {
-        const flower = siteData.flowers[key];
-        if (!flower) return;
-        const trans = flower[currentLang] || flower.en;
-        [false, true].forEach(wrapped => {
-          const price = (flower.stemPrice || 55000) + (wrapped ? SINGLE_STEM_WRAP_PRICE : 0);
-          const priceStr = formatRp(price);
-          const variantLabel = stemOrderButtonLabel(wrapped);
-          flowersEl.appendChild(renderPickerTile({
-            photoSrc: flower.photo,
-            title: `${trans.name} — ${variantLabel}`,
-            priceStr,
-            ariaLabel: `${trans.name}, ${variantLabel}, ${priceStr}`,
-            onSelect: () => selectStemOrder(key, true, wrapped)
-          }));
+    const row = document.getElementById('order-empty-shortcuts');
+    if (!row) return;
+    const shortcuts = [
+      { key: 'stems', target: '#collection', label: t.catOneTitle || 'Bunga jadi' },
+      { key: 'pots', target: '#mini-pots', label: t.catTwoTitle || 'Mini pot' },
+      { key: 'bouquets', target: '#bouquets', label: t.catThreeTitle || 'Buket' }
+    ];
+    if (row.children.length !== shortcuts.length) {
+      while (row.children.length > 0) row.removeChild(row.children[row.children.length - 1]);
+      shortcuts.forEach(sc => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'order-empty-shortcut';
+        btn.setAttribute('data-shortcut', sc.key);
+        btn.addEventListener('click', () => {
+          // 'all' so an active category filter can't hide the target section
+          setCategory('all', false);
+          scrollToSection(sc.target);
         });
+        row.appendChild(btn);
       });
     }
-
-    const packagesEl = document.getElementById('order-picker-packages');
-    if (packagesEl) {
-      while (packagesEl.children.length > 0) packagesEl.removeChild(packagesEl.children[packagesEl.children.length - 1]);
-      (siteData.packages || []).forEach((pkg, index) => {
-        const title = t.pkgNames[index] || `Package ${index + 1}`;
-        const priceStr = formatRp(pkg.price);
-        packagesEl.appendChild(renderPickerTile({
-          photoSrc: pkg.photoWebp || pkg.photo,
-          title,
-          priceStr,
-          ariaLabel: `${t.pkgBtn} — ${title}, ${priceStr}`,
-          onSelect: () => selectPackageOrder(index, true)
-        }));
-      });
-    }
-
-    const potsEl = document.getElementById('order-picker-pots');
-    if (potsEl) {
-      while (potsEl.children.length > 0) potsEl.removeChild(potsEl.children[potsEl.children.length - 1]);
-      (siteData.miniPots || []).forEach(pot => {
-        const trans = pot[currentLang] || pot.en;
-        const priceStr = formatRp(pot.price);
-        potsEl.appendChild(renderPickerTile({
-          photoSrc: pot.photo,
-          title: trans.name,
-          priceStr,
-          ariaLabel: `${t.miniPotBtn} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectMiniPot(pot.key, true)
-        }));
-      });
-    }
-
-    // Hide a group's heading (and the group itself) when its grid ended up empty (UX-03)
-    [
-      ['order-picker-group-flowers', flowersEl],
-      ['order-picker-group-pots', potsEl],
-      ['order-picker-group-packages', packagesEl]
-    ].forEach(([groupId, gridEl]) => {
-      const groupEl = document.getElementById(groupId);
-      if (groupEl) groupEl.style.display = (gridEl && gridEl.children.length > 0) ? '' : 'none';
-    });
+    shortcuts.forEach((sc, i) => { row.children[i].textContent = sc.label; });
   }
 
   /**
@@ -2171,6 +2081,19 @@
       }
     }
     lastFloatingCartCount = n;
+
+    // UX-04: the sticky bar is the phone's cart control, so it gets the same bump.
+    const stickyInner = document.querySelector('.sticky-order-inner');
+    if (stickyInner) {
+      if (n > 0 && lastStickyCartCount !== null && n !== lastStickyCartCount &&
+          !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        stickyInner.classList.remove('bump');
+        if (typeof stickyInner.offsetWidth === 'number') void stickyInner.offsetWidth;
+        stickyInner.classList.add('bump');
+        setTimeout(() => stickyInner.classList.remove('bump'), 400);
+      }
+      lastStickyCartCount = n;
+    }
   }
 
   /**
@@ -2347,7 +2270,7 @@
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
-    const cartUsesWrap = cart.some(line => line.type === 'package' || line.type === 'custom');
+    const cartUsesWrap = cartUsesBouquetWrap();
     const wrapIntroEl = document.getElementById('wrap-intro');
     if (wrapIntroEl) wrapIntroEl.style.display = cartUsesWrap ? '' : 'none';
     if (wrapChipsEl) wrapChipsEl.style.display = cartUsesWrap ? '' : 'none';
@@ -2363,14 +2286,30 @@
       checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
       checkoutButton.classList.toggle('btn-disabled', !enabled);
       const name = checkoutButton.querySelector('.channel-name');
-      const action = checkoutButton.querySelector('.channel-action');
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
         : !orderingAvailable
           ? (currentLang === 'en' ? 'Ordering paused — contact us directly' : 'Pemesanan dijeda — hubungi kami langsung')
           : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
-      if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
+
+    // UX-16: header "Pesan" goes straight to the cart once it has items
+    const cartCount = cartUnitCount();
+    ['nav-order', 'mobile-order-btn'].forEach(id => {
+      const link = document.getElementById(id);
+      if (!link) return;
+      if (cartCount > 0) {
+        link.setAttribute('href', '#order');
+        link.setAttribute('aria-label', fillTemplate(t.navOrderWithCount || (currentLang === 'en' ? 'Order — {n} item(s) in cart' : 'Pesan — {n} item di keranjang'), { n: cartCount }));
+      } else {
+        link.setAttribute('href', '#collection-overview');
+        link.removeAttribute('aria-label');
+      }
+    });
+
+    // UX-09: with nothing selected the price block is empty, so drop its dividers too
+    const priceContainerEl = document.querySelector('.summary-price-container');
+    if (priceContainerEl) priceContainerEl.style.display = cartHasSelection ? '' : 'none';
 
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
@@ -2404,9 +2343,6 @@
     function renderSummaryIncludes() {
       const includesListEl = document.getElementById('summary-includes-list');
       const includesLabelEl = document.getElementById('includes-label');
-      if (includesLabelEl) {
-        includesLabelEl.style.display = cartHasSelection ? '' : 'none';
-      }
       if (includesListEl) {
         includesListEl.innerHTML = '';
         const allIncludes = [];
@@ -2422,6 +2358,11 @@
               : `${t.messageCardSelected}${feeText}`);
           }
         }
+
+        // UX-09: decide visibility after building the list, so a stem-only cart
+        // doesn't leave an empty "Termasuk" heading behind
+        if (includesLabelEl) includesLabelEl.style.display = allIncludes.length ? '' : 'none';
+        includesListEl.style.display = allIncludes.length ? '' : 'none';
 
         allIncludes.forEach(text => {
           const li = document.createElement('li');
@@ -2503,7 +2444,9 @@
       if (siteData.store.channels?.showShopee === false && !waReady) {
         mktNoticeBox.style.display = 'none';
       } else {
-        mktNoticeBox.style.display = '';
+        // UX-10: a "coming soon" notice at the moment of decision is a dead end;
+        // the footer already says "Shopee (segera hadir)". Texts are still filled.
+        mktNoticeBox.style.display = shopeeActive ? '' : 'none';
         if (shopeeActive) {
           setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
           setText('#marketplace-status-text', waReady ? (t.marketplaceNoticeActive || t.marketplaceNotice) : (currentLang === 'en'
@@ -3378,7 +3321,7 @@
   const CHECKOUT_STEPS = {
     'checkout-review': { headingId: 'checkout-title', stepNumber: 1, footerId: 'checkout-review-footer' },
     'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2, footerId: 'checkout-form-footer' },
-    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2, footerId: null }
+    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 3, footerId: null }
   };
   // DEV-16: each step's total+actions bar is a real, non-scrolling footer
   // region (see .checkout-dialog-footer) rather than position:sticky inside
@@ -3400,9 +3343,9 @@
     if (modal && meta) modal.setAttribute('aria-labelledby', meta.headingId);
     const indicator = document.getElementById('checkout-step-indicator');
     if (indicator) {
-      indicator.textContent = stepId === 'checkout-success'
-        ? ck('checkoutStepSuccess')
-        : ck('checkoutStepIndicator', { step: meta.stepNumber, total: 2 });
+      // UX-08: three honest steps — review, details, then the WhatsApp hand-off
+      const stepNameKey = { 'checkout-review': 'checkoutStepReview', 'checkout-form-step': 'checkoutStepForm', 'checkout-success': 'checkoutStepSuccess' }[stepId];
+      indicator.textContent = `${ck('checkoutStepIndicator', { step: meta.stepNumber, total: 3 })} · ${ck(stepNameKey)}`;
     }
     const heading = meta ? document.getElementById(meta.headingId) : null;
     if (heading && typeof heading.focus === 'function') heading.focus();
@@ -3555,8 +3498,15 @@
     setText('#checkout-delivery-row-value', ck('checkoutDeliveryRowValue'));
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const en = currentLang === 'en';
-    const cardNoteText = state.messageCardEnabled && orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
-    setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
+    // UX-03: only mention the wrap colour when a bouquet is in the cart
+    const finishParts = [];
+    if (cartUsesBouquetWrap()) finishParts.push(`${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.`);
+    if (state.messageCardEnabled && orderNote.trim()) finishParts.push(`${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".`);
+    const finishEl = document.getElementById('checkout-finish');
+    if (finishEl) {
+      finishEl.hidden = finishParts.length === 0;
+      finishEl.textContent = finishParts.join(' ');
+    }
     setText('#checkout-notice', ck('checkoutNotice'));
     setText('#checkout-edit', ck('checkoutEditOrder'));
     setText('#checkout-continue', ck('checkoutContinueOrder'));
@@ -3936,6 +3886,27 @@
     window.addEventListener('resize', () => { if (isDatePickerOpen()) positionDatePicker(); }, { passive: true });
   }
 
+  /**
+   * UX-11: a one-sentence summary, with the full notice behind a native
+   * <details>. Built with createElement/textContent — never innerHTML.
+   */
+  function renderCheckoutPrivacyNotice() {
+    const el = document.getElementById('checkout-privacy-notice');
+    if (!el) return;
+    const vars = { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' };
+    const summaryText = document.createElement('span');
+    summaryText.textContent = ck('checkoutPrivacySummary', vars);
+    const details = document.createElement('details');
+    details.className = 'checkout-privacy-details';
+    const summary = document.createElement('summary');
+    summary.textContent = ck('checkoutPrivacyLinkText');
+    const full = document.createElement('p');
+    full.textContent = ck('checkoutPrivacyNotice', vars);
+    details.appendChild(summary);
+    details.appendChild(full);
+    el.replaceChildren(summaryText, details);
+  }
+
   function localizeCheckoutForm() {
     const copy = {
       '#checkout-form-eyebrow': ck('checkoutFormEyebrow'), '#checkout-form-title': ck('checkoutFormTitle'), '#buyer-legend': ck('checkoutBuyerLegend'),
@@ -3950,13 +3921,13 @@
       '#date-label-text': `${ck('checkoutDateLabel')} `, '#delivery-help': ck('checkoutDeliveryHelp', { days: siteData.minimumLeadDays ?? 2 }),
       '#ack-label': ck('checkoutAckLabel'), '#save-order': ck('checkoutSaveOrder'),
       '#checkout-back-to-review': ck('checkoutBackToReview'),
-      '#checkout-privacy-notice': ck('checkoutPrivacyNotice', { retention: (siteData.dataRetentionNotice && siteData.dataRetentionNotice[currentLang]) || '' }),
       '#buyer-name-required': ck('checkoutRequiredMark'), '#buyer-phone-required': ck('checkoutRequiredMark'),
       '#location-type-required': ck('checkoutRequiredMark'), '#regency-required': ck('checkoutRequiredMark'),
       '#address-required': ck('checkoutRequiredMark'), '#city-required': ck('checkoutRequiredMark'),
       '#postal-required': ck('checkoutRequiredMark'), '#date-required': ck('checkoutRequiredMark')
     };
     Object.entries(copy).forEach(([selector, value]) => setText(selector, value));
+    renderCheckoutPrivacyNotice();
     const pickupHelp = document.getElementById('pickup-help');
     if (pickupHelp) {
       const helpText = ck('checkoutPickupHelp');

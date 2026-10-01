@@ -194,15 +194,13 @@ window.ALXANTHIA_DATA = {
         name: "Sunflower",
         size: "45 cm stem",
         detail: "12 cm head",
-        blurb: "Our signature. Layered ochre petals and a dense seeded crown.",
-        singleNote: "Price per finished stem"
+        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
       },
       id: {
         name: "Bunga Matahari",
         size: "tangkai 45 cm",
         detail: "kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
       }
     },
     Rose: {
@@ -220,15 +218,13 @@ window.ALXANTHIA_DATA = {
         name: "Rose",
         size: "40 cm stem",
         detail: "spiralled head",
-        blurb: "Petals wound one by one into a spiral. The most patient flower we make.",
-        singleNote: "Price per finished stem"
+        blurb: "Petals wound one by one into a spiral. The most patient flower we make."
       },
       id: {
         name: "Mawar",
         size: "tangkai 40 cm",
         detail: "kepala melingkar",
-        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran."
       }
     },
     Tulip: {
@@ -246,15 +242,13 @@ window.ALXANTHIA_DATA = {
         name: "Tulip",
         size: "38 cm stem",
         detail: "6 petals",
-        blurb: "Six clean petals and a single leaf. Quiet enough for any room.",
-        singleNote: "Price per finished stem"
+        blurb: "Six clean petals and a single leaf. Quiet enough for any room."
       },
       id: {
         name: "Tulip",
         size: "tangkai 38 cm",
         detail: "6 kelopak",
-        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun."
       }
     },
     Gerbera: {
@@ -272,15 +266,13 @@ window.ALXANTHIA_DATA = {
         name: "Gerbera",
         size: "40 cm stem",
         detail: "coral, two-tone",
-        blurb: "Two rings of narrow coral petals around a seeded brown centre.",
-        singleNote: "Price per finished stem"
+        blurb: "Two rings of narrow coral petals around a seeded brown centre."
       },
       id: {
         name: "Gerbera",
         size: "tangkai 40 cm",
         detail: "koral, dua nada",
-        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji."
       }
     },
     Lavender: {
@@ -333,10 +325,14 @@ window.ALXANTHIA_DATA = {
       ben1d: "Tidak perlu dirangkai — buka dan letakkan.",
       ben2t: "Tanpa air",
       ben2d: "Chenille dan kawat, untuk pajangan dalam ruangan.",
-      ben3t: "Dibuat sesuai pesanan",
+      ben3t: "Dibuat per pesanan",
       ben3d: "Dipotong, dibentuk, dan dibungkus setelah Anda pesan.",
 
-      tr1t: "Dikirim dari Indonesia",
+      tr1t: "Dikirim dari Bali",
+      brandEst: "est. 2026 · Bali",
+      lockUnlock: "Buka →",
+      lockSiteLabel: "Kunci situs",
+      lockSiteTitle: "Kunci situs lagi",
       tr1d: "Ke seluruh Indonesia dalam kemasan boks protektif.",
       tr2t: "Dibuat 2–3 hari kerja",
       tr2d: "Buket 9 tangkai ke atas, 3–4 hari kerja.",
@@ -347,7 +343,8 @@ window.ALXANTHIA_DATA = {
 
       colEyebrow: "Koleksi",
       zoomPhotoLabel: "Perbesar foto {name}",
-      colTitle: "Cara memesan",
+      colTitle: "Pilih bunga Anda",
+      navOrderWithCount: "Pesan — {n} item di keranjang",
       colIntro: "Pilih tangkai jadi, mini pot, atau buket — versi kami atau versi Anda.",
       catOneLabel: "Kategori 01",
       catOneTitle: "Bunga jadi",
@@ -382,6 +379,7 @@ window.ALXANTHIA_DATA = {
       ],
       pkgBtn: "Tambahkan buket ini",
       pkgBtnActive: "✓ {qty} di keranjang — tambah lagi",
+      addedConfirm: "✓ Ditambahkan",
       pkgContinueBtn: "Lanjut ke sentuhan akhir ↓",
       pkgPhotoLabel: "foto buket",
       pkgFavoriteTag: "Favorit Studio",
@@ -421,7 +419,6 @@ window.ALXANTHIA_DATA = {
       kitSoonBody: "Kami sedang menggambar panduannya dan menguji kemasannya, supaya pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak yang menunggu, makin cepat kami luncurkan.",
       kitSoonCta: "Saya mau kitnya →",
       kitSoonCtaDisabled: "Segera hadir",
-      kitSoonSecondary: "Baca FAQ",
 
       howEyebrow: "Cara dibuat",
       howTitle: "Dikerjakan tangan, lalu dikirim ke Anda",
@@ -444,8 +441,8 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Pesan",
       orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
-      orderPickerLabel: "Belum ada pilihan — pilih produk di sini",
-      cartEmpty: "Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.",
+      orderPickerLabel: "Keranjang Anda masih kosong. Mulai dari:",
+      cartEmpty: "Belum ada produk dipilih.",
       finishLabel: "Sentuhan akhir",
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
@@ -513,8 +510,8 @@ window.ALXANTHIA_DATA = {
       checkoutReferenceLabel: "Referensi pesanan",
       checkoutStepIndicator: "Langkah {step} dari {total}",
       checkoutStepReview: "Tinjau",
-      checkoutStepForm: "Detail",
-      checkoutStepSuccess: "Selesai",
+      checkoutStepForm: "Data",
+      checkoutStepSuccess: "Kirim via WhatsApp",
       checkoutSubtotalLabel: "Subtotal produk",
       checkoutWrapFeeLabel: "Biaya bungkus custom",
       checkoutCardFeeLabel: "Kartu ucapan",
@@ -552,17 +549,18 @@ window.ALXANTHIA_DATA = {
       checkoutDeliveryHelp: "Tanggal merupakan preferensi dan akan dikonfirmasi melalui WhatsApp. Pesanan butuh minimal {days} hari persiapan sebelum tanggal ini.",
       checkoutAckLabel: "Saya memahami bahwa pesanan dibuat setelah pembayaran dikonfirmasi dan detail pengiriman akan diperiksa melalui WhatsApp.",
       checkoutPrivacyNotice: "Nama, nomor WhatsApp, alamat, dan detail penerima yang Anda isi hanya dipakai untuk memproses, mengirim, dan mengonfirmasi pesanan ini. Data disimpan di spreadsheet internal Alxanthia yang aksesnya dibatasi hanya untuk tim studio, selama {retention}, lalu dihapus kecuali dibutuhkan untuk catatan keuangan. Browser Anda juga menyimpan keranjang belanja dan nomor referensi pesanan terakhir secara lokal di perangkat ini (bukan di server kami) selama 14 hari agar mudah ditemukan lagi — ini terpisah dari jangka waktu penyimpanan di atas. Gunakan tombol \"Kosongkan keranjang\" untuk menghapusnya kapan saja, terutama pada perangkat bersama. Dengan mencentang kotak di bawah, Anda menyetujui data ini diproses sebagaimana dijelaskan di atas.",
+      checkoutPrivacySummary: "Data Anda hanya dipakai untuk pesanan ini, disimpan selama {retention} di sistem internal studio, lalu dihapus.",
       checkoutPrivacyLinkText: "Kebijakan privasi",
       checkoutRequiredMark: "(wajib)",
-      checkoutSaveOrder: "Simpan pesanan",
-      checkoutSaving: "Menyimpan…",
+      checkoutSaveOrder: "Kirim pesanan",
+      checkoutSaving: "Mengirim…",
       checkoutFieldsIncomplete: "{count} kolom perlu dilengkapi.",
       checkoutNotConfigured: "Penyimpanan pesanan belum dikonfigurasi. Silakan hubungi studio.",
       checkoutAmbiguousFailure: "Kami belum dapat memastikan pesanan tersimpan. Hubungi studio dengan referensi {reference} sebelum mencoba lagi.",
       checkoutConnectionFailure: "Pesanan belum tersimpan. Periksa koneksi internet Anda lalu coba lagi.",
       checkoutConflictFailure: "Referensi {reference} sudah digunakan dengan data yang berbeda. Hubungi studio melalui WhatsApp sebelum mencoba lagi — jangan kirim ulang.",
       checkoutRejectedFailure: "Pesanan tidak dapat disimpan. Periksa kembali data Anda atau hubungi studio.",
-      checkoutSubmittingNotice: "Sedang menyimpan pesanan Anda, mohon tunggu…",
+      checkoutSubmittingNotice: "Sedang mengirim pesanan Anda, mohon tunggu…",
       checkoutSuccessEyebrow: "Pesanan dicatat",
       checkoutSuccessTitle: "Pesanan Anda sudah dicatat.",
       checkoutSuccessCopy: "Lanjutkan ke WhatsApp agar studio kami dapat mengonfirmasi ketersediaan, pengiriman, dan pembayaran.",
@@ -613,11 +611,13 @@ window.ALXANTHIA_DATA = {
       faqEyebrow: "Pertanyaan",
       faqTitle: "Sebelum Anda memesan",
       faqs: [
-        ["Dikirim dari mana?", "Semuanya dibuat dan dikirim dari Indonesia, dikemas aman dalam kotak pelindung ke seluruh nusantara."],
+        ["Dikirim dari mana?", "Semuanya dibuat di studio kami di Jimbaran, Bali, dan dikirim ke seluruh Indonesia dalam kotak pelindung."],
         ["Berapa lama sebelum dikirim?", "Tangkai satuan dan buket kecil (3–5 tangkai) dibuat dalam 2–3 hari kerja; buket 9 tangkai ke atas membutuhkan 3–4 hari kerja."],
         ["Apakah bisa rusak di jalan?", "Buket dibungkus dan dikotakkan dengan mahkota bunga terlindungi. Serat chenille dan kawat lentur sehingga bila sedikit tertekan, mudah dibentuk ulang dengan tangan. Jika paket mengalami kendala berat akibat ekspedisi, kirimkan foto pada WhatsApp studio kami untuk bantuan langsung."],
         ["Bisa ganti isi buketnya?", "Bisa — gunakan penyusun custom di halaman ini untuk kombinasi jumlah yang Anda inginkan, atau chat kami di WhatsApp untuk request warna khusus."],
         ["Bagaimana cara merawatnya?", "Tanpa air sama sekali. Pajang di dalam ruangan, jauh dari kelembapan dan paparan terik matahari langsung; bersihkan debu halus dengan kuas lembut."],
+        ["Kapan saya membayar?", "Tidak ada pembayaran saat Anda mengirim pesanan. Studio akan mengonfirmasi ketersediaan, ongkos kirim, dan total akhir lewat WhatsApp, lalu mengirimkan cara pembayarannya."],
+        ["Bisa diambil sendiri?", "Bisa. Di Bali, pilih \"Ambil sendiri di studio (Jimbaran)\" saat mengisi pesanan; alamat pengambilan dikirim lewat WhatsApp. Anda juga bisa memesan Grab/Gojek sendiri."],
         ["Kit DIY-nya masih ada?", "Masih kami siapkan — panduan bergambar dan kemasan sedang kami rapikan. Kirim pesan ke WhatsApp kami jika ingin masuk daftar tunggu prioritas."]
       ],
 
@@ -655,7 +655,11 @@ window.ALXANTHIA_DATA = {
       ben3t: "Made to order",
       ben3d: "Cut, shaped and wrapped after you order.",
 
-      tr1t: "Ships from Indonesia",
+      tr1t: "Ships from Bali",
+      brandEst: "est. 2026 · Bali",
+      lockUnlock: "Unlock →",
+      lockSiteLabel: "Lock site",
+      lockSiteTitle: "Lock the site again",
       tr1d: "Delivered nationwide in sturdy protective boxes.",
       tr2t: "Made in 2–3 working days",
       tr2d: "Bouquets of 9+ stems take 3–4 working days.",
@@ -666,7 +670,8 @@ window.ALXANTHIA_DATA = {
 
       colEyebrow: "The collection",
       zoomPhotoLabel: "Enlarge photo of {name}",
-      colTitle: "Ways to order",
+      colTitle: "Choose your flowers",
+      navOrderWithCount: "Order — {n} item(s) in cart",
       colIntro: "Choose a finished stem, a mini pot, or a bouquet — ours or yours.",
       catOneLabel: "Category 01",
       catOneTitle: "Finished flowers",
@@ -701,6 +706,7 @@ window.ALXANTHIA_DATA = {
       ],
       pkgBtn: "Add this bouquet",
       pkgBtnActive: "✓ {qty} in cart — add another",
+      addedConfirm: "✓ Added",
       pkgContinueBtn: "Continue to finishing ↓",
       pkgPhotoLabel: "bouquet photo",
       pkgFavoriteTag: "Studio Favorite",
@@ -740,7 +746,6 @@ window.ALXANTHIA_DATA = {
       kitSoonBody: "We're drawing the plates and testing the packs so a beginner can build a flower in twenty minutes. If that's what you came for, tell us — the more people waiting, the sooner we launch it.",
       kitSoonCta: "I want the kit →",
       kitSoonCtaDisabled: "Coming soon",
-      kitSoonSecondary: "Read the FAQ",
 
       howEyebrow: "How they're made",
       howTitle: "Made by hand, then sent to you",
@@ -763,8 +768,8 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Order",
       orderTitle: "Finish your order, then confirm via chat",
-      orderPickerLabel: "Nothing selected — pick a product here",
-      cartEmpty: "Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.",
+      orderPickerLabel: "Your cart is empty. Start with:",
+      cartEmpty: "Nothing selected yet.",
       finishLabel: "Finishing",
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",
@@ -833,7 +838,7 @@ window.ALXANTHIA_DATA = {
       checkoutStepIndicator: "Step {step} of {total}",
       checkoutStepReview: "Review",
       checkoutStepForm: "Details",
-      checkoutStepSuccess: "Done",
+      checkoutStepSuccess: "Send via WhatsApp",
       checkoutSubtotalLabel: "Product subtotal",
       checkoutWrapFeeLabel: "Custom wrapping fee",
       checkoutCardFeeLabel: "Message card",
@@ -871,17 +876,18 @@ window.ALXANTHIA_DATA = {
       checkoutDeliveryHelp: "The date is a preference and will be confirmed through WhatsApp. Orders need at least {days} day(s) of preparation before this date.",
       checkoutAckLabel: "I understand that production starts after payment is confirmed and delivery details will be checked through WhatsApp.",
       checkoutPrivacyNotice: "The name, WhatsApp number, address, and recipient details you enter are only used to process, deliver, and confirm this order. Data is stored in Alxanthia's internal spreadsheet, access-restricted to the studio team only, for {retention}, then deleted unless it is needed for financial records. Your browser also keeps your cart and your most recent order reference stored locally on this device (not on our servers) for 14 days so you can find them again — this is separate from the retention period above. Use the \"Clear cart\" button to remove it at any time, especially on a shared device. By checking the box below, you consent to this data being processed as described above.",
+      checkoutPrivacySummary: "Your details are only used for this order, kept {retention} in the studio's internal records, then deleted.",
       checkoutPrivacyLinkText: "Privacy notice",
       checkoutRequiredMark: "(required)",
-      checkoutSaveOrder: "Save order",
-      checkoutSaving: "Saving…",
+      checkoutSaveOrder: "Submit order",
+      checkoutSaving: "Submitting…",
       checkoutFieldsIncomplete: "{count} field(s) need to be completed.",
       checkoutNotConfigured: "Order saving is not configured yet. Please contact the studio.",
       checkoutAmbiguousFailure: "We could not verify that the order was saved. Please contact the studio with reference {reference} before trying again.",
       checkoutConnectionFailure: "The order was not saved. Please check your internet connection and try again.",
       checkoutConflictFailure: "Reference {reference} was already used with different details. Please contact the studio via WhatsApp before trying again — do not resend.",
       checkoutRejectedFailure: "The order could not be saved. Please check your details or contact the studio.",
-      checkoutSubmittingNotice: "Saving your order, please wait…",
+      checkoutSubmittingNotice: "Submitting your order, please wait…",
       checkoutSuccessEyebrow: "Order recorded",
       checkoutSuccessTitle: "Your order request has been recorded.",
       checkoutSuccessCopy: "Continue to WhatsApp so our studio can confirm availability, delivery, and payment.",
@@ -932,11 +938,13 @@ window.ALXANTHIA_DATA = {
       faqEyebrow: "Questions",
       faqTitle: "Before you order",
       faqs: [
-        ["Where do you ship from?", "Everything is made and sent from Indonesia, delivered safely nationwide in protective boxes."],
+        ["Where do you ship from?", "Everything is made in our studio in Jimbaran, Bali, and shipped across Indonesia in a protective box."],
         ["How long before it's sent?", "Single stems and small bouquets (3–5 stems) take 2–3 working days; bouquets of nine stems or more take 3–4 working days."],
         ["Will it arrive crushed?", "Bouquets are sleeved and boxed with flower heads protected. Chenille and wire stems are pliable and can easily be reshaped by hand if slightly pressed. If severe shipping damage occurs, contact our WhatsApp studio with photos for prompt assistance."],
         ["Can I change what's in a bouquet?", "Yes — use the custom builder on this page for your desired flower combination, or message our WhatsApp for custom color requests."],
         ["How do I care for them?", "No water needed. Display indoors away from moisture and prolonged direct sunlight; dust gently with a soft brush."],
+        ["When do I pay?", "Nothing is charged when you submit an order. The studio confirms availability, delivery cost, and the final total on WhatsApp, then sends you how to pay."],
+        ["Can I pick it up?", "Yes. In Bali, choose \"Self pickup at the studio (Jimbaran)\" when you order; we'll send the pickup address on WhatsApp. You can also book your own Grab/Gojek."],
         ["Are the DIY kits still coming?", "They are still being prepared — instructions and packaging are being refined. Message our WhatsApp to join the priority waitlist."]
       ],
 

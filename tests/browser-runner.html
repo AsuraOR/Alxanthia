@@ -227,6 +227,15 @@
           assert(`Described-by texts of ${label} are unique per card`, unique.size === perCard, `${unique.size} unique vs ${perCard} cards`);
         });
 
+        // Test 10: Header "Pesan" follows the cart (UX-16)
+        const navOrder = doc.getElementById('nav-order');
+        if (navOrder) {
+          assert('Header Pesan targets the catalogue while the cart is empty', navOrder.getAttribute('href') === '#collection-overview' && !navOrder.hasAttribute('aria-label'));
+          win.AlxanthiaApp.selectStem('Rose', false);
+          assert('Header Pesan targets #order with a count label once the cart has items', navOrder.getAttribute('href') === '#order' && /1/.test(navOrder.getAttribute('aria-label') || ''), navOrder.getAttribute('aria-label'));
+          win.AlxanthiaApp.resetToInitial();
+        }
+
         statusEl.textContent = 'All real-browser interactions executed successfully.';
         statusEl.className = 'pass';
       } catch (err) {

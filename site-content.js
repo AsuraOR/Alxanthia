@@ -343,7 +343,8 @@ window.ALXANTHIA_DATA = {
 
       colEyebrow: "Koleksi",
       zoomPhotoLabel: "Perbesar foto {name}",
-      colTitle: "Cara memesan",
+      colTitle: "Pilih bunga Anda",
+      navOrderWithCount: "Pesan — {n} item di keranjang",
       colIntro: "Pilih tangkai jadi, mini pot, atau buket — versi kami atau versi Anda.",
       catOneLabel: "Kategori 01",
       catOneTitle: "Bunga jadi",
@@ -669,7 +670,8 @@ window.ALXANTHIA_DATA = {
 
       colEyebrow: "The collection",
       zoomPhotoLabel: "Enlarge photo of {name}",
-      colTitle: "Ways to order",
+      colTitle: "Choose your flowers",
+      navOrderWithCount: "Order — {n} item(s) in cart",
       colIntro: "Choose a finished stem, a mini pot, or a bouquet — ours or yours.",
       catOneLabel: "Category 01",
       catOneTitle: "Finished flowers",

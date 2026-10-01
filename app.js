@@ -2299,6 +2299,20 @@
           : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
     }
 
+    // UX-16: header "Pesan" goes straight to the cart once it has items
+    const cartCount = cartUnitCount();
+    ['nav-order', 'mobile-order-btn'].forEach(id => {
+      const link = document.getElementById(id);
+      if (!link) return;
+      if (cartCount > 0) {
+        link.setAttribute('href', '#order');
+        link.setAttribute('aria-label', fillTemplate(t.navOrderWithCount || (currentLang === 'en' ? 'Order — {n} item(s) in cart' : 'Pesan — {n} item di keranjang'), { n: cartCount }));
+      } else {
+        link.setAttribute('href', '#collection-overview');
+        link.removeAttribute('aria-label');
+      }
+    });
+
     // UX-09: with nothing selected the price block is empty, so drop its dividers too
     const priceContainerEl = document.querySelector('.summary-price-container');
     if (priceContainerEl) priceContainerEl.style.display = cartHasSelection ? '' : 'none';

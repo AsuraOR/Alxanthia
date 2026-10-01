@@ -328,7 +328,11 @@ window.ALXANTHIA_DATA = {
       ben3t: "Dibuat sesuai pesanan",
       ben3d: "Dipotong, dibentuk, dan dibungkus setelah Anda pesan.",
 
-      tr1t: "Dikirim dari Indonesia",
+      tr1t: "Dikirim dari Bali",
+      brandEst: "est. 2026 · Bali",
+      lockUnlock: "Buka →",
+      lockSiteLabel: "Kunci situs",
+      lockSiteTitle: "Kunci situs lagi",
       tr1d: "Ke seluruh Indonesia dalam kemasan boks protektif.",
       tr2t: "Dibuat 2–3 hari kerja",
       tr2d: "Buket 9 tangkai ke atas, 3–4 hari kerja.",
@@ -607,11 +611,13 @@ window.ALXANTHIA_DATA = {
       faqEyebrow: "Pertanyaan",
       faqTitle: "Sebelum Anda memesan",
       faqs: [
-        ["Dikirim dari mana?", "Semuanya dibuat dan dikirim dari Indonesia, dikemas aman dalam kotak pelindung ke seluruh nusantara."],
+        ["Dikirim dari mana?", "Semuanya dibuat di studio kami di Jimbaran, Bali, dan dikirim ke seluruh Indonesia dalam kotak pelindung."],
         ["Berapa lama sebelum dikirim?", "Tangkai satuan dan buket kecil (3–5 tangkai) dibuat dalam 2–3 hari kerja; buket 9 tangkai ke atas membutuhkan 3–4 hari kerja."],
         ["Apakah bisa rusak di jalan?", "Buket dibungkus dan dikotakkan dengan mahkota bunga terlindungi. Serat chenille dan kawat lentur sehingga bila sedikit tertekan, mudah dibentuk ulang dengan tangan. Jika paket mengalami kendala berat akibat ekspedisi, kirimkan foto pada WhatsApp studio kami untuk bantuan langsung."],
         ["Bisa ganti isi buketnya?", "Bisa — gunakan penyusun custom di halaman ini untuk kombinasi jumlah yang Anda inginkan, atau chat kami di WhatsApp untuk request warna khusus."],
         ["Bagaimana cara merawatnya?", "Tanpa air sama sekali. Pajang di dalam ruangan, jauh dari kelembapan dan paparan terik matahari langsung; bersihkan debu halus dengan kuas lembut."],
+        ["Kapan saya membayar?", "Tidak ada pembayaran saat Anda mengirim pesanan. Studio akan mengonfirmasi ketersediaan, ongkos kirim, dan total akhir lewat WhatsApp, lalu mengirimkan cara pembayarannya."],
+        ["Bisa diambil sendiri?", "Bisa. Di Bali, pilih \"Ambil sendiri di studio (Jimbaran)\" saat mengisi pesanan; alamat pengambilan dikirim lewat WhatsApp. Anda juga bisa memesan Grab/Gojek sendiri."],
         ["Kit DIY-nya masih ada?", "Masih kami siapkan — panduan bergambar dan kemasan sedang kami rapikan. Kirim pesan ke WhatsApp kami jika ingin masuk daftar tunggu prioritas."]
       ],
 
@@ -649,7 +655,11 @@ window.ALXANTHIA_DATA = {
       ben3t: "Made to order",
       ben3d: "Cut, shaped and wrapped after you order.",
 
-      tr1t: "Ships from Indonesia",
+      tr1t: "Ships from Bali",
+      brandEst: "est. 2026 · Bali",
+      lockUnlock: "Unlock →",
+      lockSiteLabel: "Lock site",
+      lockSiteTitle: "Lock the site again",
       tr1d: "Delivered nationwide in sturdy protective boxes.",
       tr2t: "Made in 2–3 working days",
       tr2d: "Bouquets of 9+ stems take 3–4 working days.",
@@ -928,11 +938,13 @@ window.ALXANTHIA_DATA = {
       faqEyebrow: "Questions",
       faqTitle: "Before you order",
       faqs: [
-        ["Where do you ship from?", "Everything is made and sent from Indonesia, delivered safely nationwide in protective boxes."],
+        ["Where do you ship from?", "Everything is made in our studio in Jimbaran, Bali, and shipped across Indonesia in a protective box."],
         ["How long before it's sent?", "Single stems and small bouquets (3–5 stems) take 2–3 working days; bouquets of nine stems or more take 3–4 working days."],
         ["Will it arrive crushed?", "Bouquets are sleeved and boxed with flower heads protected. Chenille and wire stems are pliable and can easily be reshaped by hand if slightly pressed. If severe shipping damage occurs, contact our WhatsApp studio with photos for prompt assistance."],
         ["Can I change what's in a bouquet?", "Yes — use the custom builder on this page for your desired flower combination, or message our WhatsApp for custom color requests."],
         ["How do I care for them?", "No water needed. Display indoors away from moisture and prolonged direct sunlight; dust gently with a soft brush."],
+        ["When do I pay?", "Nothing is charged when you submit an order. The studio confirms availability, delivery cost, and the final total on WhatsApp, then sends you how to pay."],
+        ["Can I pick it up?", "Yes. In Bali, choose \"Self pickup at the studio (Jimbaran)\" when you order; we'll send the pickup address on WhatsApp. You can also book your own Grab/Gojek."],
         ["Are the DIY kits still coming?", "They are still being prepared — instructions and packaging are being refined. Message our WhatsApp to join the priority waitlist."]
       ],
 

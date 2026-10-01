@@ -1065,6 +1065,11 @@
     setText('#nav-how', t.navHow);
     setText('#nav-faq', t.navFaq);
     setText('#nav-order', t.navOrder);
+    setText('#brand-est', t.brandEst);
+    setText('#lock-unlock-btn', t.lockUnlock);
+    setText('#btn-lock-site', t.lockSiteLabel);
+    const relockEl = document.getElementById('btn-lock-site');
+    if (relockEl && t.lockSiteTitle) relockEl.setAttribute('title', t.lockSiteTitle);
     setText('#mobile-order-btn', t.navOrder || 'Pesan');
 
     // Responsive brand logo

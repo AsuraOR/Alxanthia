@@ -318,7 +318,7 @@
       <form id="lock-form" class="lock-form" autocomplete="off">
         <input type="password" id="passcode-input" class="lock-input" placeholder="••••••••"
           aria-label="Kata sandi akses / Access passcode" autofocus required />
-        <button type="submit" class="lock-btn">Unlock →</button>
+        <button type="submit" class="lock-btn" id="lock-unlock-btn">Buka →</button>
       </form>
       <p id="lock-error" class="lock-error" aria-live="polite" role="alert"></p>
     </div>
@@ -369,7 +369,7 @@
         <img src="alxanthia-logo-96.webp" srcset="alxanthia-logo-96.webp 1x, alxanthia-logo-192.webp 2x" width="28"
           height="40" alt="Alxanthia Logo" class="brand-logo" />
         <span class="brand-name">Alxanthia</span>
-        <span class="brand-est">est. 2026 | Based in Bali</span>
+        <span class="brand-est" id="brand-est">est. 2026 · Bali</span>
       </a>
 
       <!-- Mobile Fast Actions -->
@@ -850,7 +850,7 @@
 
     <div class="footer-bottom container">
       <span id="footer-copyright">© 2026 Alxanthia</span>
-      <button type="button" id="btn-lock-site" class="btn-relock" title="Lock the site again">Lock Site</button>
+      <button type="button" id="btn-lock-site" class="btn-relock" title="Kunci situs lagi">Kunci situs</button>
     </div>
   </footer>
 

@@ -592,7 +592,7 @@ Run all of these and paste the results into the report:
 Tests: `npm test` passes (32 + 10 + 3 + 3 + 11 + 50 suites). `npm run test:browser` ran 71 assertions with 0 failures.
 Page height @390px empty cart: before 15,577 px (my own measurement of the same state at the base commit: 15,598 px) → after 13,469 px.
 Final `dist/` rebuild: 1889656. Console errors on load and during the flow: none from the app. The only errors were blocked external requests in this sandbox (certificate and tunnel failures).
-Owner questions outstanding: 1, 2, 3, 4, 5, 6.
+Owner questions: all answered afterwards (see *Owner answers* below). None outstanding.
 Anything skipped or changed from this brief, and why:
 - **Brief file location.** `WEBSITE-UX-FIXES.md` and `WEBSITE-UX-AUDIT.md` were not on this branch. I copied them in from `origin/claude/kind-allen-1dw9i2` (commit 5670471) and then worked from them.
 - **UX-02 shortcut buttons.** They are created once by `renderOrderPicker()` into an empty `#order-empty-shortcuts` container instead of being static HTML. The test mock cannot parse `index.html`, and this keeps the count assertion exact. Handlers are bound once.
@@ -601,3 +601,12 @@ Anything skipped or changed from this brief, and why:
 - **UX-12 owner confirmation.** The copy now says the studio is in Jimbaran and ships from Bali. This needs owner confirmation (question 5).
 - **UX-12 lock-screen strings.** Their EN versions are only visible after the language switch runs. The static HTML is Indonesian.
 - **UX-04 pill gap.** At 1440 it is 24 px, the lower edge of the 24–40 px range.
+
+## Owner answers and follow-up
+
+1. **Payment:** bank transfer only. The "Kapan saya membayar?" FAQ now says the studio sends bank account details for payment by bank transfer. Timing (before making or before shipping) was not answered, so none is stated.
+2. **Shipping outside Bali:** quoted per order. No courier list or price range was added; the payment FAQ already says delivery cost is confirmed on WhatsApp.
+3. **Changes and cancellation:** case by case. A new FAQ, "Bisa ubah atau batalkan pesanan?", says to message the studio on WhatsApp and that requests are reviewed case by case.
+4. **Wrapped single stems:** no colour choice. No change.
+5. **Location copy:** confirmed correct. No change.
+6. **Hero benefits and trust bar:** merged into one four-item trust bar. The hero's three-item list is removed. The four items are "Dikirim dari Bali", "Dibuat 2–3 hari kerja" (now also says it is cut and shaped after ordering), "Datang sudah jadi, tanpa air" and "Dikemas agar utuh". I dropped the fourth old item, "Pemesanan langsung" (WhatsApp confirmation), because the FAQ and checkout already say it. Say so if you want it back.

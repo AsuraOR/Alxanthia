@@ -1237,12 +1237,6 @@
     setText('#cta-browse', t.ctaBrowse);
     setText('#cta-bouquets', t.ctaBouquet);
 
-    setText('#ben1-t', t.ben1t);
-    setText('#ben1-d', t.ben1d);
-    setText('#ben2-t', t.ben2t);
-    setText('#ben2-d', t.ben2d);
-    setText('#ben3-t', t.ben3t);
-    setText('#ben3-d', t.ben3d);
 
     setText('#hero-caption-latin', t.heroPlateCaption || 'Helianthus annuus');
     setText('#hero-caption-pl', t.heroPlatePl || 'PL. I');
@@ -1265,10 +1259,10 @@
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path></svg>',
     // Clock (turnaround time)
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>',
+    // Check-circle (arrives finished, no assembly or water)
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.7 2.7L16 9.5"></path></svg>',
     // Shield-check (packed to arrive intact)
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>',
-    // Chat bubble (direct order via WhatsApp)
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.3 8.3 0 0 1-4-1l-4.5 1 1-4.4a8.3 8.3 0 0 1-1-4 8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4z"></path></svg>'
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>'
   ];
 
   function renderTrustBar(t) {
@@ -1277,8 +1271,8 @@
     const rows = [
       [t.tr1t, t.tr1d],
       [t.tr2t, t.tr2d],
-      [t.tr3t, t.tr3d],
-      [t.tr4t, t.tr4d]
+      [t.tr5t, t.tr5d],
+      [t.tr3t, t.tr3d]
     ];
     el.innerHTML = rows.map(([title, desc], i) => `
       <div class="trust-item">

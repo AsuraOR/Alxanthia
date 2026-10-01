@@ -836,6 +836,11 @@
   /**
    * Order action: Choose a single finished stem
    */
+  /** True when the cart holds a bouquet (package or custom) — the only lines that carry a wrap colour. */
+  function cartUsesBouquetWrap() {
+    return cart.some(l => l.type === 'package' || l.type === 'custom');
+  }
+
   function selectStemOrder(flowerKey, scroll = true, wrapped = false) {
     // UX-01: adding stays in place. `scroll` is kept for API compatibility
     // (AlxanthiaApp exposes it) but no longer moves the page or the focus.
@@ -2276,7 +2281,7 @@
     const cartTotals = computeCartTotals(cart);
     const cartInvalid = cartHasSelection && !cartTotals.isValid;
     const wrapName = t.wrapNames[selectedWrap] || t.wrapNames.kraft;
-    const cartUsesWrap = cart.some(line => line.type === 'package' || line.type === 'custom');
+    const cartUsesWrap = cartUsesBouquetWrap();
     const wrapIntroEl = document.getElementById('wrap-intro');
     if (wrapIntroEl) wrapIntroEl.style.display = cartUsesWrap ? '' : 'none';
     if (wrapChipsEl) wrapChipsEl.style.display = cartUsesWrap ? '' : 'none';
@@ -3484,8 +3489,15 @@
     setText('#checkout-delivery-row-value', ck('checkoutDeliveryRowValue'));
     const t = siteData.translations[currentLang] || siteData.translations.id;
     const en = currentLang === 'en';
-    const cardNoteText = state.messageCardEnabled && orderNote.trim() ? ` ${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".` : '';
-    setText('#checkout-finish', `${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.${cardNoteText}`);
+    // UX-03: only mention the wrap colour when a bouquet is in the cart
+    const finishParts = [];
+    if (cartUsesBouquetWrap()) finishParts.push(`${en ? 'Wrap' : 'Bungkus'}: ${t.wrapNames[selectedWrap]}.`);
+    if (state.messageCardEnabled && orderNote.trim()) finishParts.push(`${en ? 'Card message' : 'Pesan kartu'}: "${orderNote.trim()}".`);
+    const finishEl = document.getElementById('checkout-finish');
+    if (finishEl) {
+      finishEl.hidden = finishParts.length === 0;
+      finishEl.textContent = finishParts.join(' ');
+    }
     setText('#checkout-notice', ck('checkoutNotice'));
     setText('#checkout-edit', ck('checkoutEditOrder'));
     setText('#checkout-continue', ck('checkoutContinueOrder'));

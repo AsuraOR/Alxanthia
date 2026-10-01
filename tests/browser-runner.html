@@ -172,6 +172,33 @@
           );
         }
 
+        // Test 8: Checkout review only mentions wrap colour for bouquets (UX-03)
+        win.AlxanthiaApp.resetToInitial();
+        win.AlxanthiaApp.selectMiniPot('daisy', false);
+        const checkoutBtn = doc.getElementById('btn-checkout');
+        const finishEl = doc.getElementById('checkout-finish');
+        const checkoutModal = doc.getElementById('checkout-modal');
+        if (checkoutBtn && finishEl && checkoutModal) {
+          checkoutBtn.click();
+          assert(
+            'Mini-pot-only review does not mention wrap colour',
+            finishEl.hidden || !/Bungkus|Wrap/.test(finishEl.textContent),
+            finishEl.textContent
+          );
+          doc.getElementById('checkout-close').click();
+          win.AlxanthiaApp.selectPackage(0, false);
+          checkoutBtn.click();
+          assert(
+            'Review with a bouquet shows the wrap colour',
+            !finishEl.hidden && /Bungkus|Wrap/.test(finishEl.textContent),
+            finishEl.textContent
+          );
+          doc.getElementById('checkout-close').click();
+          win.AlxanthiaApp.resetToInitial();
+        } else {
+          assert('UX-03 checkout elements present', false);
+        }
+
         statusEl.textContent = 'All real-browser interactions executed successfully.';
         statusEl.className = 'pass';
       } catch (err) {

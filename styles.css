@@ -965,19 +965,14 @@ body.lock-scroll-off {
   background: var(--bg-card);
 }
 
-/* At ≥769px the flower/bouquet grids run 4-across (auto-fit) while this
-   one is a fixed 3 columns, so its cards stretch noticeably wider than
-   its neighbours sharing the same container. Cap and centre them to match
-   (UX-23). Below 769px all three grids already share the same explicit
-   2-column override, so the mismatch — and this fix — doesn't apply there. */
+/* At ≥769px the flower/bouquet grids run 4-across, so the mini pots use the
+   same 4 tracks: their 3 cards sit flush left at the same width as their
+   neighbours instead of stretching or floating centred (UX-14, replaces the
+   UX-23 centred/capped approach). Below 769px all three grids already share the
+   same explicit 2-column override. */
 @media (min-width: 769px) {
   .mini-pots-grid {
-    justify-items: center;
-  }
-
-  .mini-pot-card {
-    width: 100%;
-    max-width: 262px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -1655,7 +1650,7 @@ body.lock-scroll-off {
   margin-top: 44px;
   border-top: 1px solid var(--border-medium);
   border-bottom: 1px solid var(--border-medium);
-  padding: 30px 0;
+  padding: 30px 24px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px 44px;

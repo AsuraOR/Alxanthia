@@ -325,7 +325,7 @@ window.ALXANTHIA_DATA = {
       ben1d: "Tidak perlu dirangkai — buka dan letakkan.",
       ben2t: "Tanpa air",
       ben2d: "Chenille dan kawat, untuk pajangan dalam ruangan.",
-      ben3t: "Dibuat sesuai pesanan",
+      ben3t: "Dibuat per pesanan",
       ben3d: "Dipotong, dibentuk, dan dibungkus setelah Anda pesan.",
 
       tr1t: "Dikirim dari Bali",

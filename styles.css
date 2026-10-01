@@ -671,7 +671,7 @@ body.lock-scroll-off {
 
 .flower-card {
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto auto auto auto;
+  grid-template-rows: auto auto auto 1fr auto auto auto;
 }
 
 .flower-photo-wrapper {
@@ -791,31 +791,8 @@ body.lock-scroll-off {
   color: var(--text-dark);
 }
 
-.flower-single-note {
-  grid-row: 7;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-label);
-  line-height: 1.4;
-  color: var(--text-muted);
-  background: rgba(63, 85, 69, 0.06);
-  border: 1px solid rgba(63, 85, 69, 0.14);
-  border-left: 3px solid var(--accent-green);
-  border-radius: 0;
-  padding: 6px 10px;
-  margin: 0 0 14px;
-  font-family: var(--font-sans);
-  font-style: italic;
-}
-
-.flower-single-note .note-icon {
-  flex-shrink: 0;
-  color: var(--accent-green);
-}
-
 .flower-actions-row {
-  grid-row: 8;
+  grid-row: 7;
   align-self: end;
   display: flex;
   flex-direction: column;
@@ -3286,13 +3263,6 @@ details.is-closing > .faq-answer-wrapper {
     margin-bottom: 8px;
   }
 
-  .flower-single-note {
-    font-size: var(--fs-label);
-    line-height: 1.35;
-    padding: 5px 8px;
-    margin-bottom: 10px;
-  }
-
   .flower-actions-row {
     display: flex;
     flex-direction: column;
@@ -4236,3 +4206,17 @@ body:has(.checkout-modal[open]) { overflow: hidden; }
   .form-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+
+/* UX-05: on phones the stem button stacks label over price so neither wraps mid-phrase */
+@media (max-width: 480px) {
+  .btn-order-stem {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .per-stem-tag {
+    display: block;
+  }
+}

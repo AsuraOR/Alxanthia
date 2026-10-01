@@ -88,8 +88,8 @@
   }
 
   function stemOrderButtonLabel(wrapped, lang = currentLang) {
-    if (lang === 'en') return wrapped ? 'With wrap' : 'Without wrap';
-    return wrapped ? 'Dengan bungkus' : 'Tanpa bungkus';
+    if (lang === 'en') return wrapped ? '+ With wrap' : '+ Without wrap';
+    return wrapped ? '+ Dengan bungkus' : '+ Tanpa bungkus';
   }
 
   /**
@@ -1312,18 +1312,8 @@
 
       const card = document.createElement('article');
       card.className = 'flower-card';
-      const singleNoteHtml = trans.singleNote
-        ? `<div class="flower-single-note">
-            <svg class="note-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.3A5.7 5.7 0 1 1 2.3 8 5.7 5.7 0 0 1 8 2.3zm0 2.7a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8zm-1 3.2h2v4.8H7V8.2z"/>
-            </svg>
-            <span>${trans.singleNote}</span>
-          </div>`
-        : '';
       const photoStemCount = flower.photoStemCount || 1;
-      const photoBadgeHtml = trans.singleNote
-        ? `<span class="flower-photo-pill">${currentLang === 'en' ? `Photo: ${photoStemCount} stems` : `Foto: ${photoStemCount} tangkai`}</span>`
-        : '';
+      const photoBadgeHtml = `<span class="flower-photo-pill">${currentLang === 'en' ? `Photo: ${photoStemCount} stems` : `Foto: ${photoStemCount} tangkai`}</span>`;
 
       card.innerHTML = `
         <div class="flower-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}">
@@ -1338,7 +1328,6 @@
           <div class="flower-meta-block">
             <p class="flower-spec-line">${trans.size} · ${trans.detail}</p>
             ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
-            ${singleNoteHtml}
           </div>
           <div class="flower-actions-row">
             <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" style="--accent-hover:${flower.accent}">

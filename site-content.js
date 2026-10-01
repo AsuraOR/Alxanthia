@@ -194,15 +194,13 @@ window.ALXANTHIA_DATA = {
         name: "Sunflower",
         size: "45 cm stem",
         detail: "12 cm head",
-        blurb: "Our signature. Layered ochre petals and a dense seeded crown.",
-        singleNote: "Price per finished stem"
+        blurb: "Our signature. Layered ochre petals and a dense seeded crown."
       },
       id: {
         name: "Bunga Matahari",
         size: "tangkai 45 cm",
         detail: "kepala 12 cm",
-        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Bunga andalan kami. Kelopak oker berlapis dengan mahkota berbiji rapat."
       }
     },
     Rose: {
@@ -220,15 +218,13 @@ window.ALXANTHIA_DATA = {
         name: "Rose",
         size: "40 cm stem",
         detail: "spiralled head",
-        blurb: "Petals wound one by one into a spiral. The most patient flower we make.",
-        singleNote: "Price per finished stem"
+        blurb: "Petals wound one by one into a spiral. The most patient flower we make."
       },
       id: {
         name: "Mawar",
         size: "tangkai 40 cm",
         detail: "kepala melingkar",
-        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Kelopak dipasang satu per satu jadi lingkaran. Bunga paling menuntut kesabaran."
       }
     },
     Tulip: {
@@ -246,15 +242,13 @@ window.ALXANTHIA_DATA = {
         name: "Tulip",
         size: "38 cm stem",
         detail: "6 petals",
-        blurb: "Six clean petals and a single leaf. Quiet enough for any room.",
-        singleNote: "Price per finished stem"
+        blurb: "Six clean petals and a single leaf. Quiet enough for any room."
       },
       id: {
         name: "Tulip",
         size: "tangkai 38 cm",
         detail: "6 kelopak",
-        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Enam kelopak bersih dan satu daun. Tenang untuk ruangan mana pun."
       }
     },
     Gerbera: {
@@ -272,15 +266,13 @@ window.ALXANTHIA_DATA = {
         name: "Gerbera",
         size: "40 cm stem",
         detail: "coral, two-tone",
-        blurb: "Two rings of narrow coral petals around a seeded brown centre.",
-        singleNote: "Price per finished stem"
+        blurb: "Two rings of narrow coral petals around a seeded brown centre."
       },
       id: {
         name: "Gerbera",
         size: "tangkai 40 cm",
         detail: "koral, dua nada",
-        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji.",
-        singleNote: "Harga per 1 tangkai jadi"
+        blurb: "Dua lingkar kelopak koral ramping mengelilingi mahkota cokelat berbiji."
       }
     },
     Lavender: {

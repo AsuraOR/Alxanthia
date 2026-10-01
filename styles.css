@@ -981,7 +981,7 @@ body.lock-scroll-off {
   }
 }
 
-.mini-pot-photo-wrapper { overflow: hidden; border-bottom: 1px solid var(--border-light); cursor: pointer; }
+.mini-pot-photo-wrapper { position: relative; overflow: hidden; border-bottom: 1px solid var(--border-light); cursor: pointer; }
 .mini-pot-photo { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: transform var(--motion-duration-hover) var(--motion-ease-out); }
 .mini-pot-card:hover .mini-pot-photo { transform: scale(1.025); }
 .mini-pot-info { display: flex; flex: 1; flex-direction: column; padding: 24px; }
@@ -1070,6 +1070,7 @@ body.lock-scroll-off {
 }
 
 .bouquet-photo-wrapper {
+  position: relative;
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-card);
   overflow: hidden;
@@ -3221,7 +3222,7 @@ details.is-closing > .faq-answer-wrapper {
 
   .mini-pot-info { padding: 14px 10px; }
   .mini-pot-title { font-size: clamp(17px, 4.2vw, 21px); }
-  .mini-pot-blurb { display: -webkit-box; overflow: hidden; margin-bottom: 10px; font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .mini-pot-blurb { margin-bottom: 10px; font-size: 13px; line-height: 1.45; }
   .mini-pot-price { margin-bottom: 10px; padding-top: 8px; font-size: var(--fs-button); }
   .mini-pot-material { margin-bottom: 7px; }
 
@@ -3242,10 +3243,6 @@ details.is-closing > .faq-answer-wrapper {
     font-size: 13px;
     line-height: 1.45;
     margin-bottom: 8px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .flower-meta-block {
@@ -3306,10 +3303,6 @@ details.is-closing > .faq-answer-wrapper {
     font-size: 13px;
     line-height: 1.45;
     margin-bottom: 10px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .bouquet-price {
@@ -4219,4 +4212,21 @@ body:has(.checkout-modal[open]) { overflow: hidden; }
   .per-stem-tag {
     display: block;
   }
+}
+
+/* UX-07: visible zoom hint on product photos (touch screens never show the title tooltip) */
+.photo-zoom-hint {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(250, 245, 238, 0.82);
+  color: var(--text-dark);
+  pointer-events: none;
 }

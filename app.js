@@ -1190,7 +1190,7 @@
         ? fillTemplate(t.miniPotHeight || '~{h} cm', { h: pot.heightCm })
         : t.miniPotMaterial;
       card.innerHTML = `
-        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
+        <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /><span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span></div>
         <div class="mini-pot-info">
           <span class="mini-pot-material">${heightBadge}</span>
           <h4 class="mini-pot-title" id="pot-title-${pot.key}">${trans.name}</h4>
@@ -1320,6 +1320,7 @@
           <span class="flower-accent-line" style="background:${flower.accent}"></span>
           <img src="${flower.photo}" srcset="${flower.srcset || ''}" sizes="${flower.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="450" alt="${flowerAlt}" class="flower-photo" loading="lazy" />
           ${photoBadgeHtml}
+          <span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span>
         </div>
         <div class="flower-info">
           <h4 class="flower-name" id="flower-title-${key}">${trans.name}</h4>
@@ -1346,7 +1347,7 @@
         photoWrap.setAttribute('title', currentLang === 'en' ? 'Click to enlarge photo' : 'Klik untuk memperbesar foto');
         const handleOpenInspector = (e) => {
           e.preventDefault();
-          openImageModal(flower.photo, flowerAlt, trans.name, `${flower.latin} · ${trans.size} · ${trans.detail}`, photoWrap);
+          openImageModal(flower.photo, flowerAlt, trans.name, `${trans.blurb} — ${flower.latin} · ${trans.size} · ${trans.detail}`, photoWrap);
         };
         photoWrap.addEventListener('click', handleOpenInspector);
         photoWrap.addEventListener('keydown', (e) => {
@@ -1450,6 +1451,7 @@
         <div class="bouquet-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name })}">
           ${isPopular ? `<span class="pkg-popular-badge">${t.pkgFavoriteTag || 'Favorit Studio'}</span>` : ''}
           <img src="${pkg.photoWebp || pkg.photo}" srcset="${pkg.srcset || ''}" sizes="${pkg.sizes || '(max-width: 600px) 90vw, 260px'}" width="360" height="360" alt="${name} — ${pkg.stems} ${t.pkgStemLine}" class="bouquet-photo" loading="lazy" />
+          <span class="photo-zoom-hint" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14M7 5v4M5 7h4"/></svg></span>
         </div>
         <div class="bouquet-info">
           <div class="bouquet-meta-row">

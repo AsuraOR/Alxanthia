@@ -1193,10 +1193,10 @@
         <div class="mini-pot-photo-wrapper" role="button" tabindex="0" aria-label="${fillTemplate(t.zoomPhotoLabel || 'Enlarge photo of {name}', { name: trans.name })}"><img src="${pot.photo}" width="1254" height="1254" alt="${trans.name}" class="mini-pot-photo" loading="lazy" /></div>
         <div class="mini-pot-info">
           <span class="mini-pot-material">${heightBadge}</span>
-          <h4 class="mini-pot-title">${trans.name}</h4>
+          <h4 class="mini-pot-title" id="pot-title-${pot.key}">${trans.name}</h4>
           <p class="mini-pot-blurb">${trans.blurb}</p>
           <p class="mini-pot-price">${formatRp(pot.price)}</p>
-          <button type="button" class="btn-choose-bouquet btn-add-mini-pot">${t.miniPotBtn}</button>
+          <button type="button" class="btn-choose-bouquet btn-add-mini-pot" aria-describedby="pot-title-${pot.key}">${t.miniPotBtn}</button>
         </div>`;
       card.querySelector('.btn-add-mini-pot').addEventListener('click', (e) => {
         if (selectMiniPot(pot.key)) flashAddedConfirmation(e.currentTarget);
@@ -1322,7 +1322,7 @@
           ${photoBadgeHtml}
         </div>
         <div class="flower-info">
-          <h4 class="flower-name">${trans.name}</h4>
+          <h4 class="flower-name" id="flower-title-${key}">${trans.name}</h4>
           <p class="flower-latin">${flower.latin}</p>
           <p class="flower-blurb">${trans.blurb}</p>
           <div class="flower-meta-block">
@@ -1330,10 +1330,10 @@
             ${siteData.store.showPrices ? `<p class="flower-price-line">${priceStr} <span class="per-stem-tag">${t.perStemPrefix}</span></p>` : ''}
           </div>
           <div class="flower-actions-row">
-            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" style="--accent-hover:${flower.accent}">
+            <button type="button" class="btn-order-stem btn-order-stem-secondary" data-flower="${key}" data-wrapped="false" aria-describedby="flower-title-${key}" style="--accent-hover:${flower.accent}">
               <span>${stemOrderButtonLabel(false)}</span><span class="btn-order-stem-price">${priceStr}</span>
             </button>
-            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" style="--accent-hover:${flower.accent}">
+            <button type="button" class="btn-order-stem" data-flower="${key}" data-wrapped="true" aria-describedby="flower-title-${key}" style="--accent-hover:${flower.accent}">
               <span>${stemOrderButtonLabel(true)}</span><span class="btn-order-stem-price">${wrappedPriceStr}</span>
             </button>
           </div>
@@ -1455,11 +1455,11 @@
           <div class="bouquet-meta-row">
             <span class="bouquet-stems-label">${pkg.stems} ${t.pkgStemLine}</span>
           </div>
-          <h4 class="bouquet-title">${name}</h4>
+          <h4 class="bouquet-title" id="pkg-title-${index}">${name}</h4>
           <p class="bouquet-blurb">${blurb}</p>
           ${siteData.store.showPrices ? `<p class="bouquet-price">${priceStr}</p>` : ''}
           <div class="pkg-actions-col">
-            <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}">
+            <button type="button" class="btn-choose-bouquet ${active ? 'is-active' : ''}" data-index="${index}" aria-describedby="pkg-title-${index}">
               ${active ? fillTemplate(t.pkgBtnActive, { qty: activeLine.qty }) : t.pkgBtn}
             </button>
           </div>

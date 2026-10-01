@@ -199,6 +199,24 @@
           assert('UX-03 checkout elements present', false);
         }
 
+        // Test 9: Add buttons name their product via aria-describedby (UX-06)
+        [
+          ['stem add buttons', '.btn-order-stem'],
+          ['mini-pot add buttons', '.btn-add-mini-pot'],
+          ['package choose buttons', '#packages-grid .btn-choose-bouquet']
+        ].forEach(([label, sel]) => {
+          const btns = Array.from(doc.querySelectorAll(sel));
+          const names = btns.map(b => {
+            const el = doc.getElementById(b.getAttribute('aria-describedby') || '');
+            return el ? el.textContent.trim() : '';
+          });
+          assert(`All ${label} have aria-describedby resolving to non-empty text`, btns.length > 0 && names.every(n => n !== ''), JSON.stringify(names));
+          // Stems have two buttons per card (wrapped / unwrapped), so compare unique-per-card
+          const unique = new Set(names);
+          const perCard = sel === '.btn-order-stem' ? btns.length / 2 : btns.length;
+          assert(`Described-by texts of ${label} are unique per card`, unique.size === perCard, `${unique.size} unique vs ${perCard} cards`);
+        });
+
         statusEl.textContent = 'All real-browser interactions executed successfully.';
         statusEl.className = 'pass';
       } catch (err) {

@@ -1,6 +1,8 @@
 # Alxanthia storefront — UI/UX audit
 
 **Status:** open. Findings only — no code was changed.
+**To implement:** follow [`WEBSITE-UX-FIXES.md`](WEBSITE-UX-FIXES.md), the step-by-step brief for a
+coding agent.
 **Audited commit:** `a65f53b` (main, 1 Oct 2026).
 **Scope:** the customer-facing site (`index.html`, `styles.css`, `app.js`, `site-content.js`).
 Studio Desk is out of scope (see [`STUDIO-DESK-UX-REVIEW.md`](STUDIO-DESK-UX-REVIEW.md)).
@@ -38,7 +40,7 @@ Severity: **P1** costs orders or trust · **P2** causes confusion or friction ·
 | --- | --- | --- |
 | UX-01 | P1 | First "add" jumps the visitor 3,000–5,000 px down to the order section, and every stem add moves keyboard focus there |
 | UX-02 | P1 | The whole catalogue is shown a second time inside the order section |
-| UX-03 | P1 | Every order says "Bungkus: Kraft", even with nothing wrapped. Wrapped single stems never get the colour choice |
+| UX-03 | P1 | The review says "Bungkus: Kraft" even when nothing in the cart is wrapped |
 | UX-04 | P1 | Phone shows two floating cart controls at once, and the pill covers page content |
 | UX-05 | P2 | Each stem card shows its price three times; on phones the labels wrap and crowd |
 | UX-06 | P2 | Add buttons don't say "add" or name the product (screen readers hear 4× "Tanpa bungkus") |
@@ -97,22 +99,21 @@ The empty-state copy also says products are "di bawah" (below). On desktop the p
 shortcuts (Bunga jadi · Mini pot · Buket) that scroll back to the catalogue. The catalogue above
 stays the only place to shop.
 
-### UX-03 — Wrap colour is recorded even when nothing is wrapped, and unchosen when something is
+### UX-03 — The review says "Bungkus: Kraft" even when nothing is wrapped
 
-- `selectedWrap` defaults to `'kraft'` and is always shown in review
-  (`#checkout-finish` → "Bungkus: Kraft.") and always sent (`wrapId: selectedWrap`).
-  A **mini-pot-only** cart and a **"Tanpa bungkus"** stem order both say "Bungkus: Kraft". The
-  customer reads it as a choice they didn't make, and the studio receives it on an order with
-  no wrap.
-- The colour chips only show when `cart.some(line => line.type === 'package' || line.type === 'custom')`.
-  A customer who picks **"Dengan bungkus"** on a stem pays for wrapping but is never offered the
-  colour, and is silently recorded as Kraft.
-- Where the chips do show, they sit below the cart, far from the product, and one colour applies
-  to every wrapped item in the order.
+- `selectedWrap` defaults to `'kraft'`, and the review step always prints it
+  (`#checkout-finish` → "Bungkus: Kraft."). A **mini-pot-only** cart and a **"Tanpa bungkus"**
+  stem order both say "Bungkus: Kraft", which the customer reads as a choice they didn't make.
+  The cart panel, the wrap chips and the WhatsApp text already show the colour only when a
+  package or custom bouquet is in the cart; the review line is the one place that ignores this.
+- The studio is **not** misinformed: the server records `Wrap` only for bouquet orders
+  (`usesBouquetWrap`), and it requires a valid wrap key on every order. So the payload must not
+  change.
+- By design, a "Dengan bungkus" stem gets protective paper, not a colour choice. Whether it
+  *should* get one is an owner decision that also needs server and Studio Desk changes.
 
-**Fix.** Derive "uses wrap" from the cart, including wrapped stems. Show the chips, the review line
-and `wrapId` only when it's true (send `null` otherwise). Later, consider choosing the colour on
-the card or in the builder.
+**Fix.** Show the review's wrap sentence only when the cart contains a package or custom bouquet.
+Leave `wrapId` in the payload unchanged.
 
 ### UX-04 — Two floating cart controls on phones
 
@@ -305,7 +306,7 @@ point "Pesan" at `#order` and show the count.
 1. **UX-01 + UX-04 together.** Stay in place on add, with one clear cart control. This is the
    biggest change to how the page feels.
 2. **UX-02.** Remove the duplicate picker. The phone page gets several screens shorter.
-3. **UX-03.** Wrap logic. Small code change; fixes what the studio receives.
+3. **UX-03.** Review-line wrap logic. Small, display-only change.
 4. **UX-05, UX-06, UX-09, UX-10, UX-12.** Copy and markup quick wins.
 5. **UX-08, UX-11, UX-07.** Checkout clarity.
 6. **UX-13.** Needs owner answers (payment, shipping, pickup, changes).

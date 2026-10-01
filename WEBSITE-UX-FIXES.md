@@ -1,6 +1,6 @@
 # Storefront UX fixes — implementation brief
 
-**Status:** open. Written for a coding agent to implement, task by task.
+**Status:** implemented on branch `claude/compassionate-goldberg-kdf7km` — see the Completion report at the bottom. Written for a coding agent to implement, task by task.
 **Base commit:** `a65f53b` (main). Reconfirm each finding against HEAD before changing code.
 **Background and evidence:** [`WEBSITE-UX-AUDIT.md`](WEBSITE-UX-AUDIT.md). Read it first; this file
 says *what to change*, the audit says *why*.
@@ -568,15 +568,36 @@ Run all of these and paste the results into the report:
    - both languages: no leftover hard-coded English in ID mode, and no missing EN strings.
 5. No console errors on load or during the flow.
 
-## Completion report template
+## Completion report
 
-```
 | ID | Status | Commit | Evidence |
 | --- | --- | --- | --- |
-| UX-01 | Fixed | abc1234 | scrollY 1791 → 1791 after first add (1440px); focus on .btn-order-stem |
-| ... |
-Tests: npm test (pass/fail, suite count) · test:browser (N assertions, pass/fail)
-Page height @390px empty cart: before 15,577 px → after ____ px
-Owner questions outstanding: 1, 2, 3, 4, 5, 6
+| UX-01 | Fixed | c7b4db7 | Playwright 390 and 1440: `scrollY` 1798 → 1798 and 1300 → 1300 after the first stem add; focus stays on the button, which reads "✓ Ditambahkan". Suites 13, 18, 21 and browser Tests 1 and 4 updated. A cart-limit refusal does not flash. |
+| UX-04 | Fixed | 289cbe3 | 390: pill `display: none`, sticky bar visible. 1440: pill bottom gap 24 px, bottom-right. Sticky bar gets the same reduced-motion-aware bump. |
+| UX-02 | Fixed | ca237c5 | Empty `#order` has 0 images and 3 `.order-empty-shortcut` buttons. The "Mini pot" filter was active when the Buket shortcut was clicked; `#bouquets` was displayed. Suite 21 rewritten. |
+| UX-03 | Fixed | 6551ff7 | Browser Test 8: a mini-pot-only review shows no wrap line, and a review with a package does. `wrapId` and the payload are untouched; Suite 24 passes. |
+| UX-05 | Fixed | 8875b29 | `singleNote` removed. Screenshot at 390 shows label over price with no mid-phrase wrap. |
+| UX-06 | Fixed | a84f664 | Browser Test 9: every stem, mini-pot and package button has an `aria-describedby` that resolves to its card title. Titles are unique per card. |
+| UX-07 | Fixed | 24152ea | 0 clamped blurbs at 390. 11 of 11 product photos show the zoom hint. The flower modal caption now starts with the description. |
+| UX-09 | Fixed | eb29b37 | With a stem-only cart there is no "Termasuk" heading and no empty list. "Kosongkan keranjang" sits under the total. The empty price block and its dividers are hidden. |
+| UX-10 | Fixed | 74e363c | Suite 9 asserts the notice box has `display: none` while Shopee is not live. Its text is still set. There is no "Shopee ready" case in the suite, so I added no opposite assertion. |
+| UX-08 | Fixed | 6c8bc79 | Browser tests: "Langkah 1 dari 3 · Tinjau", "Langkah 2 dari 3 · Data", the form button reads "Kirim pesanan", and the review button has no icon. Step 3 uses the same format with "Kirim via WhatsApp"; I did not drive the browser to it. |
+| UX-11 | Fixed | bcf4667 | Browser test: the notice is a summary plus `<details>` holding the full text, ending in "Dengan mencentang kotak di bawah…". Built with `createElement`/`textContent`. |
+| UX-12 | Fixed | 7bc226c | Header, trust bar, FAQ #1 and lock-screen strings come from `site-content.js` in both languages. A check for "Based in Bali", "Unlock" and "Lock Site" in ID mode found none. |
+| UX-13 | Fixed | 2ad54e6 | Two FAQs added in ID and EN, using the exact label "Self pickup at the studio (Jimbaran)". "Baca FAQ" button and `kitSoonSecondary` keys removed. |
+| UX-14 | Fixed | dfb3239 | At 1440 the left edge is x = 154 for the stems grid, mini-pot grid, bouquet grid, kit teaser text and footer copyright. `ben3t` ID shortened to "Dibuat per pesanan". |
+| UX-15 | Fixed | dabd0e8 | Computed font sizes at 390 are 13 px for the targeted items, and the message-card option is 44 px tall. At 320 the header does not overflow. |
+| UX-16 | Fixed | 21b0ee5 | Browser Test 10: the header "Pesan" link goes to `#collection-overview` with no aria-label when the cart is empty. With items it goes to `#order` with an aria-label giving the count. `colTitle` renamed. |
+
+Tests: `npm test` passes (32 + 10 + 3 + 3 + 11 + 50 suites). `npm run test:browser` ran 71 assertions with 0 failures.
+Page height @390px empty cart: before 15,577 px (my own measurement of the same state at the base commit: 15,598 px) → after 13,469 px.
+Final `dist/` rebuild: 1889656. Console errors on load and during the flow: none from the app. The only errors were blocked external requests in this sandbox (certificate and tunnel failures).
+Owner questions outstanding: 1, 2, 3, 4, 5, 6.
 Anything skipped or changed from this brief, and why:
-```
+- **Brief file location.** `WEBSITE-UX-FIXES.md` and `WEBSITE-UX-AUDIT.md` were not on this branch. I copied them in from `origin/claude/kind-allen-1dw9i2` (commit 5670471) and then worked from them.
+- **UX-02 shortcut buttons.** They are created once by `renderOrderPicker()` into an empty `#order-empty-shortcuts` container instead of being static HTML. The test mock cannot parse `index.html`, and this keeps the count assertion exact. Handlers are bound once.
+- **UX-05 photo badge.** The "Foto: N tangkai" badge was gated on `trans.singleNote`. I made it unconditional, so deleting the `singleNote` keys did not remove it.
+- **UX-11 Indonesian summary.** It reads "disimpan **selama** {retention}", matching the existing notice's wording. The brief's text, "disimpan {retention}", does not read correctly in Indonesian once the retention phrase is filled in.
+- **UX-12 owner confirmation.** The copy now says the studio is in Jimbaran and ships from Bali. This needs owner confirmation (question 5).
+- **UX-12 lock-screen strings.** Their EN versions are only visible after the language switch runs. The static HTML is Indonesian.
+- **UX-04 pill gap.** At 1440 it is 24 px, the lower edge of the 24–40 px range.

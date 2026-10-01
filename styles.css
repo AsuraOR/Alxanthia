@@ -2035,7 +2035,16 @@ body.lock-scroll-off {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px 12px;
   margin-bottom: 8px;
+}
+
+/* UX-09: phones put the title on its own line, "Ubah pilihan" below it */
+@media (max-width: 480px) {
+  .summary-top-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .summary-top-row .step-label {
@@ -2054,14 +2063,14 @@ body.lock-scroll-off {
   align-items: center;
   justify-content: center;
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 500;
   font-size: var(--fs-label);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-muted);
   background: none;
   border: none;
-  padding: 4px 6px;
+  padding: 4px 0;
+  margin: -8px 0 16px;
   cursor: pointer;
   min-height: 44px;
   text-decoration: underline;

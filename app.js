@@ -2297,6 +2297,10 @@
       if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
+    // UX-09: with nothing selected the price block is empty, so drop its dividers too
+    const priceContainerEl = document.querySelector('.summary-price-container');
+    if (priceContainerEl) priceContainerEl.style.display = cartHasSelection ? '' : 'none';
+
     const priceEl = document.getElementById('summary-price');
     if (priceEl) {
       if (siteData.store.showPrices && cartHasSelection) {
@@ -2329,9 +2333,6 @@
     function renderSummaryIncludes() {
       const includesListEl = document.getElementById('summary-includes-list');
       const includesLabelEl = document.getElementById('includes-label');
-      if (includesLabelEl) {
-        includesLabelEl.style.display = cartHasSelection ? '' : 'none';
-      }
       if (includesListEl) {
         includesListEl.innerHTML = '';
         const allIncludes = [];
@@ -2347,6 +2348,11 @@
               : `${t.messageCardSelected}${feeText}`);
           }
         }
+
+        // UX-09: decide visibility after building the list, so a stem-only cart
+        // doesn't leave an empty "Termasuk" heading behind
+        if (includesLabelEl) includesLabelEl.style.display = allIncludes.length ? '' : 'none';
+        includesListEl.style.display = allIncludes.length ? '' : 'none';
 
         allIncludes.forEach(text => {
           const li = document.createElement('li');

@@ -1729,7 +1729,6 @@
     setText('#kit-soon-eyebrow', t.kitSoonEyebrow);
     setText('#kit-soon-title', t.kitSoonTitle);
     setText('#kit-soon-body', t.kitSoonBody);
-    setText('#kit-soon-secondary', t.kitSoonSecondary);
 
     const ctaLink = document.getElementById('kit-soon-cta');
     if (ctaLink) {

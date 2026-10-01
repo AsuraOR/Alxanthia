@@ -418,7 +418,6 @@ window.ALXANTHIA_DATA = {
       kitSoonBody: "Kami sedang menggambar panduannya dan menguji kemasannya, supaya pemula bisa membuat satu bunga dalam dua puluh menit. Kalau itu yang Anda cari, beri tahu kami — makin banyak yang menunggu, makin cepat kami luncurkan.",
       kitSoonCta: "Saya mau kitnya →",
       kitSoonCtaDisabled: "Segera hadir",
-      kitSoonSecondary: "Baca FAQ",
 
       howEyebrow: "Cara dibuat",
       howTitle: "Dikerjakan tangan, lalu dikirim ke Anda",
@@ -745,7 +744,6 @@ window.ALXANTHIA_DATA = {
       kitSoonBody: "We're drawing the plates and testing the packs so a beginner can build a flower in twenty minutes. If that's what you came for, tell us — the more people waiting, the sooner we launch it.",
       kitSoonCta: "I want the kit →",
       kitSoonCtaDisabled: "Coming soon",
-      kitSoonSecondary: "Read the FAQ",
 
       howEyebrow: "How they're made",
       howTitle: "Made by hand, then sent to you",

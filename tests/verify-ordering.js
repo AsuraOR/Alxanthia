@@ -972,9 +972,18 @@ console.log('\n--- SUITE 13: Focus Preservation & Keyboard Accessibility (A3) --
 const finishLabel = mockDocument.getElementById('finish-label');
 
 // When a single stem is selected, focus moves to #finish-label
+// UX-01: adding a stem stays in place — no scroll, no focus jump to #finish-label
 finishLabel.focused = false;
+const ux01ScrollCalls = [];
+const ux01OriginalScrollTo = sandbox.scrollTo;
+sandbox.scrollTo = (opts) => { ux01ScrollCalls.push(opts); };
+app._setCartForTest([]);
+const ux01Before = app.getCart().length;
 app.selectStem('Sunflower', true);
-assert.strictEqual(finishLabel.focused, true, 'Selecting a stem should focus #finish-label for keyboard navigation');
+sandbox.scrollTo = ux01OriginalScrollTo;
+assert.notStrictEqual(finishLabel.focused, true, 'UX-01: adding a stem must not move focus to #finish-label');
+assert.strictEqual(ux01ScrollCalls.length, 0, 'UX-01: adding a stem must not scroll the page');
+assert.strictEqual(app.getCart().length, ux01Before + 1, 'UX-01: the stem is still added to the cart');
 
 // Verify wrap chips radio group roving tabindex & arrow navigation
 const wrapChipsContainer = mockDocument.getElementById('wrap-chips');
@@ -996,7 +1005,7 @@ chips[0].dispatchEvent({
 assert.strictEqual(chips[1].classList.contains('active'), true, 'ArrowRight should activate next wrap chip');
 assert.strictEqual(chips[1].getAttribute('tabindex'), '0', 'New active chip should have tabindex 0');
 assert.strictEqual(chips[0].getAttribute('tabindex'), '-1', 'Previous active chip should have tabindex -1');
-console.log('✔ Suite 13 Passed: Finish label focus transfer and wrap chips roving tabindex/arrow navigation verified');
+console.log('✔ Suite 13 Passed: Stay-in-place add (UX-01) and wrap chips roving tabindex/arrow navigation verified');
 
 // ---------------------------------------------------------------------------
 // Suite 14: Language Reload Metadata (A4)
@@ -1201,7 +1210,7 @@ sandbox.scrollTo = (opts) => { scrollCalls.push(opts); };
 scrollCalls = [];
 app.selectStem('Rose'); // default scroll = true, cart starts empty
 const stemScrollCount = scrollCalls.length;
-assert(stemScrollCount > 0, 'Selecting a stem into an empty cart must scroll to #order by default');
+assert.strictEqual(stemScrollCount, 0, 'UX-01: selecting a stem into an empty cart must not scroll to #order');
 
 // The cart is no longer empty (it holds the Rose stem just added), so a further
 // selection must not yank the page back down to #order — customers adding a
@@ -1217,7 +1226,7 @@ app.resetToInitial();
 scrollCalls = [];
 app.selectPackage(1); // default scroll = true, cart starts empty
 const pkgScrollCount = scrollCalls.length;
-assert(pkgScrollCount > 0, 'Selecting a package into an empty cart must scroll to #order by default, matching stem behaviour (P1-05)');
+assert.strictEqual(pkgScrollCount, 0, 'UX-01: selecting a package into an empty cart must not scroll to #order, matching stem behaviour');
 
 sandbox.scrollTo = originalScrollTo;
 
@@ -1348,7 +1357,7 @@ const originalScrollToForPicker = sandbox.scrollTo;
 sandbox.scrollTo = (opts) => { pickerScrollCalls.push(opts); };
 
 pickerFlowers.children[0].click();
-assert(pickerScrollCalls.length > 0, 'Selecting the first item from the inline picker must scroll to #order');
+assert.strictEqual(pickerScrollCalls.length, 0, 'UX-01: selecting the first item from the inline picker no longer scrolls');
 assert.strictEqual(app.getCart().length, 1, 'Clicking a picker tile must add a cart line');
 
 sandbox.scrollTo = originalScrollToForPicker;

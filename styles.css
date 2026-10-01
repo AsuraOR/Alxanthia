@@ -843,6 +843,13 @@ body.lock-scroll-off {
               transform var(--motion-duration-btn) var(--motion-ease-out);
 }
 
+.btn-order-stem.is-added,
+.btn-add-mini-pot.is-added {
+  background: var(--accent-green);
+  color: var(--bg-main);
+  border-color: var(--accent-green);
+}
+
 .btn-order-stem-price {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;

@@ -39,12 +39,17 @@
         // Step 0: Ensure app is initialized
         assert('App window and DOM ready', win.AlxanthiaApp !== undefined);
 
-        // Test 1: Stem selection focus transfer to #finish-label (A3)
+        // Test 1: Stem add stays in place (UX-01). This reverses the earlier
+        // A3 behaviour that moved focus to #finish-label.
         const stemBtn = doc.querySelector('.btn-order-stem');
         const finishLabel = doc.getElementById('finish-label');
         if (stemBtn && finishLabel) {
+          stemBtn.focus();
+          const scrollBefore = win.scrollY;
           stemBtn.click();
-          assert('Stem pick transfers focus to #finish-label', doc.activeElement === finishLabel);
+          assert('Stem add keeps focus on the clicked button', doc.activeElement === stemBtn);
+          assert('First stem add leaves scrollY unchanged', Math.abs(win.scrollY - scrollBefore) <= 2, `before ${scrollBefore}, after ${win.scrollY}`);
+          assert('Stem add button shows the "added" confirmation', stemBtn.classList.contains('is-added'));
         } else {
           assert('Stem pick elements present', false, 'stemBtn or finishLabel missing');
         }
@@ -93,11 +98,8 @@
           assert('Second radio has aria-checked="true"', currentRadios[1].getAttribute('aria-checked') === 'true');
         }
 
-        // Test 4: Package selection moves focus to #finish-label (A3), the
-        // same pattern used for a stem pick (Test 1) — DEV-24: the handler
-        // intentionally scrolls to and focuses #finish-label to draw
-        // attention to the next step, so that (not the clicked button) is
-        // where focus should land.
+        // Test 4: Package selection keeps focus on the clicked button.
+        // DEV-24 used to move focus to #finish-label; UX-01 reversed that.
         // Scoped to #packages-grid: mini-pot "add" buttons also carry the
         // shared .btn-choose-bouquet class for styling, so an unscoped
         // selector can pick one of those up instead of a real package button.
@@ -108,8 +110,8 @@
           targetBtn.click();
 
           assert(
-            'Package pick transfers focus to #finish-label',
-            doc.activeElement === finishLabel,
+            'Package pick keeps focus on the clicked button',
+            doc.activeElement === targetBtn,
             `active: ${doc.activeElement ? (doc.activeElement.id || doc.activeElement.className) : 'none'}`
           );
         } else {

@@ -836,62 +836,54 @@
    * Order action: Choose a single finished stem
    */
   function selectStemOrder(flowerKey, scroll = true, wrapped = false) {
-    const wasCartEmpty = cart.length === 0;
+    // UX-01: adding stays in place. `scroll` is kept for API compatibility
+    // (AlxanthiaApp exposes it) but no longer moves the page or the focus.
     if (flowerKey && siteData.flowers[flowerKey]) {
       selectedFlower = flowerKey;
     }
+    const before = cartUnitCount();
     addLine({ type: 'stem', flowerKey: selectedFlower, wrapped: wrapped === true, qty: 1 });
-    if (scroll) {
-      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
-      const finishLabel = document.getElementById('finish-label');
-      if (finishLabel) {
-        finishLabel.focus({ preventScroll: true });
-        finishLabel.classList.remove('finish-label-pulse');
-        if (typeof finishLabel.offsetWidth === 'number') {
-          void finishLabel.offsetWidth;
-        }
-        finishLabel.classList.add('finish-label-pulse');
-        setTimeout(() => {
-          finishLabel.classList.remove('finish-label-pulse');
-        }, 1200);
-      }
-    }
+    return cartUnitCount() > before;
   }
 
   function selectMiniPot(potKey, scroll = true) {
-    const wasCartEmpty = cart.length === 0;
     const pot = (siteData.miniPots || []).find(item => item.key === potKey);
-    if (!pot) return;
+    if (!pot) return false;
+    const before = cartUnitCount();
     addLine({ type: 'pot', potKey, qty: 1 });
-    if (scroll && wasCartEmpty) scrollToSection('#order', '.order-controls-col');
+    return cartUnitCount() > before;
+  }
+
+  /**
+   * UX-01: briefly swap an add button's label for "✓ Added". Focus stays put;
+   * screen readers are covered by addLine()'s live-region announcement.
+   */
+  function flashAddedConfirmation(btn) {
+    if (!btn || btn.dataset.flashing === 'true') return;
+    const t = siteData.translations[currentLang] || siteData.translations.id;
+    const saved = btn.innerHTML;
+    btn.dataset.flashing = 'true';
+    btn.textContent = t.addedConfirm || (currentLang === 'en' ? '✓ Added' : '✓ Ditambahkan');
+    btn.classList.add('is-added');
+    setTimeout(() => {
+      btn.innerHTML = saved;
+      btn.classList.remove('is-added');
+      delete btn.dataset.flashing;
+    }, 1400);
   }
 
   /**
    * Order action: Select a bouquet package
    */
   function selectPackageOrder(pkgIndex, scroll = true, restoreFocus = true) {
-    const wasCartEmpty = cart.length === 0;
     selectedPackage = Math.max(0, Math.min(pkgIndex, siteData.packages.length - 1));
+    const before = cartUnitCount();
     addLine({ type: 'package', pkgIndex: selectedPackage, qty: 1 });
     if (restoreFocus) {
       const activeBtn = document.querySelector(`.btn-choose-bouquet[data-index="${selectedPackage}"]`);
       if (activeBtn) activeBtn.focus({ preventScroll: true });
     }
-    if (scroll) {
-      if (wasCartEmpty) scrollToSection('#order', '.order-controls-col');
-      const finishLabel = document.getElementById('finish-label');
-      if (finishLabel) {
-        finishLabel.focus({ preventScroll: true });
-        finishLabel.classList.remove('finish-label-pulse');
-        if (typeof finishLabel.offsetWidth === 'number') {
-          void finishLabel.offsetWidth;
-        }
-        finishLabel.classList.add('finish-label-pulse');
-        setTimeout(() => {
-          finishLabel.classList.remove('finish-label-pulse');
-        }, 1200);
-      }
-    }
+    return cartUnitCount() > before;
   }
 
   /**
@@ -1200,7 +1192,9 @@
           <p class="mini-pot-price">${formatRp(pot.price)}</p>
           <button type="button" class="btn-choose-bouquet btn-add-mini-pot">${t.miniPotBtn}</button>
         </div>`;
-      card.querySelector('.btn-add-mini-pot').addEventListener('click', () => selectMiniPot(pot.key));
+      card.querySelector('.btn-add-mini-pot').addEventListener('click', (e) => {
+        if (selectMiniPot(pot.key)) flashAddedConfirmation(e.currentTarget);
+      });
 
       // ALX-17: mini pots previously had no detail/inspector action at
       // all — reuse the same accessible image-modal pattern the finished
@@ -1372,7 +1366,7 @@
       orderButtons.forEach(orderBtn => {
         orderBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true');
+          if (selectStemOrder(key, true, orderBtn.getAttribute('data-wrapped') === 'true')) flashAddedConfirmation(orderBtn);
         });
       });
 

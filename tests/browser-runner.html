@@ -180,6 +180,9 @@
         const checkoutModal = doc.getElementById('checkout-modal');
         if (checkoutBtn && finishEl && checkoutModal) {
           checkoutBtn.click();
+          const stepInd = doc.getElementById('checkout-step-indicator');
+          assert('Checkout review reads "Langkah 1 dari 3 · Tinjau"', stepInd && stepInd.textContent === 'Langkah 1 dari 3 · Tinjau', stepInd && stepInd.textContent);
+          assert('Checkout review button has no chat icon', !checkoutBtn.querySelector('.channel-icon'));
           assert(
             'Mini-pot-only review does not mention wrap colour',
             finishEl.hidden || !/Bungkus|Wrap/.test(finishEl.textContent),

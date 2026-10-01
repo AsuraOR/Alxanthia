@@ -2452,7 +2452,7 @@ body.lock-scroll-off {
 .btn-channel.btn-disabled {
   background: #EAE3D5 !important;
   color: #8C8474 !important;
-  border: 1px dashed var(--border-medium) !important;
+  border: 1px solid var(--border-medium) !important;
   cursor: not-allowed;
   box-shadow: none !important;
   transform: none !important;
@@ -2518,7 +2518,10 @@ body.lock-scroll-off {
 }
 
 .btn-channel.btn-disabled .channel-name {
-  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 .btn-channel.btn-disabled .channel-action {
   color: var(--text-body);

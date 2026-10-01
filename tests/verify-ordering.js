@@ -328,7 +328,6 @@ registerEl('div', 'order-announcer');
 // Native checkout trigger (ALX-11)
 const btnCheckout = registerEl('button', 'btn-checkout', 'btn-channel');
 btnCheckout.appendChild(createMockElement('span', '', 'channel-name'));
-btnCheckout.appendChild(createMockElement('span', '', 'channel-action'));
 
 // Channel elements
 const btnWhatsapp = registerEl('a', 'btn-whatsapp', 'btn-channel btn-whatsapp-primary');

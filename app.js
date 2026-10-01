@@ -2288,13 +2288,11 @@
       checkoutButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
       checkoutButton.classList.toggle('btn-disabled', !enabled);
       const name = checkoutButton.querySelector('.channel-name');
-      const action = checkoutButton.querySelector('.channel-action');
       if (name) name.textContent = enabled
         ? (currentLang === 'en' ? 'Review order' : 'Tinjau pesanan')
         : !orderingAvailable
           ? (currentLang === 'en' ? 'Ordering paused — contact us directly' : 'Pemesanan dijeda — hubungi kami langsung')
           : (currentLang === 'en' ? 'Choose a product first' : 'Pilih produk terlebih dahulu');
-      if (action) action.textContent = enabled ? (currentLang === 'en' ? 'continue →' : 'lanjut →') : '';
     }
 
     // UX-09: with nothing selected the price block is empty, so drop its dividers too
@@ -3311,7 +3309,7 @@
   const CHECKOUT_STEPS = {
     'checkout-review': { headingId: 'checkout-title', stepNumber: 1, footerId: 'checkout-review-footer' },
     'checkout-form-step': { headingId: 'checkout-form-title', stepNumber: 2, footerId: 'checkout-form-footer' },
-    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 2, footerId: null }
+    'checkout-success': { headingId: 'checkout-success-title', stepNumber: 3, footerId: null }
   };
   // DEV-16: each step's total+actions bar is a real, non-scrolling footer
   // region (see .checkout-dialog-footer) rather than position:sticky inside
@@ -3333,9 +3331,9 @@
     if (modal && meta) modal.setAttribute('aria-labelledby', meta.headingId);
     const indicator = document.getElementById('checkout-step-indicator');
     if (indicator) {
-      indicator.textContent = stepId === 'checkout-success'
-        ? ck('checkoutStepSuccess')
-        : ck('checkoutStepIndicator', { step: meta.stepNumber, total: 2 });
+      // UX-08: three honest steps — review, details, then the WhatsApp hand-off
+      const stepNameKey = { 'checkout-review': 'checkoutStepReview', 'checkout-form-step': 'checkoutStepForm', 'checkout-success': 'checkoutStepSuccess' }[stepId];
+      indicator.textContent = `${ck('checkoutStepIndicator', { step: meta.stepNumber, total: 3 })} · ${ck(stepNameKey)}`;
     }
     const heading = meta ? document.getElementById(meta.headingId) : null;
     if (heading && typeof heading.focus === 'function') heading.focus();

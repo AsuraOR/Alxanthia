@@ -445,8 +445,8 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Pesan",
       orderTitle: "Lengkapi pesanan Anda, lalu konfirmasi via chat",
-      orderPickerLabel: "Belum ada pilihan — pilih produk di sini",
-      cartEmpty: "Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.",
+      orderPickerLabel: "Keranjang Anda masih kosong. Mulai dari:",
+      cartEmpty: "Belum ada produk dipilih.",
       finishLabel: "Sentuhan akhir",
       wrapIntro: "Pilih warna kertas pembungkus untuk bunga Anda. Sudah termasuk dalam harga buket; tangkai satuan dibalut kertas pelindung siap vas.",
       cardLabel: "Kartu ucapan",
@@ -765,8 +765,8 @@ window.ALXANTHIA_DATA = {
 
       orderEyebrow: "Order",
       orderTitle: "Finish your order, then confirm via chat",
-      orderPickerLabel: "Nothing selected — pick a product here",
-      cartEmpty: "Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.",
+      orderPickerLabel: "Your cart is empty. Start with:",
+      cartEmpty: "Nothing selected yet.",
       finishLabel: "Finishing",
       wrapIntro: "Choose the paper we wrap your flowers in. Included in every bouquet price; single stems arrive paper-wrapped and vase-ready.",
       cardLabel: "Message card",

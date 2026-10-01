@@ -1909,95 +1909,34 @@ body.lock-scroll-off {
   flex-direction: column;
 }
 
-/* Inline Order Picker — shown only while the cart is empty (P1-08) */
-.order-picker-group {
-  margin-bottom: 4px;
-}
-
-.order-picker-group-label {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin: 0 0 8px;
-}
-
-.order-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Empty-cart shortcuts (UX-02) — secondary buttons that jump to a catalogue section */
+.order-empty-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
 }
 
-/* A lone tile left over in an odd-count group (e.g. 3 mini pots in 2
-   columns) fills the row instead of leaving a visible empty cell (UX-03). */
-.order-picker-grid > .picker-tile:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
-
-@media (min-width: 769px) {
-  /* On wider screens the picker's job is a quick, compact pick-list, not
-     another full product showcase — one row per category (at most 4
-     items) instead of a tall 2-column block of full-size photos. */
-  .order-picker-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .order-picker-grid > .picker-tile:last-child:nth-child(odd) {
-    grid-column: auto;
-  }
-}
-
-.picker-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  border: 1px solid var(--border-light);
-  background: var(--bg-card);
-  padding: 8px;
-  cursor: pointer;
-  text-align: left;
-  border-radius: 0;
+.order-empty-shortcut {
+  flex: 1 1 auto;
   min-height: 44px;
-  transition: border-color var(--motion-duration-btn) var(--motion-ease-out),
-              transform var(--motion-duration-btn) var(--motion-ease-out);
-}
-
-.picker-tile:hover {
-  border-color: var(--accent-green);
-  transform: translateY(-1px);
-}
-
-.picker-tile-photo {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border: 1px solid var(--border-light);
-  background: var(--bg-main);
-}
-
-.picker-tile-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-}
-
-.picker-tile-title {
-  font-family: var(--font-serif);
-  font-size: 14px;
-  line-height: 1.25;
-  color: var(--text-dark);
-}
-
-.picker-tile-price {
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--accent-green);
+  color: var(--accent-green);
   font-family: var(--font-sans);
-  font-size: var(--fs-label);
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background-color var(--motion-duration-btn) var(--motion-ease-out),
+              color var(--motion-duration-btn) var(--motion-ease-out);
+}
+
+.order-empty-shortcut:hover {
+  background: var(--accent-green);
+  color: var(--bg-main);
 }
 
 .wrap-intro {

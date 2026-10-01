@@ -315,8 +315,7 @@ registerEl('button', 'sticky-order-cta');
 registerEl('ul', 'cart-lines');
 registerEl('div', 'order-picker');
 registerEl('p', 'order-picker-label');
-registerEl('div', 'order-picker-flowers');
-registerEl('div', 'order-picker-packages');
+registerEl('div', 'order-empty-shortcuts');
 registerEl('span', 'summary-price');
 registerEl('span', 'summary-shipping-note');
 registerEl('p', 'includes-label');
@@ -1342,31 +1341,21 @@ assert.strictEqual(summaryPrice.style.display, 'none', '#summary-price must stay
 assert.strictEqual(shippingNote.style.display, 'none');
 assert.strictEqual(includesList.children.length, 0);
 
-const pickerFlowers = mockDocument.getElementById('order-picker-flowers');
-const pickerPackages = mockDocument.getElementById('order-picker-packages');
-assert.strictEqual(pickerFlowers.children.length, 8, 'Picker must render wrapped and unwrapped tiles for every flower');
-assert.strictEqual(pickerPackages.children.length, 4, 'Picker must render one tile per package');
+// UX-02: the picker is three shortcut buttons, not a second copy of the catalogue
+// (the mock registry doesn't nest elements, so read the shortcut row directly)
+const shortcutRow = mockDocument.getElementById('order-empty-shortcuts');
+const emptyShortcuts = shortcutRow.querySelectorAll('.order-empty-shortcut');
+assert.strictEqual(emptyShortcuts.length, 3, '#order-picker must contain exactly 3 shortcut buttons while the cart is empty');
+assert.strictEqual(shortcutRow.querySelectorAll('img').length, 0, '#order-picker must not render product images');
 
-// Clicking a picker tile adds a line and scrolls to #order, same as every
-// other add-to-cart entry point when the cart starts empty. This also
-// replaces the instant layout collapse (the picker disappearing once the
-// cart is no longer empty) with an intentional smooth scroll, instead of
-// leaving the viewport to snap with no compensation.
-let pickerScrollCalls = [];
-const originalScrollToForPicker = sandbox.scrollTo;
-sandbox.scrollTo = (opts) => { pickerScrollCalls.push(opts); };
-
-pickerFlowers.children[0].click();
-assert.strictEqual(pickerScrollCalls.length, 0, 'UX-01: selecting the first item from the inline picker no longer scrolls');
-assert.strictEqual(app.getCart().length, 1, 'Clicking a picker tile must add a cart line');
-
-sandbox.scrollTo = originalScrollToForPicker;
+app.selectStem('Rose', false);
+assert.strictEqual(app.getCart().length, 1);
 
 // Once the cart holds something, the picker gives way to the real cart summary
 assert.strictEqual(orderPicker.style.display, 'none', '#order-picker must hide once the cart is non-empty');
 assert.notStrictEqual(summaryPrice.style.display, 'none', '#summary-price must reappear once the cart has a line');
 
-console.log('✔ Suite 21 Passed: The inline picker is visible only while the cart is empty and scrolls to #order on first selection');
+console.log('✔ Suite 21 Passed: The empty-cart picker shows three shortcuts (no product tiles) and hides once the cart has a line');
 
 // ---------------------------------------------------------------------------
 // Suite 22: Predefined bouquets have no variety chooser (curated by studio)

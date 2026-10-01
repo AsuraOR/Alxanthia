@@ -1960,9 +1960,7 @@
         while (linesEl.children.length > 0) linesEl.removeChild(linesEl.children[linesEl.children.length - 1]);
         const emptyLi = document.createElement('li');
         emptyLi.className = 'cart-line-empty';
-        emptyLi.textContent = t.cartEmpty || (currentLang === 'en'
-          ? 'Nothing selected yet. Pick a stem, a mini pot, or a bouquet below to start.'
-          : 'Belum ada produk dipilih. Pilih tangkai, mini pot, atau buket di bawah untuk memulai.');
+        emptyLi.textContent = t.cartEmpty || (currentLang === 'en' ? 'Nothing selected yet.' : 'Belum ada produk dipilih.');
         linesEl.appendChild(emptyLi);
       }
       return;
@@ -2011,44 +2009,10 @@
   }
 
   /**
-   * Build one compact selectable tile for the empty-cart order picker.
-   * Shared shape for both flowers and packages so the markup lives in one place.
-   */
-  function renderPickerTile({ photoSrc, title, priceStr, ariaLabel, onSelect }) {
-    const tile = document.createElement('button');
-    tile.type = 'button';
-    tile.className = 'picker-tile';
-    tile.setAttribute('aria-label', ariaLabel);
-
-    const thumb = document.createElement('img');
-    thumb.className = 'picker-tile-photo';
-    thumb.src = photoSrc;
-    thumb.alt = '';
-    thumb.setAttribute('aria-hidden', 'true');
-    thumb.width = 64;
-    thumb.height = 64;
-    thumb.loading = 'lazy';
-    tile.appendChild(thumb);
-
-    const info = document.createElement('span');
-    info.className = 'picker-tile-info';
-    const titleEl = document.createElement('span');
-    titleEl.className = 'picker-tile-title';
-    titleEl.textContent = title;
-    const priceEl = document.createElement('span');
-    priceEl.className = 'picker-tile-price';
-    priceEl.textContent = priceStr;
-    info.appendChild(titleEl);
-    info.appendChild(priceEl);
-    tile.appendChild(info);
-
-    tile.addEventListener('click', onSelect);
-    return tile;
-  }
-
-  /**
-   * Render the inline order picker — visible only while the cart is empty,
-   * so the header "Pesan" CTA and #order never land on a dead end (P1-08).
+   * Render the empty-cart order panel: three shortcuts to the catalogue
+   * sections instead of a second copy of every product (UX-02). Visible only
+   * while the cart is empty. The buttons are created once and their click
+   * handlers bound once; later renders only refresh the label and texts.
    */
   function renderOrderPicker() {
     const pickerEl = document.getElementById('order-picker');
@@ -2061,74 +2025,31 @@
     pickerEl.style.display = 'block';
 
     const t = siteData.translations[currentLang] || siteData.translations.id;
-    setText('#order-picker-label', t.orderPickerLabel || 'Pilih produk');
-    setText('#order-picker-flowers-label', t.catOneTitle || 'Bunga jadi');
-    setText('#order-picker-pots-label', t.catTwoTitle || 'Mini pot');
-    setText('#order-picker-packages-label', t.catThreeTitle || 'Buket');
+    setText('#order-picker-label', t.orderPickerLabel || (currentLang === 'en' ? 'Your cart is empty. Start with:' : 'Keranjang Anda masih kosong. Mulai dari:'));
 
-    const flowersEl = document.getElementById('order-picker-flowers');
-    if (flowersEl) {
-      while (flowersEl.children.length > 0) flowersEl.removeChild(flowersEl.children[flowersEl.children.length - 1]);
-      (siteData.flowerOrder || []).forEach(key => {
-        const flower = siteData.flowers[key];
-        if (!flower) return;
-        const trans = flower[currentLang] || flower.en;
-        [false, true].forEach(wrapped => {
-          const price = (flower.stemPrice || 55000) + (wrapped ? SINGLE_STEM_WRAP_PRICE : 0);
-          const priceStr = formatRp(price);
-          const variantLabel = stemOrderButtonLabel(wrapped);
-          flowersEl.appendChild(renderPickerTile({
-            photoSrc: flower.photo,
-            title: `${trans.name} — ${variantLabel}`,
-            priceStr,
-            ariaLabel: `${trans.name}, ${variantLabel}, ${priceStr}`,
-            onSelect: () => selectStemOrder(key, true, wrapped)
-          }));
+    const row = document.getElementById('order-empty-shortcuts');
+    if (!row) return;
+    const shortcuts = [
+      { key: 'stems', target: '#collection', label: t.catOneTitle || 'Bunga jadi' },
+      { key: 'pots', target: '#mini-pots', label: t.catTwoTitle || 'Mini pot' },
+      { key: 'bouquets', target: '#bouquets', label: t.catThreeTitle || 'Buket' }
+    ];
+    if (row.children.length !== shortcuts.length) {
+      while (row.children.length > 0) row.removeChild(row.children[row.children.length - 1]);
+      shortcuts.forEach(sc => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'order-empty-shortcut';
+        btn.setAttribute('data-shortcut', sc.key);
+        btn.addEventListener('click', () => {
+          // 'all' so an active category filter can't hide the target section
+          setCategory('all', false);
+          scrollToSection(sc.target);
         });
+        row.appendChild(btn);
       });
     }
-
-    const packagesEl = document.getElementById('order-picker-packages');
-    if (packagesEl) {
-      while (packagesEl.children.length > 0) packagesEl.removeChild(packagesEl.children[packagesEl.children.length - 1]);
-      (siteData.packages || []).forEach((pkg, index) => {
-        const title = t.pkgNames[index] || `Package ${index + 1}`;
-        const priceStr = formatRp(pkg.price);
-        packagesEl.appendChild(renderPickerTile({
-          photoSrc: pkg.photoWebp || pkg.photo,
-          title,
-          priceStr,
-          ariaLabel: `${t.pkgBtn} — ${title}, ${priceStr}`,
-          onSelect: () => selectPackageOrder(index, true)
-        }));
-      });
-    }
-
-    const potsEl = document.getElementById('order-picker-pots');
-    if (potsEl) {
-      while (potsEl.children.length > 0) potsEl.removeChild(potsEl.children[potsEl.children.length - 1]);
-      (siteData.miniPots || []).forEach(pot => {
-        const trans = pot[currentLang] || pot.en;
-        const priceStr = formatRp(pot.price);
-        potsEl.appendChild(renderPickerTile({
-          photoSrc: pot.photo,
-          title: trans.name,
-          priceStr,
-          ariaLabel: `${t.miniPotBtn} — ${trans.name}, ${priceStr}`,
-          onSelect: () => selectMiniPot(pot.key, true)
-        }));
-      });
-    }
-
-    // Hide a group's heading (and the group itself) when its grid ended up empty (UX-03)
-    [
-      ['order-picker-group-flowers', flowersEl],
-      ['order-picker-group-pots', potsEl],
-      ['order-picker-group-packages', packagesEl]
-    ].forEach(([groupId, gridEl]) => {
-      const groupEl = document.getElementById(groupId);
-      if (groupEl) groupEl.style.display = (gridEl && gridEl.children.length > 0) ? '' : 'none';
-    });
+    shortcuts.forEach((sc, i) => { row.children[i].textContent = sc.label; });
   }
 
   /**

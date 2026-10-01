@@ -2434,7 +2434,9 @@
       if (siteData.store.channels?.showShopee === false && !waReady) {
         mktNoticeBox.style.display = 'none';
       } else {
-        mktNoticeBox.style.display = '';
+        // UX-10: a "coming soon" notice at the moment of decision is a dead end;
+        // the footer already says "Shopee (segera hadir)". Texts are still filled.
+        mktNoticeBox.style.display = shopeeActive ? '' : 'none';
         if (shopeeActive) {
           setText('#mkt-soon-tag', t.shopeeBadgeTag || (currentLang === 'en' ? 'Official Store' : 'Toko Resmi'));
           setText('#marketplace-status-text', waReady ? (t.marketplaceNoticeActive || t.marketplaceNotice) : (currentLang === 'en'

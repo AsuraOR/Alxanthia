@@ -875,6 +875,7 @@ const footerShopee = mockDocument.getElementById('footer-link-shopee');
 // "display: flex !important" in the stylesheet.
 assert(shopeeBtn.classList.contains('btn-shopee-hidden'), 'Shopee button must be hidden while unready, not shown disabled');
 assert(mktText.textContent.includes('Listing Shopee sedang disiapkan'), 'Notice box must honestly state listing in preparation');
+assert.strictEqual(mktBox.style.display, 'none', 'UX-10: the Shopee notice box must be hidden while Shopee is not live');
 assert.strictEqual(footerShopee.getAttribute('aria-disabled'), 'true');
 assert(footerShopee.innerHTML.includes('segera hadir'));
 
